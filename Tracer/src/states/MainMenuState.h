@@ -24,6 +24,8 @@ public:
 	void update(App& app, float) override;
 	void render(App& app) override;
 
+	void startBattle(App& app);
+
 private:
 	std::array<Button*, 4> buttons_ {nullptr, nullptr, nullptr, nullptr};
 	int screenW_ = 1280;

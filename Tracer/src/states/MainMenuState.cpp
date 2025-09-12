@@ -1,4 +1,5 @@
 #include "MainMenuState.h"
+#include "BattleState.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
 #include <SDL.h>
@@ -7,6 +8,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <cmath>
+#include <memory>
 
 MainMenuState::MainMenuState() = default;
 MainMenuState::~MainMenuState() = default;
@@ -48,7 +50,7 @@ void MainMenuState::onEnter(App& app) {
 		buttons_[i]->setText(labels[i]);
 		if (smallFont_) buttons_[i]->setFont(smallFont_, app.getRenderer());
 	}
-	buttons_[0]->setOnClick([&app]() { SDL_Log("Start clicked"); });
+	// 不设置按钮回调，在handleEvent中直接处理
 	buttons_[1]->setOnClick([]() { SDL_Log("Settings clicked"); });
 	buttons_[2]->setOnClick([]() { SDL_Log("Collection clicked"); });
 	buttons_[3]->setOnClick([&app]() { SDL_Event quit; quit.type = SDL_QUIT; SDL_PushEvent(&quit); });
@@ -110,7 +112,20 @@ void MainMenuState::onExit(App& app) {
 }
 
 void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
+	// 处理按钮事件
 	for (auto* b : buttons_) if (b) b->handleEvent(e);
+
+	// 特殊处理开始游戏按钮（避免lambda生命周期问题）
+	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+		int mx = e.button.x, my = e.button.y;
+		if (buttons_[0]) {
+			const SDL_Rect& rect = buttons_[0]->getRect();
+			if (mx >= rect.x && mx <= rect.x + rect.w &&
+				my >= rect.y && my <= rect.y + rect.h) {
+				app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState())));
+			}
+		}
+	}
 }
 
 void MainMenuState::update(App& app, float dt) {
@@ -368,4 +383,6 @@ void MainMenuState::render(App& app) {
 	}
 }
 
-
+void MainMenuState::startBattle(App& app) {
+	app.setState(std::unique_ptr<State>(new BattleState()));
+}

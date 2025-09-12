@@ -21,6 +21,9 @@
     <ClCompile Include="src\\ui\\Button.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\\states\\BattleState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="src\\states\\MainMenuState.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -36,6 +39,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="src\\ui\\Button.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\\states\\BattleState.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="src\\states\\MainMenuState.h">

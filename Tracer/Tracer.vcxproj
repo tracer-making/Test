@@ -140,6 +140,7 @@
   <ItemGroup>
     <ClCompile Include="src\\core\\App.cpp" />
     <ClCompile Include="src\\ui\\Button.cpp" />
+    <ClCompile Include="src\\states\\BattleState.cpp" />
     <ClCompile Include="src\\states\\MainMenuState.cpp" />
     <ClCompile Include="src\\main.cpp" />
   </ItemGroup>
