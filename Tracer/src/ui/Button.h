@@ -20,6 +20,7 @@ public:
 	void setFont(_TTF_Font* font, SDL_Renderer* renderer);
 
 	bool isHovered() const { return hovered_; }
+	const SDL_Rect& getRect() const { return rect_; }
 
 private:
 	SDL_Rect rect_ {0,0,0,0};
