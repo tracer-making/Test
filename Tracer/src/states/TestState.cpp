@@ -1,0 +1,205 @@
+#include "TestState.h"
+#include "MainMenuState.h"
+#include "BattleState.h"
+#include "MapExploreState.h"
+#include "../core/App.h"
+#include "../ui/Button.h"
+#include <SDL.h>
+#include <SDL_ttf.h>
+#include <vector>
+#include <memory>
+
+TestState::TestState() = default;
+TestState::~TestState() {
+	if (font_) TTF_CloseFont(font_);
+	if (smallFont_) TTF_CloseFont(smallFont_);
+	if (titleTex_) SDL_DestroyTexture(titleTex_);
+	
+	for (auto* button : testButtons_) {
+		delete button;
+	}
+	delete backButton_;
+}
+
+void TestState::onEnter(App& app) {
+	SDL_Log("TestState::onEnter - Start");
+	
+	int w, h;
+	SDL_GetWindowSize(app.getWindow(), &w, &h);
+	screenW_ = w;
+	screenH_ = h;
+	SDL_Log("Screen size: %d x %d", screenW_, screenH_);
+
+	// 加载字体
+	font_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 80);
+	smallFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 20);
+	if (!font_ || !smallFont_) {
+		SDL_Log("TTF_OpenFont failed: %s", TTF_GetError());
+		return;
+	}
+	else {
+		SDL_Log("Fonts loaded successfully");
+		SDL_Color titleCol{ 200, 230, 255, 255 };
+		SDL_Surface* ts = TTF_RenderUTF8_Blended(font_, u8"功能测试界面", titleCol);
+		if (ts) {
+			titleTex_ = SDL_CreateTextureFromSurface(app.getRenderer(), ts);
+			titleW_ = ts->w;
+			titleH_ = ts->h;
+			SDL_FreeSurface(ts);
+			SDL_Log("Title texture created: %d x %d", titleW_, titleH_);
+		}
+	}
+
+	// 创建返回按钮（右上角）
+	backButton_ = new Button();
+	if (!backButton_) {
+		SDL_Log("Failed to create back button");
+		return;
+	}
+	SDL_Log("Back button created");
+	
+	int backButtonSize = 40;
+	SDL_Rect backButtonRect{ screenW_ - backButtonSize - 20, 20, backButtonSize, backButtonSize };
+	backButton_->setRect(backButtonRect);
+	backButton_->setText(u8"X");
+	if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
+	backButton_->setOnClick([&app]() {
+		app.setState(std::unique_ptr<State>(static_cast<State*>(new MainMenuState())));
+		});
+	SDL_Log("Back button setup complete");
+
+	// 按钮标签（在onEnter中初始化）
+	std::vector<std::string> buttonLabels = {
+		u8"主菜单",
+		u8"战斗界面", 
+		u8"地图探索",
+		u8"角色界面",
+		u8"卡牌界面",
+		u8"设置界面"
+	};
+	SDL_Log("Button labels initialized: %zu buttons", buttonLabels.size());
+
+	// 创建测试按钮网格
+	int buttonWidth = 200;
+	int buttonHeight = 45;
+	int buttonMargin = 20;
+	int gridColumns = 2;
+	int gridRows = static_cast<int>((buttonLabels.size() + gridColumns - 1) / gridColumns);
+	
+	int gridWidth = gridColumns * buttonWidth + (gridColumns - 1) * buttonMargin;
+	int gridHeight = gridRows * buttonHeight + (gridRows - 1) * buttonMargin;
+	int gridX = (screenW_ - gridWidth) / 2;
+	int gridY = (screenH_ - gridHeight) / 2 + 60;
+	SDL_Log("Grid layout: %d columns, %d rows, position: %d, %d", gridColumns, gridRows, gridX, gridY);
+
+	for (size_t i = 0; i < buttonLabels.size(); ++i) {
+		int row = static_cast<int>(i) / gridColumns;
+		int col = i % gridColumns;
+		
+		SDL_Rect buttonRect{
+			gridX + col * (buttonWidth + buttonMargin),
+			gridY + row * (buttonHeight + buttonMargin),
+			buttonWidth,
+			buttonHeight
+		};
+
+		Button* button = new Button();
+		if (!button) {
+			SDL_Log("Failed to create button %zu", i);
+			continue;
+		}
+		
+		button->setRect(buttonRect);
+		button->setText(buttonLabels[i]);
+		if (smallFont_) button->setFont(smallFont_, app.getRenderer());
+		
+		// 设置按钮回调函数
+		switch (i) {
+		case 0: // 主菜单
+			// 不设置回调，在handleEvent中处理
+			break;
+		case 1: // 战斗界面
+			// 不设置回调，在handleEvent中处理
+			break;
+		case 2: // 地图探索（暂留空）
+			// 不设置回调，在handleEvent中处理
+			break;
+		default:
+			// 不设置回调，在handleEvent中处理
+			break;
+		}
+
+		testButtons_.push_back(button);
+		SDL_Log("Button %zu created and added", i);
+	}
+	
+	SDL_Log("TestState::onEnter - Complete, %zu test buttons created", testButtons_.size());
+}
+
+void TestState::handleEvent(App& app, const SDL_Event& e) {
+	// 处理返回按钮事件
+	if (backButton_) backButton_->handleEvent(e);
+	
+	// 处理测试按钮事件
+	for (auto* button : testButtons_) {
+		if (button) button->handleEvent(e);
+	}
+
+	// 特殊处理测试按钮点击（避免lambda生命周期问题）
+	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+		int mx = e.button.x, my = e.button.y;
+		
+		// 检查每个测试按钮
+		for (size_t i = 0; i < testButtons_.size(); ++i) {
+			if (testButtons_[i]) {
+				const SDL_Rect& rect = testButtons_[i]->getRect();
+				if (mx >= rect.x && mx <= rect.x + rect.w &&
+					my >= rect.y && my <= rect.y + rect.h) {
+					
+					// 根据按钮索引处理不同功能
+					switch (i) {
+					case 0: // 主菜单
+						app.setState(std::unique_ptr<State>(static_cast<State*>(new MainMenuState())));
+						break;
+					case 1: // 战斗界面
+						app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState())));
+						break;
+					case 2: // 地图探索
+						app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+						break;
+					default:
+						SDL_Log("测试按钮 %d 点击", static_cast<int>(i));
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
+void TestState::update(App& app, float dt) {
+	// 更新逻辑（如果需要）
+}
+
+void TestState::render(App& app) {
+	SDL_Renderer* r = app.getRenderer();
+	
+	// 深色背景
+	SDL_SetRenderDrawColor(r, 15, 20, 30, 255);
+	SDL_Rect bg{ 0, 0, screenW_, screenH_ };
+	SDL_RenderFillRect(r, &bg);
+
+	// 渲染标题
+	if (titleTex_) {
+		SDL_Rect dst{ screenW_ / 2 - titleW_ / 2, 80, titleW_, titleH_ };
+		SDL_RenderCopy(r, titleTex_, nullptr, &dst);
+	}
+
+	// 渲染返回按钮
+	if (backButton_) backButton_->render(r);
+	
+	// 渲染测试按钮
+	for (auto* button : testButtons_) {
+		if (button) button->render(r);
+	}
+}

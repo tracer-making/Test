@@ -1,0 +1,1113 @@
+#include "MapExploreState.h"
+#include "TestState.h"
+#include "../core/App.h"
+#include "../ui/Button.h"
+#include <SDL.h>
+#include <SDL_ttf.h>
+#include <vector>
+#include <memory>
+#include <random>
+#include <algorithm>
+#include <queue>
+
+MapExploreState::MapExploreState() = default;
+MapExploreState::~MapExploreState() {
+    delete regenerateButton_;
+}
+
+void MapExploreState::onEnter(App& app) {
+    // 获取屏幕尺寸
+    int w, h;
+    SDL_GetWindowSize(app.getWindow(), &w, &h);
+    screenW_ = w;
+    screenH_ = h;
+
+    // 加载字体
+    font_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 60);
+    smallFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 16);
+    if (!font_ || !smallFont_) {
+        SDL_Log("TTF_OpenFont failed: %s", TTF_GetError());
+    }
+    else {
+        SDL_Color titleCol{ 200, 230, 255, 255 };
+        SDL_Surface* ts = TTF_RenderUTF8_Blended(font_, u8"地图探索", titleCol);
+        if (ts) {
+            titleTex_ = SDL_CreateTextureFromSurface(app.getRenderer(), ts);
+            titleW_ = ts->w;
+            titleH_ = ts->h;
+            SDL_FreeSurface(ts);
+        }
+    }
+
+    // 生成分层地图
+    generateLayeredMap();
+    
+    // 创建重新生成按钮（右上角）
+    regenerateButton_ = new Button();
+    if (regenerateButton_) {
+        int regenButtonWidth = 120;
+        int regenButtonHeight = 40;
+        SDL_Rect regenButtonRect{ screenW_ - regenButtonWidth - 20, 20, regenButtonWidth, regenButtonHeight };
+        regenerateButton_->setRect(regenButtonRect);
+        regenerateButton_->setText(u8"重新生成");
+        if (smallFont_) {
+            regenerateButton_->setFont(smallFont_, app.getRenderer());
+        }
+    }
+}
+
+void MapExploreState::onExit(App& app) {
+    // 清理资源
+    if (titleTex_) {
+        SDL_DestroyTexture(titleTex_);
+        titleTex_ = nullptr;
+    }
+    if (font_) {
+        TTF_CloseFont(font_);
+        font_ = nullptr;
+    }
+    if (smallFont_) {
+        TTF_CloseFont(smallFont_);
+        smallFont_ = nullptr;
+    }
+}
+
+void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
+    // 处理返回按钮（ESC键）
+    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_ESCAPE) {
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
+        return;
+    }
+    
+    // 处理重新生成地图（R键）
+    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_r) {
+        generateLayeredMap();
+        SDL_Log("Map regenerated!");
+        return;
+    }
+    
+    // 处理鼠标点击
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        int mx = e.button.x, my = e.button.y;
+        
+         // 重新生成按钮（右上角）
+         if (regenerateButton_) {
+             const SDL_Rect& rect = regenerateButton_->getRect();
+             if (mx >= rect.x && mx <= rect.x + rect.w &&
+                 my >= rect.y && my <= rect.y + rect.h) {
+                 generateLayeredMap();
+                 SDL_Log("Map regenerated!");
+                 return;
+             }
+         }
+        
+        // 检查是否点击了节点
+        for (int layer = 0; layer <= numLayers_; ++layer) {
+            for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
+                const MapNode& node = layerNodes_[layer][i];
+                int dx = mx - node.x;
+                int dy = my - node.y;
+                if (dx * dx + dy * dy <= node.size * node.size) {
+                    int globalIndex = getGlobalNodeIndex(layer, static_cast<int>(i));
+                    SDL_Log("Clicked node %d (layer %d, local %zu)", globalIndex, layer, i);
+                    
+                    // 如果点击的是可访问的节点，移动玩家
+                    if (isNodeAccessible(globalIndex)) {
+                        movePlayerToNode(globalIndex);
+                        SDL_Log("Player moved to accessible node %d", globalIndex);
+                    } else if (globalIndex == playerCurrentNode_) {
+                        SDL_Log("Player is already at node %d", globalIndex);
+                    } else {
+                        SDL_Log("Node %d is not accessible from current position", globalIndex);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void MapExploreState::update(App& app, float dt) {
+    // 更新逻辑（如果需要）
+}
+
+void MapExploreState::render(App& app) {
+    SDL_Renderer* r = app.getRenderer();
+    
+    // 清屏
+    SDL_SetRenderDrawColor(r, 20, 20, 40, 255);
+    SDL_RenderClear(r);
+    
+    // 渲染标题
+    renderTitle(r);
+    
+    // 渲染地图
+    renderMap(r);
+    
+    // 渲染按钮
+    if (regenerateButton_) {
+        try {
+            regenerateButton_->render(r);
+        } catch (...) {
+            // 如果按钮渲染失败，忽略错误
+        }
+    }
+}
+
+void MapExploreState::renderTitle(SDL_Renderer* renderer) {
+    if (titleTex_) {
+        SDL_Rect titleRect = {
+            (screenW_ - titleW_) / 2,
+            50,
+            titleW_,
+            titleH_
+        };
+        SDL_RenderCopy(renderer, titleTex_, nullptr, &titleRect);
+    }
+}
+
+void MapExploreState::generateLayeredMap() {
+    SDL_Log("Generating simple path-based map");
+    
+    // 1. 初始化参数
+    numLayers_ = 8; // 减少层数，让路径更清晰
+    layerNodes_.clear();
+    layerNodes_.resize(numLayers_ + 1); // +1 for boss layer
+    
+    // 创建起点（第0层，在最下面）
+    MapNode startNode;
+    startNode.layer = 0;
+    startNode.x = screenW_ / 2; // 简化，暂时不添加偏移
+    startNode.y = screenH_ - 100; // 起点在最下面
+    startNode.type = MapNode::NodeType::START;
+    startNode.accessible = true;
+    layerNodes_[0].push_back(startNode);
+    startNodeIdx_ = 0;
+    
+    // 2. 生成2-4条不同的路径
+    generatePathNodes();
+    
+    // 3. 连接路径
+    connectPaths();
+    
+    // 4. 创建终点
+    createEndNode();
+    
+    // 5. 验证路径
+    validatePaths();
+    
+    // 6. 初始化玩家位置
+    initializePlayer();
+    
+    SDL_Log("Simple path-based map generated successfully");
+}
+
+void MapExploreState::generatePathNodes() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> typeDist(0, 3); // 节点类型权重
+    std::uniform_int_distribution<> nodeCount(1, 4); // 每层1-4个节点
+    
+    // 为每一层生成不同数量的节点
+    for (int layer = 1; layer < numLayers_; ++layer) {
+        // 每层随机决定节点数量
+        int numNodesInThisLayer = nodeCount(gen);
+        SDL_Log("Layer %d: generating %d nodes", layer, numNodesInThisLayer);
+        
+        // 计算节点在屏幕上的位置
+        int layerWidth = 600; // 每层的宽度
+        int nodeSpacing = layerWidth / (numNodesInThisLayer + 1);
+        
+        for (int i = 0; i < numNodesInThisLayer; ++i) {
+            MapNode newNode;
+            newNode.layer = layer;
+            
+            // 节点位置：水平分布 + 轻微随机偏移，增加美感
+            std::uniform_int_distribution<> xOffset(-20, 20);  // 减少水平偏移范围
+            std::uniform_int_distribution<> yOffset(-10, 10);  // 减少垂直偏移范围
+            newNode.x = (screenW_ - layerWidth) / 2 + (i + 1) * nodeSpacing + xOffset(gen);
+            newNode.y = screenH_ - 150 - layer * 60 + yOffset(gen); // 从底部开始，向上排列，添加垂直偏移
+            
+            // 安全检查：确保节点位置在屏幕范围内
+            if (newNode.x < 50) newNode.x = 50;
+            if (newNode.x > screenW_ - 50) newNode.x = screenW_ - 50;
+            if (newNode.y < 50) newNode.y = 50;
+            if (newNode.y > screenH_ - 50) newNode.y = screenH_ - 50;
+            
+            // 根据权重随机选择类型
+            int typeWeight = typeDist(gen);
+            switch (typeWeight) {
+                case 0: newNode.type = MapNode::NodeType::NORMAL; break;
+                case 1: newNode.type = MapNode::NodeType::ELITE; break;
+                case 2: newNode.type = MapNode::NodeType::SHOP; break;
+                case 3: newNode.type = MapNode::NodeType::EVENT; break;
+                default: newNode.type = MapNode::NodeType::NORMAL; break;
+            }
+            
+            newNode.accessible = true;
+            layerNodes_[layer].push_back(newNode);
+        }
+    }
+    
+    // 输出每层的节点数量
+    for (int layer = 1; layer < numLayers_; ++layer) {
+        SDL_Log("Layer %d: %zu nodes", layer, layerNodes_[layer].size());
+    }
+}
+
+void MapExploreState::connectPaths() {
+    // 连接路径：创建多条从起点到终点的路径，覆盖所有节点
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    
+    SDL_Log("Starting multiple path connections...");
+    
+    // 起点连接到第1层的所有节点
+    if (!layerNodes_[0].empty() && !layerNodes_[1].empty()) {
+        SDL_Log("Connecting start to layer 1 (%zu nodes)", layerNodes_[1].size());
+        int startGlobalIdx = getGlobalNodeIndex(0, 0);
+        if (startGlobalIdx != -1) {
+            for (size_t i = 0; i < layerNodes_[1].size(); ++i) {
+                int targetGlobalIdx = getGlobalNodeIndex(1, static_cast<int>(i));
+                if (targetGlobalIdx != -1) {
+                    MapNode* startNode = getNodeByGlobalIndex(startGlobalIdx);
+                    if (startNode) {
+                        startNode->connections.push_back(targetGlobalIdx);
+                    }
+                }
+            }
+        }
+    }
+    
+    // 连接中间层，确保所有节点都被覆盖且无交叉
+    for (int layer = 1; layer < numLayers_ - 1; ++layer) {
+        auto& currentLayer = layerNodes_[layer];
+        auto& nextLayer = layerNodes_[layer + 1];
+        
+        SDL_Log("Layer %d: %zu nodes, Layer %d: %zu nodes", 
+                layer, currentLayer.size(), layer + 1, nextLayer.size());
+        
+        if (currentLayer.empty() || nextLayer.empty()) {
+            SDL_Log("Skipping layer %d due to empty layer", layer);
+            continue;
+        }
+        
+        // 确保每个父节点都连接到下一层，避免孤儿节点
+        std::vector<bool> parentConnected(currentLayer.size(), false);
+        
+        // 为下一层的每个节点连接多个父节点，但避免交叉
+        for (size_t nextIdx = 0; nextIdx < nextLayer.size(); ++nextIdx) {
+            // 计算这个节点应该连接的父节点范围（避免交叉）
+            int startParent, endParent;
+            
+            if (nextLayer.size() == 1) {
+                // 如果下一层只有一个节点，连接当前层的所有节点
+                startParent = 0;
+                endParent = static_cast<int>(currentLayer.size()) - 1;
+            } else {
+                // 根据节点在下一层中的位置，计算应该连接的父节点范围
+                double ratio = static_cast<double>(nextIdx) / (nextLayer.size() - 1);
+                int totalParents = static_cast<int>(currentLayer.size());
+                
+                // 计算连接范围，确保不交叉
+                int rangeSize = std::max(1, totalParents / static_cast<int>(nextLayer.size()));
+                startParent = static_cast<int>(ratio * (totalParents - rangeSize));
+                endParent = std::min(startParent + rangeSize - 1, totalParents - 1);
+            }
+            
+            // 连接范围内的所有父节点
+            for (int parentIdx = startParent; parentIdx <= endParent; ++parentIdx) {
+                connectNodes(layer, parentIdx, layer + 1, static_cast<int>(nextIdx));
+                parentConnected[parentIdx] = true;
+                SDL_Log("Connected layer %d node %d to layer %d node %zu (range: %d-%d)", 
+                        layer, parentIdx, layer + 1, nextIdx, startParent, endParent);
+            }
+        }
+        
+        // 检查并修复孤儿节点
+        for (size_t parentIdx = 0; parentIdx < currentLayer.size(); ++parentIdx) {
+            if (!parentConnected[parentIdx]) {
+                // 找到最接近的下一层节点进行连接
+                int bestChild = selectBestParentNode(layer, static_cast<int>(parentIdx), static_cast<int>(nextLayer.size()));
+                if (bestChild >= 0 && bestChild < static_cast<int>(nextLayer.size())) {
+                    connectNodes(layer, static_cast<int>(parentIdx), layer + 1, bestChild);
+                    SDL_Log("Fixed orphan node: connected layer %d node %zu to layer %d node %d", 
+                            layer, parentIdx, layer + 1, bestChild);
+                }
+            }
+        }
+    }
+    
+    SDL_Log("Path connections completed");
+}
+
+void MapExploreState::createEndNode() {
+    // 创建终点节点（BOSS，在最上面，单独一层）
+    MapNode endNode;
+    endNode.layer = numLayers_;
+    endNode.x = screenW_ / 2; // 简化，暂时不添加偏移
+    
+    // 计算最后一层中间节点的Y坐标
+    int lastLayerY = screenH_ - 150 - (numLayers_ - 1) * 60;
+    // 终点节点在最后一层上方，确保单独一层
+    endNode.y = lastLayerY - 80; // 在最后一层上方80像素，确保分离
+    
+    endNode.type = MapNode::NodeType::BOSS;
+    endNode.accessible = true;
+    layerNodes_[numLayers_].push_back(endNode);
+    bossNodeIdx_ = 0;
+    
+    SDL_Log("Created end node at layer %d, x=%d, y=%d (last layer y=%d)", 
+            numLayers_, endNode.x, endNode.y, lastLayerY);
+    
+    // 连接最后一层的所有节点到终点
+    if (!layerNodes_[numLayers_ - 1].empty()) {
+        int endGlobalIdx = getGlobalNodeIndex(numLayers_, 0);
+        if (endGlobalIdx != -1) {
+            for (size_t i = 0; i < layerNodes_[numLayers_ - 1].size(); ++i) {
+                int sourceGlobalIdx = getGlobalNodeIndex(numLayers_ - 1, static_cast<int>(i));
+                if (sourceGlobalIdx != -1) {
+                    getNodeByGlobalIndex(sourceGlobalIdx)->connections.push_back(endGlobalIdx);
+                }
+            }
+        }
+    }
+}
+
+void MapExploreState::validatePaths() {
+    // 验证路径覆盖所有节点
+    SDL_Log("Validating path coverage...");
+    
+    if (hasPathFromStartToBoss()) {
+        SDL_Log("✓ Path from start to boss exists");
+    } else {
+        SDL_Log("✗ Warning: No path from start to boss");
+    }
+    
+    // 验证所有节点都被路径覆盖
+    int totalNodes = getTotalNodeCount();
+    int reachableFromStart = 0;
+    int reachableFromEnd = 0;
+    
+    for (int i = 0; i < totalNodes; ++i) {
+        if (canReachFromStart(i)) {
+            reachableFromStart++;
+        }
+        if (canReachFromEnd(i)) {
+            reachableFromEnd++;
+        }
+    }
+    
+    SDL_Log("Path coverage from start: %d/%d nodes", reachableFromStart, totalNodes);
+    SDL_Log("Path coverage from end: %d/%d nodes", reachableFromEnd, totalNodes);
+    
+    if (reachableFromStart == totalNodes) {
+        SDL_Log("✓ All nodes are covered by paths from start");
+    } else {
+        SDL_Log("✗ Warning: %d nodes are not covered by paths from start", totalNodes - reachableFromStart);
+    }
+    
+    if (reachableFromEnd == totalNodes) {
+        SDL_Log("✓ All nodes are covered by paths from end");
+    } else {
+        SDL_Log("✗ Warning: %d nodes are not covered by paths from end", totalNodes - reachableFromEnd);
+    }
+    
+    // 计算路径数量（简化版本，避免崩溃）
+    int pathCount = countPathsFromStartToEnd();
+    SDL_Log("Total paths from start to end: %d", pathCount);
+    
+    if (reachableFromStart == totalNodes && reachableFromEnd == totalNodes) {
+        SDL_Log("✓ Perfect path coverage achieved! (%d paths)", pathCount);
+    } else {
+        SDL_Log("✗ Path coverage issues detected");
+    }
+}
+
+bool MapExploreState::canReachFromStart(int targetNodeIndex) {
+    // 使用BFS检查从起点是否能到达目标节点
+    std::vector<bool> visited(getTotalNodeCount(), false);
+    std::queue<int> queue;
+    
+    // 从起点开始
+    int startGlobalIdx = getGlobalNodeIndex(0, 0);
+    if (startGlobalIdx == -1) return false;
+    
+    queue.push(startGlobalIdx);
+    visited[startGlobalIdx] = true;
+    
+    while (!queue.empty()) {
+        int current = queue.front();
+        queue.pop();
+        
+        if (current == targetNodeIndex) {
+            return true; // 找到目标节点
+        }
+        
+        // 检查当前节点的所有连接
+        MapNode* currentNode = getNodeByGlobalIndex(current);
+        if (currentNode) {
+            for (int nextNode : currentNode->connections) {
+                if (nextNode >= 0 && nextNode < getTotalNodeCount() && !visited[nextNode]) {
+                    visited[nextNode] = true;
+                    queue.push(nextNode);
+                }
+            }
+        }
+    }
+    
+    return false; // 无法到达目标节点
+}
+
+bool MapExploreState::canReachFromEnd(int targetNodeIndex) {
+    // 使用BFS检查从终点是否能到达目标节点（反向遍历）
+    std::vector<bool> visited(getTotalNodeCount(), false);
+    std::queue<int> queue;
+    
+    // 从终点开始
+    int endGlobalIdx = getGlobalNodeIndex(numLayers_, 0);
+    if (endGlobalIdx == -1) return false;
+    
+    queue.push(endGlobalIdx);
+    visited[endGlobalIdx] = true;
+    
+    while (!queue.empty()) {
+        int current = queue.front();
+        queue.pop();
+        
+        if (current == targetNodeIndex) {
+            return true; // 找到目标节点
+        }
+        
+        // 反向遍历：找到所有指向当前节点的节点
+        for (int i = 0; i < getTotalNodeCount(); ++i) {
+            if (!visited[i]) {
+                MapNode* node = getNodeByGlobalIndex(i);
+                if (node) {
+                    // 检查这个节点是否连接到当前节点
+                    for (int connectedNode : node->connections) {
+                        if (connectedNode == current) {
+                            visited[i] = true;
+                            queue.push(i);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return false; // 无法到达目标节点
+}
+
+int MapExploreState::countPathsFromStartToEnd() {
+    // 使用DFS计算从起点到终点的路径数量，添加安全检查
+    int startGlobalIdx = getGlobalNodeIndex(0, 0);
+    int endGlobalIdx = getGlobalNodeIndex(numLayers_, 0);
+    
+    if (startGlobalIdx == -1 || endGlobalIdx == -1) {
+        SDL_Log("Warning: Invalid start or end node indices");
+        return 0;
+    }
+    
+    int totalNodes = getTotalNodeCount();
+    if (totalNodes > 100) {
+        SDL_Log("Warning: Too many nodes (%d), limiting path count to prevent stack overflow", totalNodes);
+        return 1; // 返回1表示至少有一条路径，避免复杂计算
+    }
+    
+    std::vector<bool> visited(totalNodes, false);
+    int pathCount = dfsCountPaths(startGlobalIdx, endGlobalIdx, visited, 0);
+    
+    SDL_Log("Path count calculation completed: %d paths", pathCount);
+    return pathCount;
+}
+
+int MapExploreState::dfsCountPaths(int current, int target, std::vector<bool>& visited, int depth) {
+    // 防止递归过深
+    if (depth > 20) {
+        SDL_Log("Warning: Recursion depth limit reached (%d), stopping path count", depth);
+        return 0;
+    }
+    
+    if (current == target) {
+        return 1; // 找到一条路径
+    }
+    
+    if (current < 0 || current >= getTotalNodeCount()) {
+        SDL_Log("Warning: Invalid current node index: %d", current);
+        return 0;
+    }
+    
+    visited[current] = true;
+    int pathCount = 0;
+    
+    MapNode* currentNode = getNodeByGlobalIndex(current);
+    if (currentNode) {
+        for (int nextNode : currentNode->connections) {
+            if (nextNode >= 0 && nextNode < getTotalNodeCount() && !visited[nextNode]) {
+                pathCount += dfsCountPaths(nextNode, target, visited, depth + 1);
+                
+                // 限制路径数量，防止计算时间过长
+                if (pathCount > 100) {
+                    SDL_Log("Warning: Path count limit reached (%d), stopping calculation", pathCount);
+                    visited[current] = false;
+                    return pathCount;
+                }
+            }
+        }
+    }
+    
+    visited[current] = false; // 回溯
+    return pathCount;
+}
+
+void MapExploreState::connectNodes(int fromLayer, int fromIndex, int toLayer, int toIndex) {
+    // 安全检查
+    if (fromLayer < 0 || fromLayer >= static_cast<int>(layerNodes_.size()) ||
+        toLayer < 0 || toLayer >= static_cast<int>(layerNodes_.size()) ||
+        fromIndex < 0 || toIndex < 0) {
+        return;
+    }
+    
+    if (fromIndex >= static_cast<int>(layerNodes_[fromLayer].size()) ||
+        toIndex >= static_cast<int>(layerNodes_[toLayer].size())) {
+        return;
+    }
+    
+    int globalFromIdx = getGlobalNodeIndex(fromLayer, fromIndex);
+    int globalToIdx = getGlobalNodeIndex(toLayer, toIndex);
+    
+    if (globalFromIdx != -1 && globalToIdx != -1) {
+        MapNode* fromNode = getNodeByGlobalIndex(globalFromIdx);
+        if (fromNode) {
+            fromNode->connections.push_back(globalToIdx);
+        }
+    }
+}
+
+void MapExploreState::createBranching(int fromLayer, int fromIndex, int toLayer) {
+    // 从单个节点分支到多个节点
+    auto& nextLayerNodes = layerNodes_[toLayer];
+    
+    for (size_t i = 0; i < nextLayerNodes.size(); ++i) {
+        connectNodes(fromLayer, fromIndex, toLayer, static_cast<int>(i));
+    }
+}
+
+void MapExploreState::createMerging(int fromLayer, int toLayer, int toIndex) {
+    // 从多个节点合并到单个节点
+    auto& currentLayerNodes = layerNodes_[fromLayer];
+    
+    for (size_t i = 0; i < currentLayerNodes.size(); ++i) {
+        connectNodes(fromLayer, static_cast<int>(i), toLayer, toIndex);
+    }
+}
+
+void MapExploreState::createComplexConnections(int fromLayer, int toLayer) {
+    // 多对多连接：避免交叉通路，使用位置选择
+    
+    // 安全检查
+    if (fromLayer < 0 || fromLayer >= static_cast<int>(layerNodes_.size()) ||
+        toLayer < 0 || toLayer >= static_cast<int>(layerNodes_.size())) {
+        return;
+    }
+    
+    auto& currentLayerNodes = layerNodes_[fromLayer];
+    auto& nextLayerNodes = layerNodes_[toLayer];
+    
+    // 检查层是否为空
+    if (currentLayerNodes.empty() || nextLayerNodes.empty()) {
+        return;
+    }
+    
+    // 为每个下一层节点选择最合适的父节点，避免交叉
+    for (size_t nextIdx = 0; nextIdx < nextLayerNodes.size(); ++nextIdx) {
+        // 根据位置选择最合适的父节点，避免交叉通路
+        int bestParentIdx = selectBestParentNode(fromLayer, static_cast<int>(nextIdx), static_cast<int>(currentLayerNodes.size()));
+        
+        if (bestParentIdx != -1 && bestParentIdx < static_cast<int>(currentLayerNodes.size())) {
+            connectNodes(fromLayer, bestParentIdx, toLayer, static_cast<int>(nextIdx));
+        }
+    }
+}
+
+int MapExploreState::selectBestParentNode(int layer, int nextNodeIndex, int parentNodeCount) {
+    // 根据位置选择最合适的父节点，避免交叉通路
+    // 使用位置映射规则：将下一层节点按位置映射到上一层节点
+    
+    // 安全检查
+    if (parentNodeCount <= 0 || nextNodeIndex < 0) {
+        return 0;
+    }
+    
+    if (parentNodeCount == 1) {
+        return 0; // 如果上一层只有一个节点，所有下一层节点都连接它
+    }
+    
+    // 安全检查：确保 layer + 1 在有效范围内
+    if (layer + 1 >= static_cast<int>(layerNodes_.size())) {
+        return 0;
+    }
+    
+    // 计算下一层节点的相对位置
+    auto& nextLayerNodes = layerNodes_[layer + 1];
+    if (nextNodeIndex >= static_cast<int>(nextLayerNodes.size())) {
+        return 0;
+    }
+    
+    // 计算下一层节点的相对位置（0.0 到 1.0）
+    float nextNodeRelativePos;
+    if (nextLayerNodes.size() == 1) {
+        nextNodeRelativePos = 0.5f; // 如果只有一个节点，放在中间
+    } else {
+        nextNodeRelativePos = static_cast<float>(nextNodeIndex) / (nextLayerNodes.size() - 1);
+    }
+    
+    // 映射到上一层节点，确保不交叉
+    // 使用更精确的映射算法，避免交叉通路
+    int parentIndex = static_cast<int>(nextNodeRelativePos * (parentNodeCount - 1) + 0.5f);
+    parentIndex = std::max(0, std::min(parentNodeCount - 1, parentIndex));
+    
+    // 确保每个下一层节点只连接一个父节点，避免交叉
+    return parentIndex;
+}
+
+int MapExploreState::getGlobalNodeIndex(int layer, int localIndex) const {
+    if (layer < 0 || layer >= static_cast<int>(layerNodes_.size()) || 
+        localIndex < 0 || localIndex >= static_cast<int>(layerNodes_[layer].size())) {
+        return -1;
+    }
+    
+    int globalIndex = 0;
+    for (int i = 0; i < layer; ++i) {
+        globalIndex += static_cast<int>(layerNodes_[i].size());
+    }
+    return globalIndex + localIndex;
+}
+
+MapExploreState::MapNode* MapExploreState::getNodeByGlobalIndex(int globalIndex) {
+    int currentIndex = 0;
+    for (auto& layer : layerNodes_) {
+        if (globalIndex < currentIndex + static_cast<int>(layer.size())) {
+            int localIndex = globalIndex - currentIndex;
+            return &layer[localIndex];
+        }
+        currentIndex += static_cast<int>(layer.size());
+    }
+    return nullptr;
+}
+
+int MapExploreState::getTotalNodeCount() const {
+    int total = 0;
+    for (const auto& layer : layerNodes_) {
+        total += static_cast<int>(layer.size());
+    }
+    return total;
+}
+
+void MapExploreState::connectStartAndBoss() {
+    // 起点连接到第1层的一部分节点（控制连接数量）
+    if (!layerNodes_[0].empty() && !layerNodes_[1].empty()) {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        
+        int startGlobalIdx = getGlobalNodeIndex(0, 0);
+        
+        // 优先连接到第1层的中心节点（主要路径）
+        int centerIndex = layerNodes_[1].size() / 2;
+        int targetGlobalIdx = getGlobalNodeIndex(1, centerIndex);
+        if (startGlobalIdx != -1 && targetGlobalIdx != -1) {
+            getNodeByGlobalIndex(startGlobalIdx)->connections.push_back(targetGlobalIdx);
+        }
+        
+        // 如果第1层有多个节点，有较小概率连接到其他节点
+        if (layerNodes_[1].size() > 1) {
+            std::uniform_int_distribution<> extraConnection(0, 100);
+            
+            // 20%的概率连接到其他节点（降低概率）
+            if (extraConnection(gen) < 20) {
+                for (size_t i = 0; i < layerNodes_[1].size(); ++i) {
+                    if (static_cast<int>(i) != centerIndex) {
+                        int targetGlobalIdx = getGlobalNodeIndex(1, static_cast<int>(i));
+                        if (startGlobalIdx != -1 && targetGlobalIdx != -1) {
+                            getNodeByGlobalIndex(startGlobalIdx)->connections.push_back(targetGlobalIdx);
+                        }
+                        break; // 只连接一个额外的节点
+                    }
+                }
+            }
+        }
+    }
+    
+    // 最后一层的所有节点都连接到BOSS（确保所有路径都能到达终点）
+    if (!layerNodes_[numLayers_ - 1].empty() && !layerNodes_[numLayers_].empty()) {
+        int bossGlobalIdx = getGlobalNodeIndex(numLayers_, 0);
+        
+        // 连接最后一层的所有节点到BOSS
+        for (size_t i = 0; i < layerNodes_[numLayers_ - 1].size(); ++i) {
+            int sourceGlobalIdx = getGlobalNodeIndex(numLayers_ - 1, static_cast<int>(i));
+            if (bossGlobalIdx != -1 && sourceGlobalIdx != -1) {
+                // 单向连接：最后一层节点连接到BOSS
+                getNodeByGlobalIndex(sourceGlobalIdx)->connections.push_back(bossGlobalIdx);
+            }
+        }
+    }
+}
+
+bool MapExploreState::hasPathFromStartToBoss() {
+    // 使用BFS检查路径
+    std::vector<bool> visited(getTotalNodeCount(), false);
+    std::queue<int> queue;
+    
+    int startGlobalIdx = getGlobalNodeIndex(0, 0);
+    int bossGlobalIdx = getGlobalNodeIndex(numLayers_, 0);
+    
+    if (startGlobalIdx == -1 || bossGlobalIdx == -1) return false;
+    
+    queue.push(startGlobalIdx);
+    visited[startGlobalIdx] = true;
+    
+    while (!queue.empty()) {
+        int current = queue.front();
+        queue.pop();
+        
+        if (current == bossGlobalIdx) return true;
+        
+        MapNode* node = getNodeByGlobalIndex(current);
+        if (node) {
+            for (int connection : node->connections) {
+                if (connection < static_cast<int>(visited.size()) && !visited[connection]) {
+                    visited[connection] = true;
+                    queue.push(connection);
+                }
+            }
+        }
+    }
+    
+    return false;
+}
+
+bool MapExploreState::allPathsFromStartReachBoss() {
+    // 检查从起点延伸的每一条路径都能到达BOSS
+    int startGlobalIdx = getGlobalNodeIndex(0, 0);
+    int bossGlobalIdx = getGlobalNodeIndex(numLayers_, 0);
+    
+    if (startGlobalIdx == -1 || bossGlobalIdx == -1) return false;
+    
+    // 使用DFS检查所有从起点出发的路径
+    std::vector<bool> visited(getTotalNodeCount(), false);
+    return dfsCheckAllPaths(startGlobalIdx, bossGlobalIdx, visited);
+}
+
+bool MapExploreState::dfsCheckAllPaths(int current, int target, std::vector<bool>& visited) {
+    if (current == target) return true;
+    
+    visited[current] = true;
+    
+    MapNode* node = getNodeByGlobalIndex(current);
+    if (!node) return false;
+    
+    // 如果当前节点没有连接，说明路径断了
+    if (node->connections.empty()) return false;
+    
+    // 检查所有连接是否都能到达目标
+    for (int connection : node->connections) {
+        if (connection < static_cast<int>(visited.size()) && !visited[connection]) {
+            if (!dfsCheckAllPaths(connection, target, visited)) {
+                return false; // 如果任何一条路径不能到达目标，返回false
+            }
+        }
+    }
+    
+    return true;
+}
+
+void MapExploreState::validateAndTrimPaths() {
+    // 检查从起点到BOSS点是否存在至少一条完整路径
+    if (!hasPathFromStartToBoss()) {
+        SDL_Log("Warning: No path from start to boss found, regenerating...");
+        generateLayeredMap(); // 重新生成
+        return;
+    }
+    
+    // 检查从起点延伸的每一条路径都能到达BOSS
+    if (!allPathsFromStartReachBoss()) {
+        SDL_Log("Warning: Not all paths from start reach boss, regenerating...");
+        generateLayeredMap(); // 重新生成
+        return;
+    }
+    
+    // 移除所有"孤儿节点"（即无法从起点到达，或者无法到达BOSS的节点）
+    removeOrphanNodes();
+}
+
+void MapExploreState::removeOrphanNodes() {
+    // 标记所有从起点可达的节点
+    std::vector<bool> reachable(getTotalNodeCount(), false);
+    std::queue<int> queue;
+    
+    int startGlobalIdx = getGlobalNodeIndex(0, 0);
+    if (startGlobalIdx != -1) {
+        queue.push(startGlobalIdx);
+        reachable[startGlobalIdx] = true;
+    }
+    
+    while (!queue.empty()) {
+        int current = queue.front();
+        queue.pop();
+        
+        MapNode* node = getNodeByGlobalIndex(current);
+        if (node) {
+            for (int connection : node->connections) {
+                if (connection < static_cast<int>(reachable.size()) && !reachable[connection]) {
+                    reachable[connection] = true;
+                    queue.push(connection);
+                }
+            }
+        }
+    }
+    
+    // 移除不可达的节点
+    for (int layer = 0; layer <= numLayers_; ++layer) {
+        auto& layerNodes = layerNodes_[layer];
+        for (auto it = layerNodes.begin(); it != layerNodes.end();) {
+            int globalIdx = getGlobalNodeIndex(layer, static_cast<int>(it - layerNodes.begin()));
+            if (globalIdx != -1 && !reachable[globalIdx]) {
+                it = layerNodes.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+}
+
+void MapExploreState::renderMap(SDL_Renderer* renderer) {
+    // 渲染连接线
+    for (int layer = 0; layer <= numLayers_; ++layer) {
+        for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
+            const MapNode& node = layerNodes_[layer][i];
+            for (int connection : node.connections) {
+                MapExploreState::MapNode* connectedNode = getNodeByGlobalIndex(connection);
+                if (connectedNode) {
+                    renderConnection(renderer, node, *connectedNode);
+                }
+            }
+        }
+    }
+    
+    // 渲染节点
+    for (int layer = 0; layer <= numLayers_; ++layer) {
+        for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
+            int globalIndex = getGlobalNodeIndex(layer, static_cast<int>(i));
+            renderNode(renderer, layerNodes_[layer][i], globalIndex);
+        }
+    }
+}
+
+void MapExploreState::renderNode(SDL_Renderer* renderer, const MapNode& node, int index) {
+    // 节点已经包含屏幕坐标，直接使用
+    int x = node.x;
+    int y = node.y;
+    
+    // 检查节点状态（添加安全检查）
+    bool isCurrentNode = (playerCurrentNode_ != -1 && index == playerCurrentNode_);
+    bool isAccessible = (playerCurrentNode_ != -1 && isNodeAccessible(index));
+    
+    // 设置节点颜色
+    switch (node.type) {
+        case MapNode::NodeType::START:
+            SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255); // 棕色
+            break;
+        case MapNode::NodeType::BOSS:
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // 红色
+            break;
+        case MapNode::NodeType::ELITE:
+            SDL_SetRenderDrawColor(renderer, 255, 215, 0, 255); // 金色
+            break;
+        case MapNode::NodeType::SHOP:
+            SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255); // 蓝色
+            break;
+        case MapNode::NodeType::EVENT:
+            SDL_SetRenderDrawColor(renderer, 138, 43, 226, 255); // 紫色
+            break;
+        default:
+            SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255); // 灰色
+            break;
+    }
+    
+    // 绘制节点
+    SDL_Rect nodeRect = {
+        x - node.size / 2,
+        y - node.size / 2,
+        node.size,
+        node.size
+    };
+    SDL_RenderFillRect(renderer, &nodeRect);
+    
+    // 绘制边框 - 根据节点状态使用不同颜色
+    if (isCurrentNode) {
+        // 当前节点：亮黄色粗边框
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+        for (int i = 0; i < 4; ++i) {
+            SDL_Rect borderRect = {
+                nodeRect.x - i,
+                nodeRect.y - i,
+                nodeRect.w + 2 * i,
+                nodeRect.h + 2 * i
+            };
+            SDL_RenderDrawRect(renderer, &borderRect);
+        }
+    } else if (isAccessible) {
+        // 可访问节点：亮绿色粗边框
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        for (int i = 0; i < 3; ++i) {
+            SDL_Rect borderRect = {
+                nodeRect.x - i,
+                nodeRect.y - i,
+                nodeRect.w + 2 * i,
+                nodeRect.h + 2 * i
+            };
+            SDL_RenderDrawRect(renderer, &borderRect);
+        }
+    } else {
+        // 不可访问节点：普通白色边框
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &nodeRect);
+    }
+    
+    // 绘制节点编号（调试用）
+    if (smallFont_) {
+        char nodeText[16];
+        snprintf(nodeText, sizeof(nodeText), "%d", index);
+        SDL_Color textColor{ 255, 255, 255, 255 };
+        SDL_Surface* textSurface = TTF_RenderUTF8_Blended(smallFont_, nodeText, textColor);
+        if (textSurface) {
+            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+            if (textTexture) {
+                SDL_Rect textRect = { x - 5, y - 5, textSurface->w, textSurface->h };
+                SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+                SDL_DestroyTexture(textTexture);
+            }
+            SDL_FreeSurface(textSurface);
+        }
+    }
+}
+
+void MapExploreState::renderConnection(SDL_Renderer* renderer, const MapNode& from, const MapNode& to) {
+    // 直接使用节点的屏幕坐标
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawLine(renderer, from.x, from.y, to.x, to.y);
+}
+
+SDL_Point MapExploreState::gridToScreen(int gridX, int gridY) const {
+    int nodeSpacing = 80;
+    int mapOffsetX = (screenW_ - 600) / 2; // 假设地图宽度约600像素
+    int mapOffsetY = 200; // 向下偏移为标题留空间
+    
+    return { 
+        mapOffsetX + gridX * nodeSpacing, 
+        mapOffsetY + gridY * nodeSpacing 
+    };
+}
+
+int MapExploreState::screenToGrid(int screenX, int screenY) const {
+    // 查找对应的节点（使用分层结构）
+    for (int layer = 0; layer <= numLayers_; ++layer) {
+        for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
+            const MapNode& node = layerNodes_[layer][i];
+            int dx = screenX - node.x;
+            int dy = screenY - node.y;
+            if (dx * dx + dy * dy <= node.size * node.size) {
+                return getGlobalNodeIndex(layer, static_cast<int>(i));
+            }
+        }
+    }
+    return -1;
+}
+
+void MapExploreState::initializePlayer() {
+    // 玩家初始位置在起点
+    playerCurrentNode_ = getGlobalNodeIndex(0, 0);
+    if (playerCurrentNode_ == -1) {
+        SDL_Log("Warning: Could not find start node for player initialization");
+        playerCurrentNode_ = -1;
+        accessibleNodes_.clear();
+        return;
+    }
+    
+    // 验证起点节点是否存在
+    MapNode* startNode = getNodeByGlobalIndex(playerCurrentNode_);
+    if (!startNode) {
+        SDL_Log("Warning: Start node %d does not exist", playerCurrentNode_);
+        playerCurrentNode_ = -1;
+        accessibleNodes_.clear();
+        return;
+    }
+    
+    // 更新可移动节点列表
+    updateAccessibleNodes();
+    
+    SDL_Log("Player initialized at node %d (start node)", playerCurrentNode_);
+}
+
+void MapExploreState::updateAccessibleNodes() {
+    accessibleNodes_.clear();
+    
+    if (playerCurrentNode_ == -1) {
+        SDL_Log("Warning: Player current node is -1, cannot update accessible nodes");
+        return;
+    }
+    
+    // 获取玩家当前节点
+    MapNode* currentNode = getNodeByGlobalIndex(playerCurrentNode_);
+    if (!currentNode) {
+        SDL_Log("Warning: Could not get current node %d", playerCurrentNode_);
+        return;
+    }
+    
+    // 添加当前节点连接的所有节点到可移动列表
+    for (int connection : currentNode->connections) {
+        if (connection >= 0 && connection < getTotalNodeCount()) {
+            // 验证连接节点是否存在
+            MapNode* connectedNode = getNodeByGlobalIndex(connection);
+            if (connectedNode) {
+                accessibleNodes_.push_back(connection);
+            } else {
+                SDL_Log("Warning: Connected node %d does not exist", connection);
+            }
+        } else {
+            SDL_Log("Warning: Invalid connection index %d", connection);
+        }
+    }
+    
+    SDL_Log("Updated accessible nodes: %zu nodes accessible from node %d", 
+            accessibleNodes_.size(), playerCurrentNode_);
+}
+
+bool MapExploreState::isNodeAccessible(int nodeIndex) {
+    // 安全检查
+    if (nodeIndex < 0 || nodeIndex >= getTotalNodeCount()) {
+        return false;
+    }
+    
+    // 简单的线性搜索，避免使用std::find
+    for (int accessibleNode : accessibleNodes_) {
+        if (accessibleNode == nodeIndex) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void MapExploreState::movePlayerToNode(int nodeIndex) {
+    if (!isNodeAccessible(nodeIndex)) {
+        SDL_Log("Warning: Cannot move to node %d, not accessible", nodeIndex);
+        return;
+    }
+    
+    playerCurrentNode_ = nodeIndex;
+    updateAccessibleNodes();
+    
+    SDL_Log("Player moved to node %d", nodeIndex);
+}

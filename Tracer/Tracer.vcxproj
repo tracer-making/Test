@@ -142,6 +142,8 @@
     <ClCompile Include="src\\ui\\Button.cpp" />
     <ClCompile Include="src\\states\\BattleState.cpp" />
     <ClCompile Include="src\\states\\MainMenuState.cpp" />
+    <ClCompile Include="src\\states\\TestState.cpp" />
+    <ClCompile Include="src\\states\\MapExploreState.cpp" />
     <ClCompile Include="src\\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -149,6 +151,8 @@
     <ClInclude Include="src\\core\\State.h" />
     <ClInclude Include="src\\ui\\Button.h" />
     <ClInclude Include="src\\states\\MainMenuState.h" />
+    <ClInclude Include="src\\states\\TestState.h" />
+    <ClInclude Include="src\\states\\MapExploreState.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

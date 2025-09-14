@@ -1,5 +1,6 @@
 #include "MainMenuState.h"
 #include "BattleState.h"
+#include "TestState.h" // Added include
 #include "../core/App.h"
 #include "../ui/Button.h"
 #include <SDL.h>
@@ -33,13 +34,15 @@ void MainMenuState::onEnter(App& app) {
 
 
 	std::vector<Button*> owned;
-	owned.reserve(4);
-	for (int i = 0; i < 4; ++i) owned.push_back(new Button());
+	owned.reserve(5); // Changed from 4 to 5
+	for (int i = 0; i < 5; ++i) owned.push_back(new Button()); // Changed from 4 to 5
 	buttons_[0] = owned[0];
 	buttons_[1] = owned[1];
 	buttons_[2] = owned[2];
 	buttons_[3] = owned[3];
+	buttons_[4] = owned[4]; // Added test button
 
+	// 主按钮
 	int bw = 200, bh = 45; // 按钮更小
 	int cx = screenW_ / 2 - bw / 2;
 	int cy = screenH_ / 2 - (bh * 4 + 15 * 3) / 2 + 60; // 按钮往下移
@@ -50,6 +53,15 @@ void MainMenuState::onEnter(App& app) {
 		buttons_[i]->setText(labels[i]);
 		if (smallFont_) buttons_[i]->setFont(smallFont_, app.getRenderer());
 	}
+	
+	// 测试按钮（右上角）
+	int testButtonSize = 40;
+	SDL_Rect testButtonRect { screenW_ - testButtonSize - 20, 20, testButtonSize, testButtonSize };
+	buttons_[4]->setRect(testButtonRect);
+	buttons_[4]->setText(u8"T");
+	if (smallFont_) buttons_[4]->setFont(smallFont_, app.getRenderer());
+	// 不设置按钮回调，在handleEvent中直接处理（与开始游戏按钮一致）
+
 	// 不设置按钮回调，在handleEvent中直接处理
 	buttons_[1]->setOnClick([]() { SDL_Log("Settings clicked"); });
 	buttons_[2]->setOnClick([]() { SDL_Log("Collection clicked"); });
@@ -58,7 +70,7 @@ void MainMenuState::onEnter(App& app) {
 	// 初始化乱码数据流（更快、多一点、小一点）
 	streams_.clear();
 	const char* charSet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()[]{}|;:,.<>?";
-	int charSetSize = strlen(charSet);
+	int charSetSize = static_cast<int>(strlen(charSet));
 	int streamCount = screenW_ / 12; // 增加密度
 	for (int i = 0; i < streamCount; ++i) {
 		DataStream s;
@@ -103,14 +115,6 @@ void MainMenuState::onEnter(App& app) {
 	}
 }
 
-void MainMenuState::onExit(App& app) {
-	for (auto* b : buttons_) { delete b; }
-	buttons_ = {nullptr, nullptr, nullptr, nullptr};
-	if (font_) { TTF_CloseFont(font_); font_ = nullptr; }
-	if (smallFont_) { TTF_CloseFont(smallFont_); smallFont_ = nullptr; }
-	if (titleTex_) { SDL_DestroyTexture(titleTex_); titleTex_ = nullptr; }
-}
-
 void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
 	// 处理按钮事件
 	for (auto* b : buttons_) if (b) b->handleEvent(e);
@@ -125,12 +129,20 @@ void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
 				app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState())));
 			}
 		}
+		// 处理测试按钮点击
+		if (buttons_[4]) {
+			const SDL_Rect& rect = buttons_[4]->getRect();
+			if (mx >= rect.x && mx <= rect.x + rect.w &&
+				my >= rect.y && my <= rect.y + rect.h) {
+				app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
+			}
+		}
 	}
 }
 
 void MainMenuState::update(App& app, float dt) {
 	const char* charSet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()[]{}|;:,.<>?";
-	int charSetSize = strlen(charSet);
+	int charSetSize = static_cast<int>(strlen(charSet));
 
 	for (auto& s : streams_) {
 		s.y += s.speed * dt;
@@ -383,6 +395,8 @@ void MainMenuState::render(App& app) {
 	}
 }
 
-void MainMenuState::startBattle(App& app) {
+
+void MainMenuState::startBattle(App& app)
+{
 	app.setState(std::unique_ptr<State>(new BattleState()));
 }

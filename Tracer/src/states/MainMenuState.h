@@ -19,7 +19,6 @@ public:
 	~MainMenuState();
 
 	void onEnter(App& app) override;
-	void onExit(App& app) override;
 	void handleEvent(App& app, const SDL_Event& e) override;
 	void update(App& app, float) override;
 	void render(App& app) override;
@@ -27,7 +26,7 @@ public:
 	void startBattle(App& app);
 
 private:
-	std::array<Button*, 4> buttons_ {nullptr, nullptr, nullptr, nullptr};
+	std::array<Button*, 5> buttons_ {nullptr, nullptr, nullptr, nullptr, nullptr}; // Changed from 4 to 5
 	int screenW_ = 1280;
 	int screenH_ = 720;
 
