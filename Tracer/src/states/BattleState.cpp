@@ -1,4 +1,5 @@
 #include "BattleState.h"
+#include "TestState.h"
 #include "../core/App.h"
 #include <SDL.h>
 #include <cmath>
@@ -229,14 +230,28 @@ void BattleState::onEnter(App& app) {
 
 	// 初始化阴阳平衡
 	yinYangBalance_ = 50;
+
+	// 创建返回测试按钮（左上角）
+	if (!backToTestButton_) backToTestButton_ = new Button();
+	if (backToTestButton_) {
+		SDL_Rect r{20, 20, 120, 36};
+		backToTestButton_->setRect(r);
+		backToTestButton_->setText("返回测试");
+		// BattleState 暂无字体系统，按钮无字渲染也可使用纯底色；如需字体，可接入TTF
+		backToTestButton_->setOnClick([this]() {
+			pendingGoTest_ = true;
+		});
+	}
 }
 
 void BattleState::onExit(App& app) {
 	// 清理资源（如果有的话）
+	if (backToTestButton_) { delete backToTestButton_; backToTestButton_ = nullptr; }
 }
 
 void BattleState::handleEvent(App& app, const SDL_Event& e) {
 	// 处理鼠标悬停和点击事件
+	if (backToTestButton_) backToTestButton_->handleEvent(e);
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mouseX = e.button.x;
 		int mouseY = e.button.y;
@@ -328,6 +343,11 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 
 void BattleState::update(App& app, float dt) {
 	// 更新游戏逻辑
+	if (pendingGoTest_) {
+		pendingGoTest_ = false;
+		app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
+		return;
+	}
 
 	// 阴阳平衡缓慢随机变化（模拟游戏平衡机制）
 	yinYangBalance_ += (rand() % 3 - 1); // -1, 0, 或 1
@@ -836,5 +856,10 @@ void BattleState::render(App& app) {
 				}
 			}
 		}
+	}
+
+	// 渲染返回测试按钮（简单矩形按钮，无字体）
+	if (backToTestButton_) {
+		backToTestButton_->render(renderer);
 	}
 }

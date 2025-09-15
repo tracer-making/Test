@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../core/State.h"
+#include "../ui/Button.h"
 #include <SDL.h>
 #include <vector>
 #include <array>
@@ -51,6 +52,10 @@ private:
 	// 屏幕尺寸
 	int screenW_ = 1280;
 	int screenH_ = 720;
+
+	// 返回测试按钮
+	Button* backToTestButton_ = nullptr;
+	bool pendingGoTest_ = false;
 
 	// 水墨装饰参数 - 预计算避免闪烁
 	struct InkDot {

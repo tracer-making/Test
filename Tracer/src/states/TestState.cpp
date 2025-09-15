@@ -2,6 +2,14 @@
 #include "MainMenuState.h"
 #include "BattleState.h"
 #include "MapExploreState.h"
+#include "DeckState.h"
+#include "HeritageState.h"
+#include "EngraveState.h"
+#include "InkShopState.h"
+#include "MemoryRepairState.h"
+#include "RelicPickupState.h"
+#include "TemperState.h"
+#include "SeekerState.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
 #include <SDL.h>
@@ -68,14 +76,25 @@ void TestState::onEnter(App& app) {
 		});
 	SDL_Log("Back button setup complete");
 
-	// 按钮标签（在onEnter中初始化）
+	// 按钮标签：保留前三个入口，其余替换为功能测试入口
 	std::vector<std::string> buttonLabels = {
 		u8"主菜单",
-		u8"战斗界面", 
+		u8"战斗界面",
 		u8"地图探索",
-		u8"角色界面",
-		u8"卡牌界面",
-		u8"设置界面"
+		u8"文脉传承",
+		u8"意境刻画",
+		u8"诗剑之争/意境之斗",
+		u8"墨坊",
+		u8"记忆修复",
+		u8"墨宝拾遗",
+		u8"淬炼",
+		u8"寻物人",
+		u8"以物易物",
+		u8"焚书",
+		u8"文心试炼",
+		u8"合卷",
+		u8"墨鬼",
+		u8"牌库"
 	};
 	SDL_Log("Button labels initialized: %zu buttons", buttonLabels.size());
 
@@ -113,21 +132,7 @@ void TestState::onEnter(App& app) {
 		button->setText(buttonLabels[i]);
 		if (smallFont_) button->setFont(smallFont_, app.getRenderer());
 		
-		// 设置按钮回调函数
-		switch (i) {
-		case 0: // 主菜单
-			// 不设置回调，在handleEvent中处理
-			break;
-		case 1: // 战斗界面
-			// 不设置回调，在handleEvent中处理
-			break;
-		case 2: // 地图探索（暂留空）
-			// 不设置回调，在handleEvent中处理
-			break;
-		default:
-			// 不设置回调，在handleEvent中处理
-			break;
-		}
+		// 不在此处设置回调，统一在 handleEvent 中处理
 
 		testButtons_.push_back(button);
 		SDL_Log("Button %zu created and added", i);
@@ -155,21 +160,20 @@ void TestState::handleEvent(App& app, const SDL_Event& e) {
 				const SDL_Rect& rect = testButtons_[i]->getRect();
 				if (mx >= rect.x && mx <= rect.x + rect.w &&
 					my >= rect.y && my <= rect.y + rect.h) {
-					
-					// 根据按钮索引处理不同功能
+					// 只记录待切换目标，在 update 中执行
 					switch (i) {
-					case 0: // 主菜单
-						app.setState(std::unique_ptr<State>(static_cast<State*>(new MainMenuState())));
-						break;
-					case 1: // 战斗界面
-						app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState())));
-						break;
-					case 2: // 地图探索
-						app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
-						break;
-					default:
-						SDL_Log("测试按钮 %d 点击", static_cast<int>(i));
-						break;
+					case 0: pendingTarget_ = 0; break; // 主菜单
+					case 1: pendingTarget_ = 1; break; // 战斗
+					case 2: pendingTarget_ = 2; break; // 地图
+					case 3: pendingTarget_ = 3; break; // 文脉传承
+					case 4: pendingTarget_ = 4; break; // 意境刻画
+					case 16: pendingTarget_ = 16; break; // 牌库
+					case 6: pendingTarget_ = 6; break; // 墨坊
+					case 7: pendingTarget_ = 7; break; // 记忆修复
+					case 8: pendingTarget_ = 8; break; // 墨宝拾遗
+					case 9: pendingTarget_ = 9; break; // 淬炼
+					case 10: pendingTarget_ = 10; break; // 寻物人
+					default: break;
 					}
 				}
 			}
@@ -178,7 +182,48 @@ void TestState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void TestState::update(App& app, float dt) {
-	// 更新逻辑（如果需要）
+	// 延迟切换状态，避免在事件处理中销毁当前对象
+	if (pendingTarget_ != -1) {
+		int t = pendingTarget_;
+		pendingTarget_ = -1;
+		switch (t) {
+		case 0:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new MainMenuState())));
+			break;
+		case 1:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState())));
+			break;
+		case 2:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+			break;
+		case 3:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new HeritageState())));
+			break;
+		case 4:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new EngraveState())));
+			break;
+		case 6:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new InkShopState())));
+			break;
+		case 7:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new MemoryRepairState())));
+			break;
+		case 8:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new RelicPickupState())));
+			break;
+		case 9:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new TemperState())));
+			break;
+		case 10:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new SeekerState())));
+			break;
+		case 16:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new DeckState())));
+			break;
+		default:
+			break;
+		}
+	}
 }
 
 void TestState::render(App& app) {

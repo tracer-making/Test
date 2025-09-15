@@ -24,6 +24,9 @@ private:
     
     // UI按钮
     Button* regenerateButton_ = nullptr;
+    std::vector<Button*> difficultyButtons_;
+    Button* backToTestButton_ = nullptr;
+    bool pendingGoTest_ = false;
     
     // 字体
     _TTF_Font* font_ = nullptr;
@@ -56,6 +59,7 @@ private:
     std::vector<int> accessibleNodes_; // 玩家可移动到的节点列表
     
     // 地图生成
+    int maxNodesPerLayer_ = 3;       // 复杂度：每层最多节点数（1-4）
     void generateLayeredMap();
     void generatePathNodes();
     void connectPaths();

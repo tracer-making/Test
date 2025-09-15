@@ -36,4 +36,7 @@ private:
 	SDL_Texture* titleTex_ = nullptr;
 	int titleW_ = 0;
 	int titleH_ = 0;
+
+	// 延迟切换，避免事件处理中切状态
+	int pendingTarget_ = -1; // -1无，0主菜单，1战斗，2地图，16牌库，3文脉传承
 };
