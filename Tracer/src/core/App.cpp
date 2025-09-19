@@ -7,6 +7,7 @@
 #include <SDL_ttf.h>
 #endif
 #include <memory>
+#include "Cards.h"
 
 App::App() = default;
 App::~App() { shutdown(); }
@@ -33,6 +34,9 @@ bool App::init(const char* title, int width, int height) {
 		SDL_Log("CreateRenderer Error: %s", SDL_GetError());
 		return false;
 	}
+
+	// 加载内置卡牌数据库
+	CardDB::instance().loadBuiltinCards();
 
 	running_ = true;
 	return true;

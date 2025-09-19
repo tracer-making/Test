@@ -10,6 +10,9 @@
 #include "RelicPickupState.h"
 #include "TemperState.h"
 #include "SeekerState.h"
+#include "BurnState.h"
+#include "BarterState.h"
+#include "CardBrowserState.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
 #include <SDL.h>
@@ -93,7 +96,7 @@ void TestState::onEnter(App& app) {
 		u8"焚书",
 		u8"文心试炼",
 		u8"合卷",
-		u8"墨鬼",
+		u8"卡牌图鉴",
 		u8"牌库"
 	};
 	SDL_Log("Button labels initialized: %zu buttons", buttonLabels.size());
@@ -173,6 +176,11 @@ void TestState::handleEvent(App& app, const SDL_Event& e) {
 					case 8: pendingTarget_ = 8; break; // 墨宝拾遗
 					case 9: pendingTarget_ = 9; break; // 淬炼
 					case 10: pendingTarget_ = 10; break; // 寻物人
+        case 11: pendingTarget_ = 11; break; // 以物易物
+        case 12: pendingTarget_ = 12; break; // 焚书
+        case 13: pendingTarget_ = 13; break; // 文心试炼
+        case 14: pendingTarget_ = 14; break; // 合卷
+        case 15: pendingTarget_ = 15; break; // 卡牌图鉴
 					default: break;
 					}
 				}
@@ -216,6 +224,21 @@ void TestState::update(App& app, float dt) {
 			break;
 		case 10:
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new SeekerState())));
+			break;
+		case 11:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new BarterState())));
+			break;
+		case 12:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new BurnState())));
+			break;
+		case 13:
+			// 文心试炼 - 暂未实现
+			break;
+		case 14:
+			// 合卷 - 暂未实现
+			break;
+		case 15:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new CardBrowserState())));
 			break;
 		case 16:
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new DeckState())));

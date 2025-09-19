@@ -6,7 +6,7 @@
 #include <vector>
 #include <array>
 
-class Card;
+struct Card;
 
 class BattleState : public State {
 public:
