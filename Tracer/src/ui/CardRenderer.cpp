@@ -121,30 +121,41 @@ void CardRenderer::renderCard(App& app,
 
         bool hasBoneCost = false;
         for (const auto& m : card.marks) if (m == "消耗骨头") { hasBoneCost = true; break; }
-        if (card.sacrificeCost > 0) {
+        if (card.sacrificeCost > 0 || hasBoneCost) {
             int dropSize = SDL_max(4, (int)(rect.h * 0.08f));
             int startY = lineY + 4;
-            if (hasBoneCost && card.sacrificeCost > 3) {
-                int startX = rect.x + rect.w - 6 - (dropSize + 20);
-                drawDropOrBone(r, true, startX, startY, dropSize);
-                SDL_SetRenderDrawColor(r, 60, 50, 40, 255);
-                int multX = startX + dropSize + 2;
-                int multY = startY + dropSize/2;
-                SDL_RenderDrawLine(r, multX, multY - 2, multX + 4, multY + 2);
-                SDL_RenderDrawLine(r, multX + 4, multY - 2, multX, multY + 2);
-                SDL_Color countCol{60, 50, 40, 255};
-                SDL_Surface* cs = TTF_RenderUTF8_Blended(statFont, std::to_string(card.sacrificeCost).c_str(), countCol);
-                if (cs) {
-                    SDL_Texture* ct = SDL_CreateTextureFromSurface(r, cs);
-                    float scale = (float)desiredStatH / (float)cs->h;
-                    int w = (int)(cs->w * scale);
-                    int h = (int)(cs->h * scale);
-                    SDL_Rect cdst{ multX + 8, multY - h/2, w, h };
-                    SDL_RenderCopy(r, ct, nullptr, &cdst);
-                    SDL_DestroyTexture(ct);
-                    SDL_FreeSurface(cs);
+            if (hasBoneCost) {
+                // 消耗骨头的卡牌，显示白色骨头图标
+                if (card.sacrificeCost > 3) {
+                    // 数量超过3，显示"骨头×数量"
+                    int startX = rect.x + rect.w - 6 - (dropSize + 20);
+                    drawDropOrBone(r, true, startX, startY, dropSize);
+                    SDL_SetRenderDrawColor(r, 60, 50, 40, 255);
+                    int multX = startX + dropSize + 2;
+                    int multY = startY + dropSize/2;
+                    SDL_RenderDrawLine(r, multX, multY - 2, multX + 4, multY + 2);
+                    SDL_RenderDrawLine(r, multX + 4, multY - 2, multX, multY + 2);
+                    SDL_Color countCol{60, 50, 40, 255};
+                    SDL_Surface* cs = TTF_RenderUTF8_Blended(statFont, std::to_string(card.sacrificeCost).c_str(), countCol);
+                    if (cs) {
+                        SDL_Texture* ct = SDL_CreateTextureFromSurface(r, cs);
+                        float scale = (float)desiredStatH / (float)cs->h;
+                        int w = (int)(cs->w * scale);
+                        int h = (int)(cs->h * scale);
+                        SDL_Rect cdst{ multX + 8, multY - h/2, w, h };
+                        SDL_RenderCopy(r, ct, nullptr, &cdst);
+                        SDL_DestroyTexture(ct);
+                        SDL_FreeSurface(cs);
+                    }
+                } else {
+                    // 数量不超过3，显示多个骨头图标
+                    int dropSpacing = dropSize + 2;
+                    int startX = rect.x + rect.w - 6 - (card.sacrificeCost * dropSpacing);
+                    for (int i = 0; i < card.sacrificeCost; ++i) {
+                        drawDropOrBone(r, true, startX + i * dropSpacing, startY, dropSize);
+                    }
                 }
-            } else if (!hasBoneCost && card.sacrificeCost > 3) {
+            } else if (card.sacrificeCost > 3) {
                 int startX = rect.x + rect.w - 6 - (dropSize + 20);
                 drawDropOrBone(r, false, startX, startY, dropSize);
                 SDL_SetRenderDrawColor(r, 60, 50, 40, 255);

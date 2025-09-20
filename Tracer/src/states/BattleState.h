@@ -78,6 +78,7 @@ private:
 	_TTF_Font* cardNameFont_ = nullptr;
 	_TTF_Font* cardStatFont_ = nullptr;
 	_TTF_Font* infoFont_ = nullptr;
+	_TTF_Font* enemyFont_ = nullptr;     // 敌人区域专用字体
 	
 	// 按钮
 	Button* backButton_ = nullptr;
@@ -117,7 +118,30 @@ private:
 	bool showSacrificeInk_ = false;      // 是否显示献墨量（延时显示）
 	float sacrificeAnimTime_ = 0.0f;     // 献祭动画时间
 	float sacrificeAnimDuration_ = 1.0f; // 献祭动画持续时间
-	std::vector<int> cardsToDestroy_;   // 待摧毁的卡牌索引
+	
+	// 回合制系统
+	bool hasDrawnThisTurn_ = false;      // 本回合是否已抽牌
+	bool mustDrawThisTurn_ = false;      // 本回合是否必须抽牌（第二回合开始）
+	
+	// 战斗系统
+	int totalDamageDealt_ = 0;          // 本回合造成的总伤害
+	bool showDamage_ = false;           // 是否显示伤害
+	float damageDisplayTime_ = 0.0f;   // 伤害显示时间
+	float damageDisplayDuration_ = 2.0f; // 伤害显示持续时间
+	
+	// 魂骨系统
+	int boneCount_ = 0;                 // 魂骨数量
+	std::vector<bool> previousCardStates_; // 上一帧的卡牌存活状态
+	
+	// 上帝模式系统
+	bool godMode_ = false;             // 是否处于上帝模式
+	bool enemyTurnStarted_ = false;    // 敌方回合是否已开始
+	
+	// 卡牌摧毁动画系统
+	bool isDestroyAnimating_ = false;  // 是否正在播放摧毁动画
+	float destroyAnimTime_ = 0.0f;    // 摧毁动画时间
+	float destroyAnimDuration_ = 0.5f; // 摧毁动画持续时间
+	std::vector<int> cardsToDestroy_;  // 待摧毁的卡牌索引
 	
 	// 私有方法
 	void initializeBattle();
