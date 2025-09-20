@@ -16,7 +16,10 @@ MainMenuState::~MainMenuState() = default;
 
 void MainMenuState::onEnter(App& app) {
 	srand(static_cast<unsigned int>(time(nullptr)));
-	int w, h; SDL_GetWindowSize(app.getWindow(), &w, &h); screenW_ = w; screenH_ = h;
+	// 设置窗口尺寸（适中尺寸）
+	screenW_ = 1600;
+	screenH_ = 1000;
+	SDL_SetWindowSize(app.getWindow(), screenW_, screenH_);
 
 	// 加载中文字体（请确保文件存在）
 	font_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 120); // 标题更大

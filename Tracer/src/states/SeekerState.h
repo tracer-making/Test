@@ -27,7 +27,7 @@ private:
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
 	Button* confirmButton_ = nullptr; // 破壁
-	int screenW_ = 1280, screenH_ = 720;
+	int screenW_ = 1600, screenH_ = 1000;
 
 	struct Artifact {
 		std::string title;      // 展示名称（未揭示时可为“未知文物”）

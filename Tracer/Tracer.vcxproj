@@ -142,6 +142,7 @@
     <ClCompile Include="src\core\Deck.cpp" />
     <ClCompile Include="src\core\Cards.cpp" />
     <ClCompile Include="src\ui\Button.cpp" />
+    <ClCompile Include="src\ui\CardRenderer.cpp" />
     <ClCompile Include="src\states\BattleState.cpp" />
     <ClCompile Include="src\states\HeritageState.cpp" />
     <ClCompile Include="src\states\EngraveState.cpp" />
@@ -166,6 +167,7 @@
     <ClInclude Include="src\core\Cards.h" />
     <ClInclude Include="src\core\State.h" />
     <ClInclude Include="src\ui\Button.h" />
+    <ClInclude Include="src\ui\CardRenderer.h" />
     <ClInclude Include="src\states\MainMenuState.h" />
     <ClInclude Include="src\states\DeckState.h" />
     <ClInclude Include="src\states\HeritageState.h" />

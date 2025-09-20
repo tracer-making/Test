@@ -3,6 +3,7 @@
 #include "../core/App.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include "../ui/CardRenderer.h"
 
 BarterState::BarterState() = default;
 BarterState::~BarterState() {
@@ -16,7 +17,10 @@ BarterState::~BarterState() {
 }
 
 void BarterState::onEnter(App& app) {
-	int w,h; SDL_GetWindowSize(app.getWindow(), &w, &h); screenW_ = w; screenH_ = h;
+	// 设置窗口尺寸（适中尺寸）
+	screenW_ = 1600;
+	screenH_ = 1000;
+	SDL_SetWindowSize(app.getWindow(), screenW_, screenH_);
 	titleFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 64);
 	smallFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 16);
 	nameFont_  = TTF_OpenFont("assets/fonts/Sanji.ttf", 22);
@@ -72,29 +76,19 @@ void BarterState::render(App& app) {
 	SDL_SetRenderDrawColor(r, 80, 70, 60, 60); srand(4243); for (int i=0;i<400;++i){ SDL_RenderDrawPoint(r, rand()%screenW_, rand()%screenH_);} 
 	if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect dst{ (screenW_-tw)/2, 80, tw, th }; SDL_RenderCopy(r, titleTex_, nullptr, &dst);} 
 
-	// 左侧：牌库
+    // 左侧：牌库（统一卡面）
 	auto& lib = DeckStore::instance().library();
 	for (size_t i=0;i<libraryRects_.size() && i<lib.size(); ++i) {
 		SDL_Rect rect = libraryRects_[i]; const Card& card = lib[i];
 		if (selectedLibraryIndex_==(int)i) { SDL_SetRenderDrawColor(r, 120, 180, 255, 120); SDL_Rect hl{rect.x-3,rect.y-3,rect.w+6,rect.h+6}; SDL_RenderFillRect(r,&hl);} 
-		SDL_SetRenderDrawColor(r, 235,230,220,230); SDL_RenderFillRect(r,&rect);
-		SDL_SetRenderDrawColor(r, 60,50,40,220); SDL_RenderDrawRect(r,&rect);
-		if (nameFont_) { SDL_Color nameCol{50,40,30,255}; SDL_Surface* s=TTF_RenderUTF8_Blended(nameFont_, card.name.c_str(), nameCol); if (s){ SDL_Texture* t=SDL_CreateTextureFromSurface(r,s); int h=SDL_max(12,(int)(rect.h*0.16f)); float sc=(float)h/(float)s->h; int wsc=(int)(s->w*sc); int nx=rect.x+(rect.w-wsc)/2; SDL_Rect nd{nx, rect.y+(int)(rect.h*0.06f), wsc, h}; SDL_RenderCopy(r,t,nullptr,&nd); SDL_DestroyTexture(t); SDL_FreeSurface(s);} }
-		if (statFont_) { char buf[32]; int h=SDL_max(12,(int)(rect.h*0.18f)); int m=SDL_max(6,(int)(rect.h*0.035f)); SDL_Color col{80,50,40,255};
-			snprintf(buf,sizeof(buf),"%d", card.attack); SDL_Surface* sa=TTF_RenderUTF8_Blended(statFont_, buf, col); if (sa){ SDL_Texture* ta=SDL_CreateTextureFromSurface(r,sa); float sc=(float)h/(float)sa->h; int wsc=(int)(sa->w*sc); SDL_Rect ad{rect.x+m, rect.y+rect.h-h-m, wsc, h}; SDL_RenderCopy(r,ta,nullptr,&ad); SDL_DestroyTexture(ta); SDL_FreeSurface(sa);} 
-			snprintf(buf,sizeof(buf),"%d", card.health); SDL_Color hp{160,30,40,255}; SDL_Surface* sh=TTF_RenderUTF8_Blended(statFont_, buf, hp); if (sh){ SDL_Texture* th=SDL_CreateTextureFromSurface(r,sh); float sc=(float)h/(float)sh->h; int wsc=(int)(sh->w*sc); SDL_Rect hd{rect.x+rect.w-wsc-m, rect.y+rect.h-h-m, wsc, h}; SDL_RenderCopy(r,th,nullptr,&hd); SDL_DestroyTexture(th); SDL_FreeSurface(sh);} }
+        CardRenderer::renderCard(app, card, rect, nameFont_, statFont_, selectedLibraryIndex_==(int)i);
 	}
 
-	// 右侧：三选一报价
+    // 右侧：三选一报价（统一卡面）
 	for (size_t i=0;i<offers_.size(); ++i) {
 		SDL_Rect rect = offers_[i].rect; const Card& card = offers_[i].card;
 		if (selectedOfferIndex_==(int)i) { SDL_SetRenderDrawColor(r, 255, 220, 120, 140); SDL_Rect hl{rect.x-3,rect.y-3,rect.w+6,rect.h+6}; SDL_RenderFillRect(r,&hl);} 
-		SDL_SetRenderDrawColor(r, 235,230,220,230); SDL_RenderFillRect(r,&rect);
-		SDL_SetRenderDrawColor(r, 60,50,40,220); SDL_RenderDrawRect(r,&rect);
-		if (nameFont_) { SDL_Color nameCol{50,40,30,255}; SDL_Surface* s=TTF_RenderUTF8_Blended(nameFont_, card.name.c_str(), nameCol); if (s){ SDL_Texture* t=SDL_CreateTextureFromSurface(r,s); int h=SDL_max(12,(int)(rect.h*0.16f)); float sc=(float)h/(float)s->h; int wsc=(int)(s->w*sc); int nx=rect.x+(rect.w-wsc)/2; SDL_Rect nd{nx, rect.y+(int)(rect.h*0.06f), wsc, h}; SDL_RenderCopy(r,t,nullptr,&nd); SDL_DestroyTexture(t); SDL_FreeSurface(s);} }
-		if (statFont_) { char buf[32]; int h=SDL_max(12,(int)(rect.h*0.18f)); int m=SDL_max(6,(int)(rect.h*0.035f)); SDL_Color col{80,50,40,255};
-			snprintf(buf,sizeof(buf),"%d", card.attack); SDL_Surface* sa=TTF_RenderUTF8_Blended(statFont_, buf, col); if (sa){ SDL_Texture* ta=SDL_CreateTextureFromSurface(r,sa); float sc=(float)h/(float)sa->h; int wsc=(int)(sa->w*sc); SDL_Rect ad{rect.x+m, rect.y+rect.h-h-m, wsc, h}; SDL_RenderCopy(r,ta,nullptr,&ad); SDL_DestroyTexture(ta); SDL_FreeSurface(sa);} 
-			snprintf(buf,sizeof(buf),"%d", card.health); SDL_Color hp{160,30,40,255}; SDL_Surface* sh=TTF_RenderUTF8_Blended(statFont_, buf, hp); if (sh){ SDL_Texture* th=SDL_CreateTextureFromSurface(r,sh); float sc=(float)h/(float)sh->h; int wsc=(int)(sh->w*sc); SDL_Rect hd{rect.x+rect.w-wsc-m, rect.y+rect.h-h-m, wsc, h}; SDL_RenderCopy(r,th,nullptr,&hd); SDL_DestroyTexture(th); SDL_FreeSurface(sh);} }
+        CardRenderer::renderCard(app, card, rect, nameFont_, statFont_, selectedOfferIndex_==(int)i);
 	}
 
 	if (backButton_) backButton_->render(r);

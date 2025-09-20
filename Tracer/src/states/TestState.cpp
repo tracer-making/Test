@@ -35,10 +35,10 @@ TestState::~TestState() {
 void TestState::onEnter(App& app) {
 	SDL_Log("TestState::onEnter - Start");
 	
-	int w, h;
-	SDL_GetWindowSize(app.getWindow(), &w, &h);
-	screenW_ = w;
-	screenH_ = h;
+	// 设置窗口尺寸（适中尺寸）
+	screenW_ = 1600;
+	screenH_ = 1000;
+	SDL_SetWindowSize(app.getWindow(), screenW_, screenH_);
 	SDL_Log("Screen size: %d x %d", screenW_, screenH_);
 
 	// 加载字体

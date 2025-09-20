@@ -1,6 +1,7 @@
 #include "DeckState.h"
 #include "TestState.h"
 #include "../core/App.h"
+#include "../ui/CardRenderer.h"
 #include <cmath>
 
 DeckState::DeckState() = default;
@@ -14,7 +15,10 @@ DeckState::~DeckState() {
 }
 
 void DeckState::onEnter(App& app) {
-	int w,h; SDL_GetWindowSize(app.getWindow(), &w, &h); screenW_ = w; screenH_ = h;
+	// 设置窗口尺寸（适中尺寸）
+	screenW_ = 1600;
+	screenH_ = 1000;
+	SDL_SetWindowSize(app.getWindow(), screenW_, screenH_);
 	titleFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 64);
 	smallFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 16);
 	nameFont_  = TTF_OpenFont("assets/fonts/Sanji.ttf", 22);
@@ -104,90 +108,18 @@ void DeckState::render(App& app) {
 		if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r, s); SDL_Rect dst{ sliderTrack_.x, sliderTrack_.y- s->h - 6, s->w, s->h }; SDL_RenderCopy(r,t,nullptr,&dst); SDL_DestroyTexture(t); SDL_FreeSurface(s);} 
 	}
 
-	// 绘制卡牌网格（战斗界面水墨风格）
+	// 绘制卡牌网格（统一水墨风格）
 	for (const auto& c : cards_) {
-		// 纸面底色
-		SDL_SetRenderDrawColor(r, 235, 230, 220, 230);
-		SDL_RenderFillRect(r, &c.rect);
-		// 边框（深墨）
-		SDL_SetRenderDrawColor(r, 60, 50, 40, 220);
-		SDL_RenderDrawRect(r, &c.rect);
-
-		// 角落小装饰点
-		SDL_SetRenderDrawColor(r, 120, 110, 100, 150);
-		SDL_Rect dots[4] = {
-			{c.rect.x + 4, c.rect.y + 4, 2, 2},
-			{c.rect.x + c.rect.w - 6, c.rect.y + 4, 2, 2},
-			{c.rect.x + 4, c.rect.y + c.rect.h - 6, 2, 2},
-			{c.rect.x + c.rect.w - 6, c.rect.y + c.rect.h - 6, 2, 2}
-		};
-		for (const auto& d : dots) SDL_RenderFillRect(r, &d);
-
-		// 名称（顶部居中）使用更大字体，并在下方画明显分割线（按卡牌高度比例缩放）
-		if (nameFont_) {
-			SDL_Color nameCol{50, 40, 30, 255};
-			SDL_Surface* s = TTF_RenderUTF8_Blended(nameFont_, c.name.c_str(), nameCol);
-			if (s) {
-				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
-				int desiredNameH = SDL_max(12, (int)(c.rect.h * 0.16f));
-				float scaleN = (float)desiredNameH / (float)s->h;
-				int scaledW = (int)(s->w * scaleN);
-				int nx = c.rect.x + (c.rect.w - scaledW) / 2;
-				SDL_Rect ndst{ nx, c.rect.y + (int)(c.rect.h * 0.04f), scaledW, desiredNameH };
-				SDL_RenderCopy(r, t, nullptr, &ndst);
-				SDL_DestroyTexture(t);
-				// 分割线（厚度随高度变化）
-				int lineY = ndst.y + ndst.h + SDL_max(2, (int)(c.rect.h * 0.015f));
-				int thickness = SDL_max(1, (int)(c.rect.h * 0.007f));
-				SDL_SetRenderDrawColor(r, 80, 70, 60, 220);
-				for (int i = 0; i < thickness; ++i) {
-					SDL_RenderDrawLine(r, c.rect.x + 6, lineY + i, c.rect.x + c.rect.w - 6, lineY + i);
-				}
-				SDL_FreeSurface(s);
-			}
-		}
-
-		// 攻击力（左下角）和生命值（右下角）使用更大字体（按卡牌高度比例缩放）
-		char buf[32];
-		if (statFont_) {
-			SDL_Color statCol{80, 50, 40, 255};
-			int desiredStatH = SDL_max(12, (int)(c.rect.h * 0.18f));
-			int margin = SDL_max(6, (int)(c.rect.h * 0.035f));
-			// 攻击
-			snprintf(buf, sizeof(buf), "%d", c.attack);
-			SDL_Surface* sa = TTF_RenderUTF8_Blended(statFont_, buf, statCol);
-			if (sa) {
-				SDL_Texture* ta = SDL_CreateTextureFromSurface(r, sa);
-				float scaleA = (float)desiredStatH / (float)sa->h;
-				int aW = (int)(sa->w * scaleA);
-				SDL_Rect adst{ c.rect.x + margin, c.rect.y + c.rect.h - desiredStatH - margin, aW, desiredStatH };
-				SDL_RenderCopy(r, ta, nullptr, &adst);
-				SDL_DestroyTexture(ta);
-				// 在攻击力下方绘制淡淡的剑形（尺寸随卡牌变化）
-				SDL_SetRenderDrawColor(r, 60, 70, 100, 60);
-				int swordY = adst.y + adst.h + SDL_max(1, (int)(c.rect.h * 0.006f));
-				int swordW = SDL_max(adst.w, (int)(c.rect.w * 0.22f));
-				int swordX = adst.x;
-				SDL_RenderDrawLine(r, swordX, swordY, swordX + swordW, swordY);
-				SDL_RenderDrawLine(r, swordX + swordW/3, swordY-2, swordX + swordW/3, swordY+2);
-				SDL_RenderDrawLine(r, swordX + swordW, swordY, swordX + swordW - 4, swordY - 3);
-				SDL_RenderDrawLine(r, swordX + swordW, swordY, swordX + swordW - 4, swordY + 3);
-				SDL_FreeSurface(sa);
-			}
-			// 生命
-			snprintf(buf, sizeof(buf), "%d", c.health);
-			SDL_Color hpCol{160, 30, 40, 255};
-			SDL_Surface* sh = TTF_RenderUTF8_Blended(statFont_, buf, hpCol);
-			if (sh) {
-				SDL_Texture* th = SDL_CreateTextureFromSurface(r, sh);
-				float scaleH = (float)desiredStatH / (float)sh->h;
-				int hW = (int)(sh->w * scaleH);
-				SDL_Rect hdst{ c.rect.x + c.rect.w - hW - margin, c.rect.y + c.rect.h - desiredStatH - margin, hW, desiredStatH };
-				SDL_RenderCopy(r, th, nullptr, &hdst);
-				SDL_DestroyTexture(th);
-				SDL_FreeSurface(sh);
-			}
-		}
+		// 将CardView转换为Card结构以使用CardRenderer
+		Card card;
+		card.name = c.name;
+		card.attack = c.attack;
+		card.health = c.health;
+		card.category = "其他"; // 默认分类
+		card.sacrificeCost = 0; // 默认无献祭消耗
+		card.marks = c.marks;
+		
+		CardRenderer::renderCard(app, card, c.rect, nameFont_, statFont_, false);
 	}
 }
 

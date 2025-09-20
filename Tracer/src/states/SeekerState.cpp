@@ -2,6 +2,7 @@
 #include "TestState.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
+#include "../ui/CardRenderer.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <sstream>
@@ -21,10 +22,10 @@ SeekerState::~SeekerState() {
 void SeekerState::onEnter(App& app) {
 	SDL_Log("SeekerState::onEnter - Start");
 	
-	int w, h;
-	SDL_GetWindowSize(app.getWindow(), &w, &h);
-	screenW_ = w;
-	screenH_ = h;
+	// 设置窗口尺寸（适中尺寸）
+	screenW_ = 1600;
+	screenH_ = 1000;
+	SDL_SetWindowSize(app.getWindow(), screenW_, screenH_);
 	SDL_Log("Screen size: %d x %d", screenW_, screenH_);
 
 	// 加载字体（与牌库界面保持一致）
@@ -160,7 +161,7 @@ void SeekerState::render(App& app) {
 		}
 	}
 
-	// 渲染三件未知文物（使用水墨卡面样式）
+	// 渲染三件未知文物（统一水墨卡面样式）
 	for (size_t i = 0; i < artifacts_.size(); ++i) {
 		SDL_Rect rect = artifacts_[i].rect;
 		const bool isSelected = (selectedIndex_ == (int)i);
@@ -173,44 +174,28 @@ void SeekerState::render(App& app) {
 			SDL_RenderFillRect(r, &highlightRect);
 		}
 
-		// 纸面底色
-		SDL_SetRenderDrawColor(r, 235, 230, 220, 230);
-		SDL_RenderFillRect(r, &rect);
-		// 边框
-		SDL_SetRenderDrawColor(r, 60, 50, 40, 220);
-		SDL_RenderDrawRect(r, &rect);
-		// 角落装饰点
-		SDL_SetRenderDrawColor(r, 120, 110, 100, 150);
-		SDL_Rect dots[4] = {
-			{rect.x + 4, rect.y + 4, 2, 2},
-			{rect.x + rect.w - 6, rect.y + 4, 2, 2},
-			{rect.x + 4, rect.y + rect.h - 6, 2, 2},
-			{rect.x + rect.w - 6, rect.y + rect.h - 6, 2, 2}
-		};
-		for (const auto& d : dots) SDL_RenderFillRect(r, &d);
-
-		// 标题（未知/已揭示）
-		if (nameFont_) {
-			SDL_Color nameCol{50, 40, 30, 255};
-			std::string title = revealed ? artifacts_[i].title : std::string(u8"未知文物");
-			SDL_Surface* s = TTF_RenderUTF8_Blended(nameFont_, title.c_str(), nameCol);
-			if (s) {
-				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
-				int desiredNameH = SDL_max(12, (int)(rect.h * 0.16f));
-				float scaleN = (float)desiredNameH / (float)s->h;
-				int scaledW = (int)(s->w * scaleN);
-				int nx = rect.x + (rect.w - scaledW) / 2;
-				SDL_Rect ndst{ nx, rect.y + (int)(rect.h * 0.06f), scaledW, desiredNameH };
-				SDL_RenderCopy(r, t, nullptr, &ndst);
-				SDL_DestroyTexture(t);
-				// 分割线
-				int lineY = ndst.y + ndst.h + SDL_max(2, (int)(rect.h * 0.015f));
-				int thickness = SDL_max(1, (int)(rect.h * 0.007f));
-				SDL_SetRenderDrawColor(r, 80, 70, 60, 220);
-				for (int j = 0; j < thickness; ++j) SDL_RenderDrawLine(r, rect.x + 6, lineY + j, rect.x + rect.w - 6, lineY + j);
-				SDL_FreeSurface(s);
+		// 将文物转换为Card结构以使用CardRenderer
+		Card card;
+		card.name = revealed ? artifacts_[i].title : std::string(u8"未知文物");
+		card.attack = 0; // 文物无攻击力
+		card.health = 0; // 文物无生命值
+		card.category = "文物"; // 文物分类
+		card.sacrificeCost = 0; // 文物无献祭消耗
+		
+		// 根据稀有度添加印记
+		if (revealed) {
+			if (artifacts_[i].rarity >= 2) {
+				card.marks.push_back("传奇");
+			} else if (artifacts_[i].rarity == 1) {
+				card.marks.push_back("稀有");
+			} else {
+				card.marks.push_back("普通");
 			}
+		} else {
+			card.marks.push_back("未知");
 		}
+		
+		CardRenderer::renderCard(app, card, rect, nameFont_, statFont_, isSelected);
 
 		// 中间区域：未知遮罩/图案 或 揭示后的奖励描述
 		if (smallFont_) {
@@ -235,24 +220,6 @@ void SeekerState::render(App& app) {
 					SDL_DestroyTexture(t);
 					SDL_FreeSurface(s);
 				}
-			}
-		}
-
-		// 底部：稀有度指示（揭示后显示具体稀有度）
-		if (statFont_) {
-			int desiredStatH = SDL_max(12, (int)(rect.h * 0.16f));
-			int margin = SDL_max(6, (int)(rect.h * 0.035f));
-			SDL_Color rareCol{80, 50, 40, 255};
-			const char* rareText = revealed ? (artifacts_[i].rarity>=2?"传奇":(artifacts_[i].rarity==1?"稀有":"普通")) : "?";
-			SDL_Surface* s = TTF_RenderUTF8_Blended(statFont_, rareText, rareCol);
-			if (s) {
-				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
-				float scale = (float)desiredStatH / (float)s->h;
-				int wscaled = (int)(s->w * scale);
-				SDL_Rect dst{ rect.x + rect.w - wscaled - margin, rect.y + rect.h - desiredStatH - margin, wscaled, desiredStatH };
-				SDL_RenderCopy(r, t, nullptr, &dst);
-				SDL_DestroyTexture(t);
-				SDL_FreeSurface(s);
 			}
 		}
 	}

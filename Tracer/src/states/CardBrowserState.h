@@ -50,6 +50,10 @@ private:
     _TTF_Font* cardStatFont_ = nullptr;
     _TTF_Font* pageInfoFont_ = nullptr;
     
+    // Screen dimensions（适中尺寸）
+    int screenW_ = 1600;
+    int screenH_ = 1000;
+    
     // State
     bool pendingBackToTest_ = false;
     int selectedCardIndex_ = -1;

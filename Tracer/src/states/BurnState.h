@@ -27,7 +27,7 @@ private:
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
 	Button* burnButton_ = nullptr;
-	int screenW_ = 1280, screenH_ = 720;
+	int screenW_ = 1600, screenH_ = 1000;
 	std::string message_;
 	bool pendingBackToTest_ = false;
 

@@ -3,6 +3,7 @@
 #include "../core/App.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include "../ui/CardRenderer.h"
 
 BurnState::BurnState() = default;
 BurnState::~BurnState() {
@@ -16,7 +17,10 @@ BurnState::~BurnState() {
 }
 
 void BurnState::onEnter(App& app) {
-	int w,h; SDL_GetWindowSize(app.getWindow(), &w, &h); screenW_ = w; screenH_ = h;
+	// 设置窗口尺寸（适中尺寸）
+	screenW_ = 1600;
+	screenH_ = 1000;
+	SDL_SetWindowSize(app.getWindow(), screenW_, screenH_);
 	titleFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 64);
 	smallFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 16);
 	nameFont_  = TTF_OpenFont("assets/fonts/Sanji.ttf", 22);
@@ -121,7 +125,7 @@ void BurnState::render(App& app) {
 		if (s) { SDL_Texture* t = SDL_CreateTextureFromSurface(r, s); SDL_Rect d{ screenW_/2 - s->w/2, 150, s->w, s->h }; SDL_RenderCopy(r, t, nullptr, &d); SDL_DestroyTexture(t); SDL_FreeSurface(s);} 
 	}
 
-	// 渲染牌组（库）为水墨卡面
+    // 渲染牌组（库）为统一卡面
 	auto& lib2 = DeckStore::instance().library();
 	for (size_t i=0; i<cardRects_.size() && i<lib2.size(); ++i) {
 		SDL_Rect rect = cardRects_[i];
@@ -133,30 +137,7 @@ void BurnState::render(App& app) {
 			SDL_RenderFillRect(r, &hl);
 		}
 
-		SDL_SetRenderDrawColor(r, 235, 230, 220, 230);
-		SDL_RenderFillRect(r, &rect);
-		SDL_SetRenderDrawColor(r, 60, 50, 40, 220);
-		SDL_RenderDrawRect(r, &rect);
-
-		SDL_SetRenderDrawColor(r, 120, 110, 100, 150);
-		SDL_Rect dots[4] = {{rect.x+4,rect.y+4,2,2},{rect.x+rect.w-6,rect.y+4,2,2},{rect.x+4,rect.y+rect.h-6,2,2},{rect.x+rect.w-6,rect.y+rect.h-6,2,2}};
-		for (const auto& d : dots) SDL_RenderFillRect(r, &d);
-
-		if (nameFont_) {
-			SDL_Color nameCol{50, 40, 30, 255};
-			SDL_Surface* s = TTF_RenderUTF8_Blended(nameFont_, card.name.c_str(), nameCol);
-			if (s) { SDL_Texture* t = SDL_CreateTextureFromSurface(r, s); int desiredH = SDL_max(12, (int)(rect.h*0.16f)); float sc = (float)desiredH/(float)s->h; int wsc=(int)(s->w*sc); int nx = rect.x + (rect.w - wsc)/2; SDL_Rect nd{nx, rect.y + (int)(rect.h*0.06f), wsc, desiredH}; SDL_RenderCopy(r, t, nullptr, &nd); SDL_DestroyTexture(t); SDL_FreeSurface(s);} 
-		}
-
-		if (statFont_) {
-			char buf[32]; SDL_Color statCol{80,50,40,255}; int desired = SDL_max(12,(int)(rect.h*0.18f)); int margin = SDL_max(6,(int)(rect.h*0.035f));
-			snprintf(buf,sizeof(buf),"%d", card.attack);
-			SDL_Surface* sa = TTF_RenderUTF8_Blended(statFont_, buf, statCol);
-			if (sa) { SDL_Texture* ta = SDL_CreateTextureFromSurface(r, sa); float sc=(float)desired/(float)sa->h; int wsc=(int)(sa->w*sc); SDL_Rect ad{ rect.x+margin, rect.y+rect.h-desired-margin, wsc, desired}; SDL_RenderCopy(r, ta, nullptr, &ad); SDL_DestroyTexture(ta); SDL_FreeSurface(sa);} 
-			snprintf(buf,sizeof(buf),"%d", card.health);
-			SDL_Color hpCol{160,30,40,255}; SDL_Surface* sh = TTF_RenderUTF8_Blended(statFont_, buf, hpCol);
-			if (sh) { SDL_Texture* th = SDL_CreateTextureFromSurface(r, sh); float sc=(float)desired/(float)sh->h; int wsc=(int)(sh->w*sc); SDL_Rect hd{ rect.x+rect.w-wsc-margin, rect.y+rect.h-desired-margin, wsc, desired}; SDL_RenderCopy(r, th, nullptr, &hd); SDL_DestroyTexture(th); SDL_FreeSurface(sh);} 
-		}
+        CardRenderer::renderCard(app, card, rect, nameFont_, statFont_, selectedIndex_ == (int)i);
 	}
 
 	if (backButton_) backButton_->render(r);
