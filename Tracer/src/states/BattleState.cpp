@@ -191,26 +191,18 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				statusMessage_ = "第一回合不能抽牌！";
 			} else if (hasDrawnThisTurn_) {
 				statusMessage_ = "本回合已抽过牌！";
-			} else if (playerPileCount_ > 0) {
-				auto allIds = CardDB::instance().allIds();
-				std::vector<std::string> playerCardIds;
-				for (const auto& id : allIds) {
-					if (id != "moding") { // 排除墨锭
-						playerCardIds.push_back(id);
-					}
-				}
-				
-				if (!playerCardIds.empty()) {
-					int randomIndex = rand() % playerCardIds.size();
-					Card newCard = CardDB::instance().make(playerCardIds[randomIndex]);
-					if (!newCard.id.empty()) {
-						handCards_.push_back(newCard);
-						playerPileCount_--;
-						hasDrawnThisTurn_ = true;
-						mustDrawThisTurn_ = false; // 抽牌后取消强制抽牌要求
-						layoutHandCards();
-						statusMessage_ = "从玩家牌堆抽到：" + newCard.name;
-					}
+			} else if (playerPileCount_ > 0 && !playerDeck_.empty()) {
+				// 从固定牌堆中抽取第一张牌
+				std::string cardId = playerDeck_[0];
+				Card newCard = CardDB::instance().make(cardId);
+				if (!newCard.id.empty()) {
+					handCards_.push_back(newCard);
+					playerDeck_.erase(playerDeck_.begin()); // 移除已抽取的牌
+					playerPileCount_--;
+					hasDrawnThisTurn_ = true;
+					mustDrawThisTurn_ = false; // 抽牌后取消强制抽牌要求
+					layoutHandCards();
+					statusMessage_ = "从玩家牌堆抽到：" + newCard.name;
 				}
 			} else {
 				statusMessage_ = "玩家牌堆已空！";
@@ -448,6 +440,128 @@ void BattleState::update(App& app, float dt) {
 		}
 	}
 	
+	// 处理攻击动画
+	if (isAttackAnimating_) {
+		attackAnimTime_ += dt;
+		
+		// 检查是否需要切换到下一张卡牌攻击
+		if (currentAttackingIndex_ < static_cast<int>(attackingCards_.size())) {
+			int currentCardIndex = attackingCards_[currentAttackingIndex_];
+			
+			// 检查是否是特殊攻击
+			const auto& attacker = battlefield_[currentCardIndex];
+			BattleState::AttackType attackType = getCardAttackType(attacker.card);
+			
+			if (attackType != BattleState::AttackType::Normal) {
+				// 特殊攻击：设置特殊攻击动画，但不立即切换卡牌
+				if (!isSpecialAttackAnimating_) {
+					int col = currentCardIndex % BATTLEFIELD_COLS;
+					executeSpecialAttack(currentCardIndex, col, isPlayerAttacking_);
+				}
+			} else {
+				// 普通攻击：执行普通攻击逻辑
+				if (attackAnimTime_ >= attackAnimDuration_ / 2.0f && !hasAttacked_) {
+					hasAttacked_ = true; // 标记已攻击，防止重复执行
+					
+					// 执行普通攻击
+					int col = currentCardIndex % BATTLEFIELD_COLS;
+					executeNormalAttack(currentCardIndex, col, isPlayerAttacking_, attacker.card.attack);
+				}
+			}
+			
+			// 当前卡牌攻击动画完成，切换到下一张
+			if (attackAnimTime_ >= attackAnimDuration_) {
+				BattleState::AttackType attackType = getCardAttackType(attacker.card);
+				if (attackType == BattleState::AttackType::Normal) {
+					// 普通攻击：直接切换下一张卡牌
+					currentAttackingIndex_++;
+					attackAnimTime_ = 0.0f;
+					hasAttacked_ = false; // 重置攻击标志，为下一张卡牌准备
+				}
+				// 特殊攻击：等待特殊攻击动画完成后再切换（在特殊攻击动画逻辑中处理）
+			}
+		} else {
+			// 所有卡牌攻击完成
+			isAttackAnimating_ = false;
+			attackAnimTime_ = 0.0f;
+			attackingCards_.clear();
+			currentAttackingIndex_ = 0;
+			
+			if (isPlayerAttacking_) {
+				// 玩家攻击完成，进入敌方回合
+				if (totalDamageDealt_ > 0) {
+					showDamage_ = true;
+					damageDisplayTime_ = 0.0f;
+					statusMessage_ = "造成 " + std::to_string(totalDamageDealt_) + " 点伤害！";
+				} else {
+					statusMessage_ = "我方攻击完成";
+				}
+				
+				currentPhase_ = GamePhase::EnemyTurn;
+				currentTurn_++; // 增加回合数
+				hasDrawnThisTurn_ = false; // 重置抽牌状态
+				mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+				
+				// 恢复墨量（每回合开始时获得一些墨量）
+				currentInk_ += 2; // 每回合获得2点墨量
+				if (currentInk_ > maxInk_) currentInk_ = maxInk_;
+				
+				// 延迟执行敌人回合
+				enemyTurn();
+			} else {
+				// 敌方攻击完成，回到玩家回合
+				currentPhase_ = GamePhase::PlayerTurn;
+				if (mustDrawThisTurn_) {
+					statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";
+				} else {
+					statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
+				}
+			}
+		}
+	}
+	
+	// 处理特殊攻击动画
+	if (isSpecialAttackAnimating_) {
+		attackAnimTime_ += dt;
+		
+		// 检查当前目标是否有效
+		if (currentTargetIndex_ < 3 && specialAttackTargets_[currentTargetIndex_] != -1) {
+			int currentTargetIndex = specialAttackTargets_[currentTargetIndex_];
+			
+			// 攻击动画进行到一半时执行攻击逻辑
+			if (attackAnimTime_ >= attackAnimDuration_ / 2.0f && !hasAttacked_) {
+				hasAttacked_ = true;
+				
+				// 执行对当前目标的攻击
+				int attackerIndex = attackingCards_[currentAttackingIndex_];
+				int damage = battlefield_[attackerIndex].card.attack;
+				attackTarget(attackerIndex, currentTargetIndex, damage);
+			}
+			
+			// 当前目标攻击完成，切换到下一个目标
+			if (attackAnimTime_ >= attackAnimDuration_) {
+				currentTargetIndex_++;
+				attackAnimTime_ = 0.0f;
+				hasAttacked_ = false;
+				
+				// 检查是否所有目标都攻击完成
+				if (currentTargetIndex_ >= 3 || specialAttackTargets_[currentTargetIndex_] == -1) {
+					isSpecialAttackAnimating_ = false;
+					// 继续正常的攻击流程
+					currentAttackingIndex_++;
+					attackAnimTime_ = 0.0f;
+					hasAttacked_ = false;
+					
+					// 特殊攻击完成，回到正常攻击流程
+					// 不在这里检查是否所有卡牌都攻击完成，让正常攻击流程处理
+				}
+			}
+		} else {
+			// 特殊攻击完成
+			isSpecialAttackAnimating_ = false;
+		}
+	}
+	
 	// 处理摧毁动画
 	if (isDestroyAnimating_) {
 		destroyAnimTime_ += dt;
@@ -564,29 +678,28 @@ void BattleState::initializeBattle() {
 		handCards_.push_back(inkCard);
 	}
 	
-	// 抽3张玩家牌（从其他卡牌中随机选择）
-	auto allIds = CardDB::instance().allIds();
-	std::vector<std::string> playerCardIds;
-	for (const auto& id : allIds) {
-		if (id != "墨锭") { // 排除墨锭
-			playerCardIds.push_back(id);
-		}
-	}
+	// 初始化固定玩家牌堆（4张不同的卡牌）
+	playerDeck_.clear();
+	playerDeck_.push_back("shuangdao_moke");  // 双刀墨客
+	playerDeck_.push_back("daobi_li");          // 刀笔吏
+	playerDeck_.push_back("shuangya_zhanlang"); // 霜牙战狼
+	playerDeck_.push_back("shougong");         // 守宫
+	playerPileCount_ = static_cast<int>(playerDeck_.size());
 	
-	// 随机选择3张玩家牌
-	for (int i = 0; i < 3 && i < static_cast<int>(playerCardIds.size()); ++i) {
-		int randomIndex = rand() % playerCardIds.size();
-		Card card = CardDB::instance().make(playerCardIds[randomIndex]);
+	// 抽3张玩家牌（从固定玩家牌堆中抽取）
+	for (int i = 0; i < 3 && i < static_cast<int>(playerDeck_.size()); ++i) {
+		std::string cardId = playerDeck_[0];
+		Card card = CardDB::instance().make(cardId);
 		if (!card.id.empty()) {
 			handCards_.push_back(card);
 		}
-		// 移除已选择的卡牌，避免重复
-		playerCardIds.erase(playerCardIds.begin() + randomIndex);
+		// 从牌堆中移除已抽取的卡牌
+		playerDeck_.erase(playerDeck_.begin());
+		playerPileCount_--;
 	}
 	
 	// 初始化牌堆
 	inkPileCount_ = 10;  // 墨锭牌堆只有10张
-	playerPileCount_ = 20;
 	
 	// 初始化回合制系统
 	hasDrawnThisTurn_ = false;
@@ -610,6 +723,14 @@ void BattleState::initializeBattle() {
 	isDestroyAnimating_ = false;
 	destroyAnimTime_ = 0.0f;
 	cardsToDestroy_.clear();
+	
+	// 初始化攻击动画系统
+	isAttackAnimating_ = false;
+	attackAnimTime_ = 0.0f;
+	attackingCards_.clear();
+	currentAttackingIndex_ = 0;
+	isPlayerAttacking_ = true;
+	hasAttacked_ = false;
 }
 
 void BattleState::layoutUI() {
@@ -830,107 +951,66 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 void BattleState::endTurn() {
 	if (currentPhase_ != GamePhase::PlayerTurn) return;
 	
-	// 执行战斗：我方造物攻击敌方
-	totalDamageDealt_ = 0;
-	
-	// 我方第三行卡牌攻击敌方
+	// 收集所有可以攻击的我方卡牌（从左到右）
+	attackingCards_.clear();
 	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
 		int playerIndex = 2 * BATTLEFIELD_COLS + col; // 第三行
-		int enemyIndex = 1 * BATTLEFIELD_COLS + col;  // 第二行（敌方攻击行）
-		
-		if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer) {
-			// 我方卡牌攻击
-			int damage = battlefield_[playerIndex].card.attack;
-			if (damage > 0) {
-				if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer) {
-					// 对位有敌方卡牌，攻击敌方卡牌
-					battlefield_[enemyIndex].health -= damage;
-					if (battlefield_[enemyIndex].health <= 0) {
-						// 启动摧毁动画，但立即标记为死亡（无法反击）
-						battlefield_[enemyIndex].isAlive = false;
-						cardsToDestroy_.push_back(enemyIndex);
-						isDestroyAnimating_ = true;
-						destroyAnimTime_ = 0.0f;
-						statusMessage_ = "敌方卡牌被摧毁！";
-					}
-				} else {
-					// 对位没有敌方卡牌，直接攻击敌方本体
-					totalDamageDealt_ += damage;
-					enemyHealth_ -= damage;
-					if (enemyHealth_ < 0) enemyHealth_ = 0;
-				}
-			}
+		if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer && 
+			battlefield_[playerIndex].card.attack > 0) {
+			attackingCards_.push_back(playerIndex);
 		}
 	}
 	
-	// 显示伤害
-	if (totalDamageDealt_ > 0) {
-		showDamage_ = true;
-		damageDisplayTime_ = 0.0f;
-		statusMessage_ = "造成 " + std::to_string(totalDamageDealt_) + " 点伤害！";
-				} else {
-		statusMessage_ = "我方攻击完成";
+	if (!attackingCards_.empty()) {
+		// 开始攻击动画
+		isAttackAnimating_ = true;
+		attackAnimTime_ = 0.0f;
+		currentAttackingIndex_ = 0;
+		isPlayerAttacking_ = true;
+		totalDamageDealt_ = 0;
+		statusMessage_ = "我方开始攻击！";
+	} else {
+		// 没有可攻击的卡牌，直接进入敌方回合
+		currentPhase_ = GamePhase::EnemyTurn;
+		currentTurn_++; // 增加回合数
+		hasDrawnThisTurn_ = false; // 重置抽牌状态
+		mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+		
+		// 恢复墨量（每回合开始时获得一些墨量）
+		currentInk_ += 2; // 每回合获得2点墨量
+		if (currentInk_ > maxInk_) currentInk_ = maxInk_;
+		
+		// 延迟执行敌人回合
+		enemyTurn();
 	}
-	
-	currentPhase_ = GamePhase::EnemyTurn;
-	currentTurn_++; // 增加回合数
-	hasDrawnThisTurn_ = false; // 重置抽牌状态
-	mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-	
-	// 恢复墨量（每回合开始时获得一些墨量）
-	currentInk_ += 2; // 每回合获得2点墨量
-	if (currentInk_ > maxInk_) currentInk_ = maxInk_;
-	
-	// 延迟执行敌人回合
-	enemyTurn();
 }
 
 void BattleState::enemyTurn() {
-	// 敌方回合：只有第二行的卡牌可以攻击
-	int enemyDamage = 0;
-	
-	// 敌方第二行卡牌攻击我方第三行
+	// 收集所有可以攻击的敌方卡牌（从左到右）
+	attackingCards_.clear();
 	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
 		int enemyIndex = 1 * BATTLEFIELD_COLS + col;  // 第二行（敌方攻击行）
-		int playerIndex = 2 * BATTLEFIELD_COLS + col; // 第三行（我方）
-		
-		if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer) {
-			// 敌方卡牌攻击
-			int damage = battlefield_[enemyIndex].card.attack;
-			if (damage > 0) {
-				if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer) {
-					// 对位有我方卡牌，攻击我方卡牌
-					battlefield_[playerIndex].health -= damage;
-					if (battlefield_[playerIndex].health <= 0) {
-						// 启动摧毁动画，但立即标记为死亡（无法反击）
-						battlefield_[playerIndex].isAlive = false;
-						cardsToDestroy_.push_back(playerIndex);
-						isDestroyAnimating_ = true;
-						destroyAnimTime_ = 0.0f;
-						statusMessage_ = "我方卡牌被摧毁！";
-					}
-				} else {
-					// 对位没有我方卡牌，直接攻击我方本体
-					enemyDamage += damage;
-					playerHealth_ -= damage;
-					if (playerHealth_ < 0) playerHealth_ = 0;
-				}
-			}
+		if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer && 
+			battlefield_[enemyIndex].card.attack > 0) {
+			attackingCards_.push_back(enemyIndex);
 		}
 	}
 	
-	if (enemyDamage > 0) {
-		statusMessage_ = "敌方造成 " + std::to_string(enemyDamage) + " 点伤害！";
+	if (!attackingCards_.empty()) {
+		// 开始敌方攻击动画
+		isAttackAnimating_ = true;
+		attackAnimTime_ = 0.0f;
+		currentAttackingIndex_ = 0;
+		isPlayerAttacking_ = false;
+		statusMessage_ = "敌方开始攻击！";
 				} else {
-		statusMessage_ = "敌方攻击完成";
-	}
-	
-	// 敌人回合结束，回到玩家回合
-	currentPhase_ = GamePhase::PlayerTurn;
-	if (mustDrawThisTurn_) {
-		statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";
-				} else {
-		statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
+		// 没有可攻击的敌方卡牌，直接回到玩家回合
+		currentPhase_ = GamePhase::PlayerTurn;
+		if (mustDrawThisTurn_) {
+			statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";
+		} else {
+			statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
+		}
 	}
 }
 
@@ -949,9 +1029,21 @@ void BattleState::renderBattlefield(App& app) {
 	
 	// 移除战场背景框
 	
-	// 绘制战场卡牌
+	// 第一遍：绘制所有非攻击中的卡牌
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
 		const auto& bfCard = battlefield_[i];
+		
+		// 检查是否正在播放攻击动画
+		bool isAttacking = false;
+		if (isAttackAnimating_ && currentAttackingIndex_ < static_cast<int>(attackingCards_.size())) {
+			int currentCardIndex = attackingCards_[currentAttackingIndex_];
+			if (currentCardIndex == i) {
+				isAttacking = true;
+			}
+		}
+		
+		// 跳过正在攻击的卡牌，它们会在第二遍渲染
+		if (isAttacking) continue;
 		
 		// 检查是否悬停，改变颜色
 		if (i == hoveredBattlefieldIndex_) {
@@ -992,7 +1084,6 @@ void BattleState::renderBattlefield(App& app) {
 				renderRect.y = bfCard.rect.y + (bfCard.rect.h - newHeight) / 2;
 				renderRect.w = newWidth;
 				renderRect.h = newHeight;
-				
 			}
 			
 			// 使用CardRenderer渲染卡牌，使用当前血量
@@ -1017,9 +1108,7 @@ void BattleState::renderBattlefield(App& app) {
 				SDL_Rect symbolRect{centerX - symbolSize/2 - 2, centerY - symbolSize/2 - 2, symbolSize + 4, symbolSize + 4};
 				SDL_RenderDrawRect(r, &symbolRect);
 			}
-			
 				} else {
-
 			// 绘制空槽位
 			SDL_SetRenderDrawColor(r, 60, 70, 80, 80);
 			SDL_RenderFillRect(r, &bfCard.rect);
@@ -1028,7 +1117,486 @@ void BattleState::renderBattlefield(App& app) {
 		}
 	}
 	
+	// 第二遍：绘制正在攻击的卡牌（最上层）- 只在普通攻击时显示
+	if (isAttackAnimating_ && !isSpecialAttackAnimating_ && currentAttackingIndex_ < static_cast<int>(attackingCards_.size())) {
+		// 检查当前卡牌是否是特殊攻击
+		int currentCardIndex = attackingCards_[currentAttackingIndex_];
+		const auto& attacker = battlefield_[currentCardIndex];
+		BattleState::AttackType attackType = getCardAttackType(attacker.card);
+		
+		// 只有普通攻击才显示普通攻击动画
+		if (attackType == BattleState::AttackType::Normal) {
+			int currentCardIndex = attackingCards_[currentAttackingIndex_];
+			const auto& bfCard = battlefield_[currentCardIndex];
+			
+			if (bfCard.isAlive) {
+				float attackProgress = attackAnimTime_ / attackAnimDuration_;
+				
+				// 计算攻击动画效果
+				SDL_Rect renderRect = bfCard.rect;
+				
+				// 攻击动画效果：卡牌向前移动并闪烁
+				float moveDistance = 40.0f * std::sin(attackProgress * 3.14159f); // 增加移动距离
+				float flashIntensity = 0.3f + 0.7f * std::sin(attackProgress * 12.56636f); // 更快的闪烁
+				
+				// 根据攻击方向移动卡牌
+				if (isPlayerAttacking_) {
+					// 玩家攻击：向上移动
+					renderRect.y -= static_cast<int>(moveDistance);
+				} else {
+					// 敌方攻击：向下移动
+					renderRect.y += static_cast<int>(moveDistance);
+				}
+				
+				// 使用CardRenderer渲染卡牌，使用当前血量
+				Card tempCard = bfCard.card;
+				tempCard.health = bfCard.health; // 使用当前血量
+				CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+				
+				// 添加多层闪烁边框效果
+				SDL_SetRenderDrawColor(r, 255, 255, 0, static_cast<Uint8>(255 * flashIntensity));
+				SDL_RenderDrawRect(r, &renderRect);
+				
+				// 添加外圈高亮效果
+				SDL_SetRenderDrawColor(r, 255, 200, 0, static_cast<Uint8>(128 * flashIntensity));
+				SDL_Rect outerRect = renderRect;
+				outerRect.x -= 3;
+				outerRect.y -= 3;
+				outerRect.w += 6;
+				outerRect.h += 6;
+				SDL_RenderDrawRect(r, &outerRect);
+				
+				// 添加攻击特效：从卡牌中心向外扩散的圆圈
+				int centerX = renderRect.x + renderRect.w / 2;
+				int centerY = renderRect.y + renderRect.h / 2;
+				int effectRadius = static_cast<int>(20.0f * attackProgress);
+				
+				SDL_SetRenderDrawColor(r, 255, 100, 0, static_cast<Uint8>(200 * (1.0f - attackProgress)));
+				for (int i = 0; i < effectRadius; i += 2) {
+					SDL_Rect effectRect = {centerX - i, centerY - i, i * 2, i * 2};
+					SDL_RenderDrawRect(r, &effectRect);
+				}
+			}
+		}
+	}
+	
+	// 第三遍：绘制特殊攻击的卡牌动画
+	if (isSpecialAttackAnimating_ && currentTargetIndex_ < 3 && specialAttackTargets_[currentTargetIndex_] != -1 && currentAttackingIndex_ < static_cast<int>(attackingCards_.size())) {
+		int currentTargetIndex = specialAttackTargets_[currentTargetIndex_];
+		int attackerIndex = attackingCards_[currentAttackingIndex_];
+		const auto& attacker = battlefield_[attackerIndex];
+		
+		if (attacker.isAlive) {
+			float attackProgress = attackAnimTime_ / attackAnimDuration_;
+			
+			// 计算攻击动画效果
+			SDL_Rect renderRect = attacker.rect;
+			
+			// 攻击动画效果：卡牌移动并闪烁
+			float moveDistance = 40.0f * std::sin(attackProgress * 3.14159f);
+			float flashIntensity = 0.3f + 0.7f * std::sin(attackProgress * 12.56636f);
+			
+			// 根据当前目标计算移动方向
+			if (currentTargetIndex != -1) {
+				const auto& target = battlefield_[currentTargetIndex];
+				
+				// 计算攻击者到目标的方向向量
+				int attackerCenterX = attacker.rect.x + attacker.rect.w / 2;
+				int attackerCenterY = attacker.rect.y + attacker.rect.h / 2;
+				int targetCenterX = target.rect.x + target.rect.w / 2;
+				int targetCenterY = target.rect.y + target.rect.h / 2;
+				
+				// 计算方向向量
+				float deltaX = targetCenterX - attackerCenterX;
+				float deltaY = targetCenterY - attackerCenterY;
+				float distance = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+				
+				if (distance > 0) {
+					// 归一化方向向量
+					float dirX = deltaX / distance;
+					float dirY = deltaY / distance;
+					
+					// 根据方向移动卡牌
+					renderRect.x += static_cast<int>(moveDistance * dirX);
+					renderRect.y += static_cast<int>(moveDistance * dirY);
+				}
+			} else {
+				// 如果没有目标，使用默认的前向移动
+				if (isPlayerAttacking_) {
+					renderRect.y -= static_cast<int>(moveDistance);
+				} else {
+					renderRect.y += static_cast<int>(moveDistance);
+				}
+			}
+			
+			// 使用CardRenderer渲染卡牌
+			Card tempCard = attacker.card;
+			tempCard.health = attacker.health;
+			CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+			
+			// 根据攻击类型显示不同的边框颜色
+			switch (currentAttackType_) {
+				case BattleState::AttackType::Double:
+					SDL_SetRenderDrawColor(r, 0, 255, 255, static_cast<Uint8>(255 * flashIntensity)); // 青色 - 双向攻击
+					break;
+				case BattleState::AttackType::Triple:
+					SDL_SetRenderDrawColor(r, 255, 0, 255, static_cast<Uint8>(255 * flashIntensity)); // 紫色 - 三向攻击
+					break;
+				case BattleState::AttackType::Twice:
+					SDL_SetRenderDrawColor(r, 255, 165, 0, static_cast<Uint8>(255 * flashIntensity)); // 橙色 - 双重攻击
+					break;
+				case BattleState::AttackType::DoubleTwice:
+					SDL_SetRenderDrawColor(r, 0, 255, 0, static_cast<Uint8>(255 * flashIntensity)); // 绿色 - 双向双重攻击
+					break;
+				case BattleState::AttackType::TripleTwice:
+					SDL_SetRenderDrawColor(r, 255, 255, 255, static_cast<Uint8>(255 * flashIntensity)); // 白色 - 三向双重攻击
+					break;
+				default:
+					SDL_SetRenderDrawColor(r, 255, 255, 0, static_cast<Uint8>(255 * flashIntensity)); // 黄色 - 普通攻击
+					break;
+			}
+			SDL_RenderDrawRect(r, &renderRect);
+			
+			// 添加外圈高亮效果
+			SDL_SetRenderDrawColor(r, 255, 200, 0, static_cast<Uint8>(128 * flashIntensity));
+			SDL_Rect outerRect = renderRect;
+			outerRect.x -= 3;
+			outerRect.y -= 3;
+			outerRect.w += 6;
+			outerRect.h += 6;
+			SDL_RenderDrawRect(r, &outerRect);
+			
+			// 添加攻击特效：从卡牌中心向外扩散的圆圈
+			int centerX = renderRect.x + renderRect.w / 2;
+			int centerY = renderRect.y + renderRect.h / 2;
+			int effectRadius = static_cast<int>(20.0f * attackProgress);
+			
+			SDL_SetRenderDrawColor(r, 255, 100, 0, static_cast<Uint8>(200 * (1.0f - attackProgress)));
+			for (int i = 0; i < effectRadius; i += 2) {
+				SDL_Rect effectRect = {centerX - i, centerY - i, i * 2, i * 2};
+				SDL_RenderDrawRect(r, &effectRect);
+			}
+		}
+	}
+	
 	// 战斗牌位标注已删除
+}
+
+// 印记系统实现 - 多印记优先级处理
+BattleState::AttackType BattleState::getCardAttackType(const Card& card) {
+	// 检查卡牌的印记来确定攻击类型
+	// 优先级：组合攻击 > 单一攻击 > 普通攻击
+	// 
+	// 设计理念：
+	// 1. 三向双重攻击：最全面，攻击对位+左右斜对位各两次
+	// 2. 双向双重攻击：攻击左右斜对位各两次，避开对位
+	// 3. 三向攻击：攻击对位+左右斜对位
+	// 4. 双向攻击：攻击左右斜对位，避开对位
+	// 5. 双重攻击：对位攻击两次，伤害最高
+	// 6. 普通攻击：基础攻击
+	
+	bool hasTriple = false;
+	bool hasDouble = false;
+	bool hasTwice = false;
+	
+	// 检查所有印记
+	for (const auto& mark : card.marks) {
+		if (mark == u8"三向攻击") {
+			hasTriple = true;
+		} else if (mark == u8"双向攻击") {
+			hasDouble = true;
+		} else if (mark == u8"双重攻击") {
+			hasTwice = true;
+		}
+	}
+	
+	// 按优先级返回攻击类型（组合攻击优先）
+	if (hasTriple && hasTwice) {
+		return BattleState::AttackType::TripleTwice;
+	} else if (hasDouble && hasTwice) {
+		return BattleState::AttackType::DoubleTwice;
+	} else if (hasTriple) {
+		return BattleState::AttackType::Triple;
+	} else if (hasDouble) {
+		return BattleState::AttackType::Double;
+	} else if (hasTwice) {
+		return BattleState::AttackType::Twice;
+	}
+	
+	return BattleState::AttackType::Normal;
+}
+
+// 执行特殊攻击
+void BattleState::executeSpecialAttack(int attackerIndex, int targetCol, bool isPlayerAttacking) {
+	const auto& attacker = battlefield_[attackerIndex];
+	BattleState::AttackType attackType = getCardAttackType(attacker.card);
+	
+	// 如果是普通攻击，直接执行
+	if (attackType == BattleState::AttackType::Normal) {
+		executeNormalAttack(attackerIndex, targetCol, isPlayerAttacking, attacker.card.attack);
+		return;
+	}
+	
+	// 设置特殊攻击动画
+	currentAttackType_ = attackType;
+	isSpecialAttackAnimating_ = true;
+	currentTargetIndex_ = 0;
+	attackAnimTime_ = 0.0f;
+	
+	// 清空目标数组
+	for (int i = 0; i < 3; ++i) {
+		specialAttackTargets_[i] = -1;
+	}
+	
+	// 根据攻击类型设置目标
+	switch (attackType) {
+		case BattleState::AttackType::Double: {
+			// 双向攻击：设置左右斜对位目标
+			setupDiagonalTargets(attackerIndex, targetCol, isPlayerAttacking);
+			break;
+		}
+		case BattleState::AttackType::Triple: {
+			// 三向攻击：设置对位+左右斜对位目标
+			setupTripleTargets(attackerIndex, targetCol, isPlayerAttacking);
+			break;
+		}
+		case BattleState::AttackType::Twice: {
+			// 双重攻击：设置对位目标两次
+			setupTwiceTargets(attackerIndex, targetCol, isPlayerAttacking);
+			break;
+		}
+		case BattleState::AttackType::DoubleTwice: {
+			// 双向双重攻击：设置左右斜对位目标各两次
+			setupDoubleTwiceTargets(attackerIndex, targetCol, isPlayerAttacking);
+			break;
+		}
+		case BattleState::AttackType::TripleTwice: {
+			// 三向双重攻击：设置对位+左右斜对位目标各两次
+			setupTripleTwiceTargets(attackerIndex, targetCol, isPlayerAttacking);
+			break;
+		}
+		default:
+			break;
+	}
+}
+
+// 设置双向攻击目标
+void BattleState::setupDiagonalTargets(int attackerIndex, int targetCol, bool isPlayerAttacking) {
+	int targetCount = 0;
+	
+	// 左斜对位
+	if (targetCol > 0) {
+		int leftTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol - 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol - 1));
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
+	}
+	
+	// 右斜对位
+	if (targetCol < BATTLEFIELD_COLS - 1) {
+		int rightTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol + 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol + 1));
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
+	}
+}
+
+// 设置三向攻击目标
+void BattleState::setupTripleTargets(int attackerIndex, int targetCol, bool isPlayerAttacking) {
+	int targetCount = 0;
+	
+	// 三向攻击顺序：左斜对位 → 对位 → 右斜对位
+	
+	// 1. 左斜对位
+	if (targetCol > 0) {
+		int leftTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol - 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol - 1));
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
+	}
+	
+	// 2. 对位
+	int frontTargetIndex = isPlayerAttacking ? 
+		(1 * BATTLEFIELD_COLS + targetCol) : 
+		(2 * BATTLEFIELD_COLS + targetCol);
+	specialAttackTargets_[targetCount++] = frontTargetIndex;
+	
+	// 3. 右斜对位
+	if (targetCol < BATTLEFIELD_COLS - 1) {
+		int rightTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol + 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol + 1));
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
+	}
+}
+
+// 设置双重攻击目标
+void BattleState::setupTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking) {
+	int targetIndex = isPlayerAttacking ? 
+		(1 * BATTLEFIELD_COLS + targetCol) : 
+		(2 * BATTLEFIELD_COLS + targetCol);
+	
+	// 同一个目标攻击两次
+	specialAttackTargets_[0] = targetIndex;
+	specialAttackTargets_[1] = targetIndex;
+}
+
+// 设置双向双重攻击目标
+void BattleState::setupDoubleTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking) {
+	int targetCount = 0;
+	
+	// 左斜对位攻击两次
+	if (targetCol > 0) {
+		int leftTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol - 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol - 1));
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
+	}
+	
+	// 右斜对位攻击两次
+	if (targetCol < BATTLEFIELD_COLS - 1) {
+		int rightTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol + 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol + 1));
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
+	}
+}
+
+// 设置三向双重攻击目标
+void BattleState::setupTripleTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking) {
+	int targetCount = 0;
+	
+	// 三向双重攻击顺序：左斜对位 → 对位 → 右斜对位（每个目标攻击两次）
+	
+	// 1. 左斜对位攻击两次
+	if (targetCol > 0) {
+		int leftTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol - 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol - 1));
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
+	}
+	
+	// 2. 对位攻击两次
+	int frontTargetIndex = isPlayerAttacking ? 
+		(1 * BATTLEFIELD_COLS + targetCol) : 
+		(2 * BATTLEFIELD_COLS + targetCol);
+	specialAttackTargets_[targetCount++] = frontTargetIndex;
+	specialAttackTargets_[targetCount++] = frontTargetIndex;
+	
+	// 3. 右斜对位攻击两次
+	if (targetCol < BATTLEFIELD_COLS - 1) {
+		int rightTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol + 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol + 1));
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
+	}
+}
+
+// 执行斜对位攻击
+void BattleState::executeDiagonalAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage) {
+	// 攻击左斜对位
+	if (targetCol > 0) {
+		int leftTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol - 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol - 1));
+		attackTarget(attackerIndex, leftTargetIndex, damage);
+	}
+	
+	// 攻击右斜对位
+	if (targetCol < BATTLEFIELD_COLS - 1) {
+		int rightTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol + 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol + 1));
+		attackTarget(attackerIndex, rightTargetIndex, damage);
+	}
+}
+
+// 执行三向攻击
+void BattleState::executeTripleAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage) {
+	// 攻击对位
+	int frontTargetIndex = isPlayerAttacking ? 
+		(1 * BATTLEFIELD_COLS + targetCol) : 
+		(2 * BATTLEFIELD_COLS + targetCol);
+	attackTarget(attackerIndex, frontTargetIndex, damage);
+	
+	// 攻击左斜对位
+	if (targetCol > 0) {
+		int leftTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol - 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol - 1));
+		attackTarget(attackerIndex, leftTargetIndex, damage);
+	}
+	
+	// 攻击右斜对位
+	if (targetCol < BATTLEFIELD_COLS - 1) {
+		int rightTargetIndex = isPlayerAttacking ? 
+			(1 * BATTLEFIELD_COLS + (targetCol + 1)) : 
+			(2 * BATTLEFIELD_COLS + (targetCol + 1));
+		attackTarget(attackerIndex, rightTargetIndex, damage);
+	}
+}
+
+// 执行双重攻击
+void BattleState::executeTwiceAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage) {
+	int targetIndex = isPlayerAttacking ? 
+		(1 * BATTLEFIELD_COLS + targetCol) : 
+		(2 * BATTLEFIELD_COLS + targetCol);
+	
+	// 第一次攻击
+	attackTarget(attackerIndex, targetIndex, damage);
+	
+	// 第二次攻击（如果目标还活着）
+	if (battlefield_[targetIndex].isAlive) {
+		attackTarget(attackerIndex, targetIndex, damage);
+	}
+}
+
+// 执行普通攻击
+void BattleState::executeNormalAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage) {
+	int targetIndex = isPlayerAttacking ? 
+		(1 * BATTLEFIELD_COLS + targetCol) : 
+		(2 * BATTLEFIELD_COLS + targetCol);
+	
+	attackTarget(attackerIndex, targetIndex, damage);
+}
+
+// 攻击目标
+void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
+	if (targetIndex < 0 || targetIndex >= TOTAL_BATTLEFIELD_SLOTS) return;
+	
+	const auto& attacker = battlefield_[attackerIndex];
+	const auto& target = battlefield_[targetIndex];
+	
+	// 检查目标是否有效
+	if (!target.isAlive) {
+		// 目标已死亡，攻击敌方本体
+		if (attacker.isPlayer) {
+			// 玩家攻击敌方本体
+			enemyHealth_ -= damage;
+			if (enemyHealth_ < 0) enemyHealth_ = 0;
+		} else {
+			// 敌方攻击玩家本体
+			playerHealth_ -= damage;
+			if (playerHealth_ < 0) playerHealth_ = 0;
+		}
+		return;
+	}
+	if (attacker.isPlayer == target.isPlayer) return; // 不能攻击友军
+	
+	// 执行攻击
+	battlefield_[targetIndex].health -= damage;
+	
+	// 检查目标是否死亡
+	if (battlefield_[targetIndex].health <= 0) {
+		battlefield_[targetIndex].isAlive = false;
+		cardsToDestroy_.push_back(targetIndex);
+		isDestroyAnimating_ = true;
+		destroyAnimTime_ = 0.0f;
+	}
 }
 
 void BattleState::renderHandCards(App& app) {

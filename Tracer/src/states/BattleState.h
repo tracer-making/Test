@@ -60,6 +60,38 @@ private:
 	int inkPileCount_ = 20;
 	int playerPileCount_ = 20;
 	
+	// 固定玩家牌堆
+	std::vector<std::string> playerDeck_;  // 玩家牌堆内容（卡牌ID列表）
+	
+	// 印记系统 - 特殊攻击方式
+	enum class AttackType {
+		Normal,         // 普通攻击（对位）
+		Double,         // 双向攻击（斜对位）
+		Triple,         // 三向攻击（对位+斜对位）
+		Twice,          // 双重攻击（对位两次）
+		DoubleTwice,    // 双向双重攻击（斜对位各攻击两次）
+		TripleTwice     // 三向双重攻击（对位+斜对位各攻击两次）
+	};
+	
+	// 获取卡牌的攻击类型
+	AttackType getCardAttackType(const Card& card);
+	
+	// 特殊攻击执行函数
+	void executeSpecialAttack(int attackerIndex, int targetCol, bool isPlayerAttacking);
+	void executeDiagonalAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage);
+	void executeTripleAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage);
+	void executeTwiceAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage);
+	void executeNormalAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage);
+	void attackTarget(int attackerIndex, int targetIndex, int damage);
+	
+	// 特殊攻击目标设置函数
+	void setupDiagonalTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
+	void setupTripleTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
+	void setupTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
+	void setupDoubleTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
+	void setupTripleTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
+	
+	
 	// 墨尺和砚台
 	SDL_Rect inkRulerRect_;    // 墨尺（显示墨量）
 	SDL_Rect inkStoneRect_;     // 砚台（墨池状态）
@@ -142,6 +174,22 @@ private:
 	float destroyAnimTime_ = 0.0f;    // 摧毁动画时间
 	float destroyAnimDuration_ = 0.5f; // 摧毁动画持续时间
 	std::vector<int> cardsToDestroy_;  // 待摧毁的卡牌索引
+	
+	// 攻击动画系统
+	bool isAttackAnimating_ = false;   // 是否正在播放攻击动画
+	float attackAnimTime_ = 0.0f;     // 攻击动画时间
+	float attackAnimDuration_ = 0.9f; // 攻击动画持续时间（稍微快一点）
+	std::vector<int> attackingCards_;  // 正在攻击的卡牌索引
+	int currentAttackingIndex_ = 0;   // 当前攻击的卡牌索引
+	bool isPlayerAttacking_ = true;   // 是否玩家攻击阶段
+	bool hasAttacked_ = false;        // 当前卡牌是否已经攻击过
+	
+	// 特殊攻击动画系统
+	AttackType currentAttackType_ = AttackType::Normal;
+	int specialAttackTargets_[3] = {-1, -1, -1}; // 最多3个目标（三向攻击）
+	int currentTargetIndex_ = 0;
+	bool isSpecialAttackAnimating_ = false;
+	
 	
 	// 私有方法
 	void initializeBattle();
