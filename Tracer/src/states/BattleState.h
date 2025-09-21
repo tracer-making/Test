@@ -76,6 +76,9 @@ private:
 	// 获取卡牌的攻击类型
 	AttackType getCardAttackType(const Card& card);
 	
+	// 检查卡牌是否有特定印记
+	bool hasMark(const Card& card, const std::string& mark);
+	
 	// 特殊攻击执行函数
 	void executeSpecialAttack(int attackerIndex, int targetCol, bool isPlayerAttacking);
 	void executeDiagonalAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage);
@@ -95,7 +98,6 @@ private:
 	// 墨尺和砚台
 	SDL_Rect inkRulerRect_;    // 墨尺（显示墨量）
 	SDL_Rect inkStoneRect_;     // 砚台（墨池状态）
-	int currentInk_ = 0;         // 当前墨量
 	int maxInk_ = 10;           // 最大墨量
 	
 	// UI区域

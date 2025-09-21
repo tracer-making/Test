@@ -73,24 +73,24 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			// T键切换上帝模式
 			godMode_ = !godMode_;
 			if (godMode_) {
-				statusMessage_ = "上帝模式已开启！悬停在敌方区域按A键生成守宫，按S键生成雪尾鼬生";
+				statusMessage_ = "上帝模式已开启！悬停在敌方区域按A键生成碧蟾，按S键生成玄乌";
 			} else {
 				statusMessage_ = "上帝模式已关闭";
 			}
 		} else if (e.key.keysym.sym == SDLK_a && godMode_) {
-			// A键在悬停位置生成守宫
+			// A键在悬停位置生成碧蟾
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						// 生成守宫卡牌
-						Card shougong = CardDB::instance().make("shougong");
-						if (!shougong.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = shougong;
+						// 生成碧蟾卡牌
+						Card bichan = CardDB::instance().make("bichan");
+						if (!bichan.id.empty()) {
+							battlefield_[hoveredBattlefieldIndex_].card = bichan;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = shougong.health;
+							battlefield_[hoveredBattlefieldIndex_].health = bichan.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
-							statusMessage_ = "在敌方区域生成守宫";
+							statusMessage_ = "在敌方区域生成碧蟾";
 						}
 					} else {
 						statusMessage_ = "该位置已有卡牌";
@@ -102,19 +102,19 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				statusMessage_ = "请悬停在敌方区域再按A键";
 			}
 		} else if (e.key.keysym.sym == SDLK_s && godMode_) {
-			// S键在悬停位置生成雪尾鼬生
+			// S键在悬停位置生成玄乌
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						// 生成雪尾鼬生卡牌
-						Card xuewei = CardDB::instance().make("xuewei_yousheng");
-						if (!xuewei.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = xuewei;
+						// 生成玄乌卡牌
+						Card xuanwu = CardDB::instance().make("xuanwu");
+						if (!xuanwu.id.empty()) {
+							battlefield_[hoveredBattlefieldIndex_].card = xuanwu;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = xuewei.health;
+							battlefield_[hoveredBattlefieldIndex_].health = xuanwu.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
-							statusMessage_ = "在敌方区域生成雪尾鼬生";
+							statusMessage_ = "在敌方区域生成玄乌";
 						}
 					} else {
 						statusMessage_ = "该位置已有卡牌";
@@ -166,6 +166,18 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 		// 检查牌堆点击（回合制限制）
 		if (mouseX >= inkPileRect_.x && mouseX <= inkPileRect_.x + inkPileRect_.w &&
 			mouseY >= inkPileRect_.y && mouseY <= inkPileRect_.y + inkPileRect_.h) {
+			// 检查是否在献祭模式
+			if (isSacrificing_) {
+				statusMessage_ = "献祭模式中，请点击场上卡牌献祭或右键取消！";
+				return;
+			}
+			
+			// 检查是否在打出阶段
+			if (showSacrificeInk_) {
+				statusMessage_ = "请先打出选中的卡牌！";
+				return;
+			}
+			
 			// 点击墨锭牌堆
 			if (currentTurn_ == 1) {
 				statusMessage_ = "第一回合不能抽牌！";
@@ -186,6 +198,18 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		} else if (mouseX >= playerPileRect_.x && mouseX <= playerPileRect_.x + playerPileRect_.w &&
 				   mouseY >= playerPileRect_.y && mouseY <= playerPileRect_.y + playerPileRect_.h) {
+			// 检查是否在献祭模式
+			if (isSacrificing_) {
+				statusMessage_ = "献祭模式中，请点击场上卡牌献祭或右键取消！";
+				return;
+			}
+			
+			// 检查是否在打出阶段
+			if (showSacrificeInk_) {
+				statusMessage_ = "请先打出选中的卡牌！";
+				return;
+			}
+			
 			// 点击玩家牌堆
 			if (currentTurn_ == 1) {
 				statusMessage_ = "第一回合不能抽牌！";
@@ -214,7 +238,9 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				// 检查是否必须抽牌
 				if (mustDrawThisTurn_) {
 					statusMessage_ = "必须先抽牌才能结束回合！";
-				} else if (isSacrificeAnimating_ || (showSacrificeInk_ && selectedHandCard_ >= 0)) {
+				} else if (isSacrificing_) {
+					statusMessage_ = "献祭模式中，请点击场上卡牌献祭或右键取消！";
+				} else if (showSacrificeInk_ || selectedHandCard_ >= 0) {
 					statusMessage_ = "请先打出选中的卡牌！";
 				} else {
 					endTurn();
@@ -230,6 +256,24 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				// 检查是否必须抽牌
 				if (mustDrawThisTurn_) {
 					statusMessage_ = "必须先抽牌才能使用手牌！";
+					return;
+				}
+				
+				// 检查是否在献祭模式
+				if (isSacrificing_) {
+					statusMessage_ = "献祭模式中，请点击场上卡牌献祭或右键取消！";
+					return;
+				}
+				
+				// 检查是否在打出阶段
+				if (showSacrificeInk_) {
+					statusMessage_ = "请先打出选中的卡牌！";
+					return;
+				}
+				
+				// 检查是否已经有选中的卡牌在等待打出
+				if (selectedHandCard_ >= 0) {
+					statusMessage_ = "请先打出已选中的卡牌！";
 					return;
 				}
 				selectedHandCard_ = static_cast<int>(i);
@@ -297,10 +341,21 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 						
 						if (battlefield_[i].isAlive && battlefield_[i].isPlayer && !battlefield_[i].isSacrificed) {
 							// 献祭这张卡牌（点击就加点数，出现墨滴，标记为已献祭）
-							currentSacrificeInk_++;
-							currentInk_ += battlefield_[i].card.sacrificeCost; // 立即增加总墨量
+							
+							
+							// 计算献祭获得的墨量（检查优质祭品印记）
+							int inkGained = battlefield_[i].card.sacrificeCost;
+							if (hasMark(battlefield_[i].card, u8"优质祭品")) {
+								inkGained = 3; // 优质祭品提供3点墨量
+								currentSacrificeInk_+= inkGained;
+								statusMessage_ = "优质祭品！获得3点墨量，当前：" + std::to_string(currentSacrificeInk_) + "/" + std::to_string(sacrificeTargetCost_);
+							} else {
+								currentSacrificeInk_++;
+								statusMessage_ = "献祭获得 " + std::to_string(inkGained) + " 点墨量，当前：" + std::to_string(currentSacrificeInk_) + "/" + std::to_string(sacrificeTargetCost_);
+							}
+							
+						
 							battlefield_[i].isSacrificed = true; // 标记为已献祭
-							statusMessage_ = "献祭获得 " + std::to_string(battlefield_[i].card.sacrificeCost) + " 点墨量，当前：" + std::to_string(currentSacrificeInk_) + "/" + std::to_string(sacrificeTargetCost_) + " (总墨量:" + std::to_string(currentInk_) + ")";
 							
 							// 检查是否献祭足够
 							if (currentSacrificeInk_ >= sacrificeTargetCost_) {
@@ -308,20 +363,33 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 								isSacrificing_ = false;
 								showSacrificeInk_ = true;  // 开始显示献墨量
 								
-								// 收集待摧毁的卡牌并立即标记为死亡
+								// 收集待摧毁的卡牌，检查生生不息印记
 								cardsToDestroy_.clear();
 								for (int j = 0; j < TOTAL_BATTLEFIELD_SLOTS; ++j) {
 									if (battlefield_[j].isSacrificed) {
-										battlefield_[j].isAlive = false; // 立即标记为死亡
-										cardsToDestroy_.push_back(j);
+										// 检查是否有生生不息印记
+										bool hasImmortal = hasMark(battlefield_[j].card, u8"生生不息");
+										
+										if (hasImmortal) {
+											// 生生不息：不死亡，但依然产生魂骨
+											boneCount_++;
+											statusMessage_ = "生生不息！获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
+										} else {
+											// 正常献祭：标记为死亡
+											battlefield_[j].isAlive = false;
+											cardsToDestroy_.push_back(j);
+										}
 									}
 								}
 								
-								// 启动摧毁动画
-								isDestroyAnimating_ = true;
-								destroyAnimTime_ = 0.0f;
-								
-								statusMessage_ = "献祭完成！卡牌正在消失...";
+								// 如果有卡牌需要摧毁，启动摧毁动画
+								if (!cardsToDestroy_.empty()) {
+									isDestroyAnimating_ = true;
+									destroyAnimTime_ = 0.0f;
+									statusMessage_ = "献祭完成！卡牌正在消失...";
+								} else {
+									statusMessage_ = "献祭完成！生生不息卡牌存活！";
+								}
 							}
 						} else if (battlefield_[i].isSacrificed) {
 							statusMessage_ = "这张卡牌已经被献祭了";
@@ -396,29 +464,36 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			statusMessage_ = "已取消献祭";
 			return;
 		}
-
-		// 检查手牌右键点击（墨锭献祭）
-		for (size_t i = 0; i < handCardRects_.size(); ++i) {
-
-			const auto& rect = handCardRects_[i];
-			if (mouseX >= rect.x && mouseX <= rect.x + rect.w &&
-				mouseY >= rect.y && mouseY <= rect.y + rect.h) {
-				Card& card = handCards_[i];
-				if (card.id == "moding" && currentPhase_ == GamePhase::PlayerTurn) {
-					// 献祭墨锭，获得墨量
-					currentInk_ += 3; // 献祭墨锭获得3点墨量
-					if (currentInk_ > maxInk_) currentInk_ = maxInk_;
-					
-					// 从手牌移除
-					handCards_.erase(handCards_.begin() + i);
-					layoutHandCards();
-					selectedHandCard_ = -1;
-					
-					statusMessage_ = "献祭墨锭，获得3点墨量！";
+		
+		// 检查是否在打出阶段，右键取消打出
+		if (selectedHandCard_ >= 0) {
+			// 检查选中的卡牌是否需要献墨点数
+			bool needsSacrifice = false;
+			for (const auto& mark : handCards_[selectedHandCard_].marks) {
+				if (mark == "消耗骨头") {
+					// 消耗骨头的卡牌不需要献祭
+					needsSacrifice = false;
+					break;
 				}
-				break;
+			}
+			
+			if (!needsSacrifice && handCards_[selectedHandCard_].sacrificeCost > 0) {
+				needsSacrifice = true;
+			}
+			
+			if (!needsSacrifice) {
+				// 不需要献墨点数的卡牌，可以右键取消打出
+				selectedHandCard_ = -1;
+				showSacrificeInk_ = false;
+				statusMessage_ = "已取消打出";
+				return;
+			} else {
+				// 需要献墨点数的卡牌，不能右键取消
+				statusMessage_ = "需要献墨的卡牌不能取消打出！";
+				return;
 			}
 		}
+
 	}
 }
 
@@ -502,9 +577,7 @@ void BattleState::update(App& app, float dt) {
 				hasDrawnThisTurn_ = false; // 重置抽牌状态
 				mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
 				
-				// 恢复墨量（每回合开始时获得一些墨量）
-				currentInk_ += 2; // 每回合获得2点墨量
-				if (currentInk_ > maxInk_) currentInk_ = maxInk_;
+				// 每回合开始时恢复一些墨量（已移除墨量系统）
 				
 				// 延迟执行敌人回合
 				enemyTurn();
@@ -589,8 +662,15 @@ void BattleState::update(App& app, float dt) {
 
 		// 如果卡牌从存活变为死亡，获得魂骨
 		if (wasAlive && !isAlive) {
-			boneCount_++;
-			statusMessage_ = "获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
+			// 检查是否是生生不息卡牌在献祭时死亡（这种情况已经在献祭逻辑中处理了魂骨）
+			bool wasSacrificed = battlefield_[i].isSacrificed;
+			bool hasImmortal = hasMark(battlefield_[i].card, u8"生生不息");
+			
+			// 如果不是生生不息卡牌在献祭时死亡，则获得魂骨
+			if (!(wasSacrificed && hasImmortal)) {
+				boneCount_++;
+				statusMessage_ = "获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
+			}
 		}
 
 		// 更新状态记录
@@ -658,7 +738,6 @@ void BattleState::initializeBattle() {
 	currentTurn_ = 1;
 	playerHealth_ = 20;
 	enemyHealth_ = 20;
-	currentInk_ = 0;
 	maxInk_ = 10;
 	selectedHandCard_ = -1;
 	statusMessage_ = "战斗开始！";
@@ -678,12 +757,14 @@ void BattleState::initializeBattle() {
 		handCards_.push_back(inkCard);
 	}
 	
-	// 初始化固定玩家牌堆（4张不同的卡牌）
+	// 初始化固定玩家牌堆（三张玄牡和两张千峰驼鹿）
 	playerDeck_.clear();
-	playerDeck_.push_back("shuangdao_moke");  // 双刀墨客
-	playerDeck_.push_back("daobi_li");          // 刀笔吏
-	playerDeck_.push_back("shuangya_zhanlang"); // 霜牙战狼
-	playerDeck_.push_back("shougong");         // 守宫
+	playerDeck_.push_back("xuanmu");             // 玄牡
+	playerDeck_.push_back("xuanmu");             // 玄牡
+	playerDeck_.push_back("qianfeng_tuolu"); 
+	playerDeck_.push_back("xuanmu");             // 玄牡
+	playerDeck_.push_back("qianfeng_tuolu");    // 千峰驼鹿
+	   // 千峰驼鹿
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 	
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -697,6 +778,9 @@ void BattleState::initializeBattle() {
 		playerDeck_.erase(playerDeck_.begin());
 		playerPileCount_--;
 	}
+	
+	// 调试信息：确认手牌数量
+	statusMessage_ = "开局手牌数量: " + std::to_string(handCards_.size()) + " (1张墨锭 + 3张玩家牌)";
 	
 	// 初始化牌堆
 	inkPileCount_ = 10;  // 墨锭牌堆只有10张
@@ -928,11 +1012,8 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 	battlefield_[battlefieldIndex].health = card.health;
 	battlefield_[battlefieldIndex].isPlayer = true;
 	
-	// 消耗献祭获得的墨量
+	// 重置献祭状态
 	if (card.sacrificeCost > 0) {
-		// 消耗献祭获得的墨量（墨量已经在献祭过程中增加了）
-		currentInk_ -= card.sacrificeCost;
-		// 重置献祭状态
 		isSacrificing_ = false;
 		currentSacrificeInk_ = 0;
 		sacrificeCandidates_.clear();
@@ -976,9 +1057,7 @@ void BattleState::endTurn() {
 		hasDrawnThisTurn_ = false; // 重置抽牌状态
 		mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
 		
-		// 恢复墨量（每回合开始时获得一些墨量）
-		currentInk_ += 2; // 每回合获得2点墨量
-		if (currentInk_ > maxInk_) currentInk_ = maxInk_;
+		// 每回合开始时恢复一些墨量（已移除墨量系统）
 		
 		// 延迟执行敌人回合
 		enemyTurn();
@@ -1326,6 +1405,16 @@ BattleState::AttackType BattleState::getCardAttackType(const Card& card) {
 	return BattleState::AttackType::Normal;
 }
 
+// 检查卡牌是否有特定印记
+bool BattleState::hasMark(const Card& card, const std::string& mark) {
+	for (const auto& cardMark : card.marks) {
+		if (cardMark == mark) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // 执行特殊攻击
 void BattleState::executeSpecialAttack(int attackerIndex, int targetCol, bool isPlayerAttacking) {
 	const auto& attacker = battlefield_[attackerIndex];
@@ -1571,6 +1660,9 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	const auto& attacker = battlefield_[attackerIndex];
 	const auto& target = battlefield_[targetIndex];
 	
+	// 检查攻击者是否有空袭印记
+	bool hasAirStrike = hasMark(attacker.card, u8"空袭");
+	
 	// 检查目标是否有效
 	if (!target.isAlive) {
 		// 目标已死亡，攻击敌方本体
@@ -1587,7 +1679,66 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	}
 	if (attacker.isPlayer == target.isPlayer) return; // 不能攻击友军
 	
-	// 执行攻击
+	// 空袭机制处理
+	if (hasAirStrike) {
+		// 检查对位是否有高跳印记
+		bool targetHasHighJump = hasMark(target.card, u8"高跳");
+		
+		if (!targetHasHighJump) {
+			// 对位没有高跳印记，空袭直接攻击本体
+			if (attacker.isPlayer) {
+				// 玩家空袭攻击敌方本体
+				enemyHealth_ -= damage;
+				if (enemyHealth_ < 0) enemyHealth_ = 0;
+			} else {
+				// 敌方空袭攻击玩家本体
+				playerHealth_ -= damage;
+				if (playerHealth_ < 0) playerHealth_ = 0;
+			}
+			return;
+		}
+		// 对位有高跳印记，空袭攻击对位的高跳卡牌
+		// 计算穿透伤害：如果攻击力大于对位血量，多余伤害穿透到第一行高跳卡牌
+		int remainingDamage = damage - target.health;
+		if (remainingDamage > 0) {
+			// 有穿透伤害，检查第一行是否有高跳卡牌
+			if (attacker.isPlayer) {
+				// 玩家攻击：检查敌方第一行（row 0）是否有高跳卡牌
+				int firstRowTargetIndex = targetIndex - BATTLEFIELD_COLS; // 第一行对应位置
+				if (firstRowTargetIndex >= 0 && firstRowTargetIndex < BATTLEFIELD_COLS) {
+					const auto& firstRowTarget = battlefield_[firstRowTargetIndex];
+					if (firstRowTarget.isAlive && hasMark(firstRowTarget.card, u8"高跳")) {
+						// 第一行有高跳卡牌，承受穿透伤害
+						battlefield_[firstRowTargetIndex].health -= remainingDamage;
+						if (battlefield_[firstRowTargetIndex].health <= 0) {
+							battlefield_[firstRowTargetIndex].isAlive = false;
+							cardsToDestroy_.push_back(firstRowTargetIndex);
+							isDestroyAnimating_ = true;
+							destroyAnimTime_ = 0.0f;
+						}
+					}
+				}
+			} else {
+				// 敌方攻击：检查玩家第一行（row 2）是否有高跳卡牌
+				int firstRowTargetIndex = targetIndex + BATTLEFIELD_COLS; // 第一行对应位置
+				if (firstRowTargetIndex >= 2 * BATTLEFIELD_COLS && firstRowTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+					const auto& firstRowTarget = battlefield_[firstRowTargetIndex];
+					if (firstRowTarget.isAlive && hasMark(firstRowTarget.card, u8"高跳")) {
+						// 第一行有高跳卡牌，承受穿透伤害
+						battlefield_[firstRowTargetIndex].health -= remainingDamage;
+						if (battlefield_[firstRowTargetIndex].health <= 0) {
+							battlefield_[firstRowTargetIndex].isAlive = false;
+							cardsToDestroy_.push_back(firstRowTargetIndex);
+							isDestroyAnimating_ = true;
+							destroyAnimTime_ = 0.0f;
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// 执行正常攻击
 	battlefield_[targetIndex].health -= damage;
 	
 	// 检查目标是否死亡
