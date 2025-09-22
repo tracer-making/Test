@@ -55,14 +55,14 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"shuangya_zhanlang", u8"霜牙战狼", 3, u8"犬部", 2, 5, "face_shuangya", {u8"双重攻击"}}; registerCard(c);
 	
 	// 鹿部
-	c = Card{"yunqu_youmi", u8"云渠幼麋", 1, u8"鹿部", 1, 1, "face_yunqu_young", {u8"横冲直撞", u8"一回合成长云渠巨麋"}}; registerCard(c);
-	c = Card{"yunqu_jumi", u8"云渠巨麋", 2, u8"鹿部", 2, 4, "face_yunqu_giant", {u8"横冲直撞", u8"成长→千峰驼鹿"}}; registerCard(c);
+	c = Card{"yunqu_youmi", u8"云渠幼麋", 1, u8"鹿部", 1, 1, "face_yunqu_young", {u8"冲刺能手", u8"一回合成长云渠巨麋"}}; registerCard(c);
+	c = Card{"yunqu_jumi", u8"云渠巨麋", 2, u8"鹿部", 2, 4, "face_yunqu_giant", {u8"冲刺能手", u8"成长→千峰驼鹿"}}; registerCard(c);
 	c = Card{"dishisanzi", u8"第十三子", 1, u8"鹿部", 0, 1, "face_dishisan", {u8"生生不息", u8"奇数次献祭→2-1"}}; registerCard(c);
-	c = Card{"shuangti_heying", u8"霜蹄鹤影", 4, u8"鹿部", 1, 2, "face_shuangti", {u8"横冲直撞", u8"死亡之触", u8"每回合生长残简0-1"}}; registerCard(c);
+	c = Card{"shuangti_heying", u8"霜蹄鹤影", 4, u8"鹿部", 1, 2, "face_shuangti", {u8"冲刺能手", u8"死亡之触", u8"每回合生长残简0-1"}}; registerCard(c);
 	c = Card{"xuanmu", u8"玄牡", 1, u8"鹿部", 0, 1, "face_xuanmu", {u8"优质祭品"}}; registerCard(c);
-	c = Card{"qijiao_shuangqi", u8"岐角双歧鹿", 2, u8"鹿部", 1, 3, "face_qijiao", {u8"横冲直撞", u8"双向攻击"}}; registerCard(c);
-	c = Card{"qianfeng_tuolu", u8"千峰驼鹿", 3, u8"鹿部", 3, 7, "face_qianfeng", {u8"超级横冲直撞"}}; registerCard(c);
-	c = Card{"danxia_ruilu", u8"丹霞瑞鹿", 2, u8"鹿部", 0, 2, "face_danxia", {u8"本回合献祭次数为攻击力", u8"横冲直撞"}}; registerCard(c);
+	c = Card{"qijiao_shuangqi", u8"岐角双歧鹿", 2, u8"鹿部", 1, 3, "face_qijiao", {u8"冲刺能手", u8"双向攻击"}}; registerCard(c);
+	c = Card{"qianfeng_tuolu", u8"千峰驼鹿", 3, u8"鹿部", 3, 7, "face_qianfeng", {u8"蛮力冲撞"}}; registerCard(c);
+	c = Card{"danxia_ruilu", u8"丹霞瑞鹿", 2, u8"鹿部", 0, 2, "face_danxia", {u8"本回合献祭次数为攻击力", u8"冲刺能手"}}; registerCard(c);
 	c = Card{"jingguan_yeniu", u8"荆关野牛", 2, u8"鹿部", 3, 2, "face_jingguan", {u8"超级超级冲撞"}}; registerCard(c);
 	
 	// 介部

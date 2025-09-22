@@ -289,7 +289,7 @@ void MapExploreState::generatePathNodes() {
             if (newNode.y < 50) newNode.y = 50;
             if (newNode.y > screenH_ - 50) newNode.y = screenH_ - 50;
             
-            // 根据权重随机选择类型
+            // 根据权重随机选择类型不是
             int typeWeight = typeDist(gen);
             switch (typeWeight) {
                 case 0: newNode.type = MapNode::NodeType::NORMAL; break;

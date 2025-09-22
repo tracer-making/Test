@@ -512,6 +512,41 @@ void BattleState::update(App& app, float dt) {
 		damageDisplayTime_ += dt;
 		if (damageDisplayTime_ >= damageDisplayDuration_) {
 			showDamage_ = false;
+			
+			// 伤害显示完成，检查是否需要开始移动动画
+			if (currentPhase_ == GamePhase::PlayerTurn && !isRushing_ && !isBruteForcing_ && !isProcessingMovementQueue_) {
+				// 收集所有需要移动的卡牌，按照从左到右的顺序
+				pendingMovementCards_.clear();
+				
+				// 检查所有卡牌，收集需要移动的卡牌
+				for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+					if (battlefield_[i].isAlive && battlefield_[i].isPlayer) {
+						if (hasMark(battlefield_[i].card, u8"冲刺能手") || hasMark(battlefield_[i].card, u8"蛮力冲撞")) {
+							pendingMovementCards_.push_back(i);
+						}
+					}
+				}
+				
+				// 开始处理移动队列
+				if (!pendingMovementCards_.empty()) {
+					// 将移动卡牌按位置排序（从左到右）
+					std::sort(pendingMovementCards_.begin(), pendingMovementCards_.end(), [](int a, int b) {
+						return (a % BATTLEFIELD_COLS) < (b % BATTLEFIELD_COLS);
+					});
+					
+					isProcessingMovementQueue_ = true;
+					processNextMovement();
+				} else {
+					// 如果没有移动卡牌，直接进入敌方回合
+					currentPhase_ = GamePhase::EnemyTurn;
+					currentTurn_++; // 增加回合数
+					hasDrawnThisTurn_ = false; // 重置抽牌状态
+					mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+					
+					// 延迟执行敌人回合
+					enemyTurn();
+				}
+			}
 		}
 	}
 	
@@ -557,32 +592,59 @@ void BattleState::update(App& app, float dt) {
 			}
 		} else {
 			// 所有卡牌攻击完成
-			isAttackAnimating_ = false;
-			attackAnimTime_ = 0.0f;
-			attackingCards_.clear();
-			currentAttackingIndex_ = 0;
-			
 			if (isPlayerAttacking_) {
-				// 玩家攻击完成，进入敌方回合
+				// 玩家攻击完成，显示伤害并准备移动动画
+				isAttackAnimating_ = false;
+				attackAnimTime_ = 0.0f;
+				attackingCards_.clear();
+				currentAttackingIndex_ = 0;
+				
 				if (totalDamageDealt_ > 0) {
 					showDamage_ = true;
 					damageDisplayTime_ = 0.0f;
 					statusMessage_ = "造成 " + std::to_string(totalDamageDealt_) + " 点伤害！";
 				} else {
 					statusMessage_ = "我方攻击完成";
+					// 即使没有伤害，也要检查移动动画
+					showDamage_ = true;
+					damageDisplayTime_ = 0.0f;
 				}
 				
-				currentPhase_ = GamePhase::EnemyTurn;
-				currentTurn_++; // 增加回合数
-				hasDrawnThisTurn_ = false; // 重置抽牌状态
-				mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+				// 检查是否有卡牌需要冲刺能手或蛮力冲撞
+				bool hasRushingCard = false;
+				bool hasBruteForceCard = false;
 				
-				// 每回合开始时恢复一些墨量（已移除墨量系统）
+				for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+					if (battlefield_[i].isAlive && battlefield_[i].isPlayer) {
+						if (hasMark(battlefield_[i].card, u8"冲刺能手")) {
+							hasRushingCard = true;
+						}
+						if (hasMark(battlefield_[i].card, u8"蛮力冲撞")) {
+							hasBruteForceCard = true;
+						}
+					}
+				}
 				
-				// 延迟执行敌人回合
-				enemyTurn();
+				if (hasRushingCard || hasBruteForceCard) {
+					// 有移动卡牌，等待伤害显示完成后再开始移动
+					statusMessage_ = "攻击完成，准备移动...";
+				} else {
+					// 没有移动卡牌，直接进入敌方回合
+					currentPhase_ = GamePhase::EnemyTurn;
+					currentTurn_++; // 增加回合数
+					hasDrawnThisTurn_ = false; // 重置抽牌状态
+					mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+					
+					// 延迟执行敌人回合
+					enemyTurn();
+				}
 			} else {
 				// 敌方攻击完成，回到玩家回合
+				isAttackAnimating_ = false;
+				attackAnimTime_ = 0.0f;
+				attackingCards_.clear();
+				currentAttackingIndex_ = 0;
+				
 				currentPhase_ = GamePhase::PlayerTurn;
 				if (mustDrawThisTurn_) {
 					statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";
@@ -655,6 +717,16 @@ void BattleState::update(App& app, float dt) {
 		}
 	}
 	
+	// 处理冲刺能手动画
+	updateRushing(dt);
+	
+	// 处理蛮力冲撞动画
+	updateBruteForce(dt);
+	
+	
+	// 处理被推动卡牌动画
+	updatePushedAnimation(dt);
+	
 	// 检测卡牌死亡，获得魂骨
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
 		bool wasAlive = previousCardStates_[i];
@@ -665,9 +737,10 @@ void BattleState::update(App& app, float dt) {
 			// 检查是否是生生不息卡牌在献祭时死亡（这种情况已经在献祭逻辑中处理了魂骨）
 			bool wasSacrificed = battlefield_[i].isSacrificed;
 			bool hasImmortal = hasMark(battlefield_[i].card, u8"生生不息");
+			bool isMovedToDeath = battlefield_[i].isMovedToDeath; // 检查是否因移动死亡
 			
-			// 如果不是生生不息卡牌在献祭时死亡，则获得魂骨
-			if (!(wasSacrificed && hasImmortal)) {
+			// 如果不是生生不息卡牌在献祭时死亡，且不是因移动死亡，则获得魂骨
+			if (!(wasSacrificed && hasImmortal) && !isMovedToDeath) {
 				boneCount_++;
 				statusMessage_ = "获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
 			}
@@ -737,7 +810,7 @@ void BattleState::initializeBattle() {
 	currentPhase_ = GamePhase::PlayerTurn;
 	currentTurn_ = 1;
 	playerHealth_ = 20;
-	enemyHealth_ = 20;
+	enemyHealth_ = 100;
 	maxInk_ = 10;
 	selectedHandCard_ = -1;
 	statusMessage_ = "战斗开始！";
@@ -757,14 +830,13 @@ void BattleState::initializeBattle() {
 		handCards_.push_back(inkCard);
 	}
 	
-	// 初始化固定玩家牌堆（三张玄牡和两张千峰驼鹿）
+	// 初始化固定玩家牌堆（两张玄牧、两张驼鹿、一张云糜）
 	playerDeck_.clear();
-	playerDeck_.push_back("xuanmu");             // 玄牡
-	playerDeck_.push_back("xuanmu");             // 玄牡
-	playerDeck_.push_back("qianfeng_tuolu"); 
-	playerDeck_.push_back("xuanmu");             // 玄牡
+	playerDeck_.push_back("xuanmu");             // 玄牧
+	playerDeck_.push_back("xuanmu");             // 玄牧
 	playerDeck_.push_back("qianfeng_tuolu");    // 千峰驼鹿
-	   // 千峰驼鹿
+	playerDeck_.push_back("qianfeng_tuolu");    // 千峰驼鹿
+	playerDeck_.push_back("yunqu_jumi");        // 云渠巨糜
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 	
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -790,7 +862,7 @@ void BattleState::initializeBattle() {
 	mustDrawThisTurn_ = false;  // 第一回合不需要强制抽牌
 	
 	// 初始化战斗系统
-	enemyHealth_ = 20;
+	enemyHealth_ = 100;
 	totalDamageDealt_ = 0;
 	showDamage_ = false;
 	damageDisplayTime_ = 0.0f;
@@ -1146,8 +1218,29 @@ void BattleState::renderBattlefield(App& app) {
 			}
 		}
 		
-		// 如果卡牌存活或者正在播放摧毁动画，则渲染
-		if (bfCard.isAlive || isAnimating) {
+		// 检查是否正在冲刺能手或蛮力冲撞动画中
+		bool isMovingAnimating = false;
+		if (isRushing_ && rushingCardIndex_ == i) {
+			isMovingAnimating = true;
+		}
+		if (isBruteForcing_ && bruteForceCardIndex_ == i) {
+			isMovingAnimating = true;
+		}
+		
+		// 检查是否正在被推动动画中
+		bool isPushedAnimating = false;
+		if (isPushedAnimating_) {
+			for (int cardIndex : pushedCardIndices_) {
+				if (cardIndex == i) {
+					isPushedAnimating = true;
+					break;
+				}
+			}
+		}
+		
+		// 如果卡牌存活或者正在播放摧毁动画，则渲染（但不在移动动画中渲染原位置）
+		// 被推动动画中的卡牌需要特殊处理
+		if ((bfCard.isAlive || isAnimating) && !isMovingAnimating && !isPushedAnimating) {
 			// 计算动画效果
 			SDL_Rect renderRect = bfCard.rect;
 			
@@ -1187,7 +1280,28 @@ void BattleState::renderBattlefield(App& app) {
 				SDL_Rect symbolRect{centerX - symbolSize/2 - 2, centerY - symbolSize/2 - 2, symbolSize + 4, symbolSize + 4};
 				SDL_RenderDrawRect(r, &symbolRect);
 			}
-				} else {
+			
+			// 在卡牌上显示移动方向
+			if (bfCard.moveDirection != 0) {
+				std::string directionText = (bfCard.moveDirection == 1) ? "→" : "←";
+				SDL_Color directionColor{0, 0, 0, 255};
+				SDL_Surface* directionSurface = TTF_RenderUTF8_Blended(cardNameFont_, directionText.c_str(), directionColor);
+				if (directionSurface) {
+					SDL_Texture* directionTexture = SDL_CreateTextureFromSurface(app.getRenderer(), directionSurface);
+					int directionWidth = directionSurface->w * 2; // 增大显示大小
+					int directionHeight = directionSurface->h * 2; // 增大显示大小
+					SDL_Rect directionRect = {
+						renderRect.x + (renderRect.w - directionWidth) / 2,
+						renderRect.y + renderRect.h / 2 - directionHeight / 2,
+						directionWidth,
+						directionHeight
+					};
+					SDL_RenderCopy(app.getRenderer(), directionTexture, nullptr, &directionRect);
+					SDL_DestroyTexture(directionTexture);
+					SDL_FreeSurface(directionSurface);
+				}
+			}
+		} else {
 			// 绘制空槽位
 			SDL_SetRenderDrawColor(r, 60, 70, 80, 80);
 			SDL_RenderFillRect(r, &bfCard.rect);
@@ -1286,8 +1400,8 @@ void BattleState::renderBattlefield(App& app) {
 				int targetCenterY = target.rect.y + target.rect.h / 2;
 				
 				// 计算方向向量
-				float deltaX = targetCenterX - attackerCenterX;
-				float deltaY = targetCenterY - attackerCenterY;
+				float deltaX = static_cast<float>(targetCenterX - attackerCenterX);
+				float deltaY = static_cast<float>(targetCenterY - attackerCenterY);
 				float distance = std::sqrt(deltaX * deltaX + deltaY * deltaY);
 				
 				if (distance > 0) {
@@ -1358,6 +1472,257 @@ void BattleState::renderBattlefield(App& app) {
 		}
 	}
 	
+	
+	
+	// 被推动卡牌动画渲染
+	if (isPushedAnimating_ && !pushedCardIndices_.empty()) {
+		for (size_t i = 0; i < pushedCardIndices_.size(); ++i) {
+			int cardIndex = pushedCardIndices_[i];
+			int direction = pushedDirections_[i];
+			
+			if (cardIndex >= 0 && cardIndex < TOTAL_BATTLEFIELD_SLOTS) {
+				const auto& bfCard = battlefield_[cardIndex];
+				if (bfCard.isAlive) {
+					float pushedProgress = pushedAnimTime_ / pushedAnimDuration_;
+					
+					// 计算被推动动画效果
+					SDL_Rect renderRect = bfCard.rect;
+					
+					// 被推动动画效果：卡牌向目标方向移动（线性移动，无回弹）
+					float moveDistance = 120.0f * pushedProgress;
+					renderRect.x += static_cast<int>(moveDistance * direction);
+					
+					// 闪烁效果
+					float flashIntensity = 0.6f + 0.4f * std::sin(pushedProgress * 6.0f);
+					
+					// 使用CardRenderer渲染卡牌，使用当前血量
+					Card tempCard = bfCard.card;
+					tempCard.health = bfCard.health; // 使用当前血量
+					CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+					
+					// 被推动卡牌的特效：蓝色边框
+					SDL_SetRenderDrawColor(r, 100, 150, 255, static_cast<Uint8>(255 * flashIntensity));
+					SDL_RenderDrawRect(r, &renderRect);
+					
+					// 添加外圈高亮效果
+					SDL_SetRenderDrawColor(r, 50, 100, 255, static_cast<Uint8>(128 * flashIntensity));
+					SDL_Rect outerRect = renderRect;
+					outerRect.x -= 2;
+					outerRect.y -= 2;
+					outerRect.w += 4;
+					outerRect.h += 4;
+					SDL_RenderDrawRect(r, &outerRect);
+					
+					// 添加推动特效：从卡牌中心向外扩散的圆圈
+					int centerX = renderRect.x + renderRect.w / 2;
+					int centerY = renderRect.y + renderRect.h / 2;
+					int effectRadius = static_cast<int>(25.0f * pushedProgress);
+					
+					SDL_SetRenderDrawColor(r, 100, 200, 255, static_cast<Uint8>(180 * (1.0f - pushedProgress)));
+					for (int j = 0; j < effectRadius; j += 3) {
+						SDL_Rect effectRect = {centerX - j, centerY - j, j * 2, j * 2};
+						SDL_RenderDrawRect(r, &effectRect);
+					}
+					
+					// 添加移动轨迹效果
+					int trailLength = static_cast<int>(30.0f * pushedProgress);
+					SDL_SetRenderDrawColor(r, 150, 200, 255, static_cast<Uint8>(120 * (1.0f - pushedProgress)));
+					for (int j = 0; j < trailLength; j += 5) {
+						int trailX = centerX - (j * direction);
+						SDL_Rect trailRect = {trailX - 2, centerY - 2, 4, 4};
+						SDL_RenderFillRect(r, &trailRect);
+					}
+				}
+			}
+		}
+	}
+	
+	// 冲刺能手动画渲染（最后渲染，确保在最上层）
+	if (isRushing_ && rushingCardIndex_ >= 0 && rushingCardIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
+		const auto& bfCard = battlefield_[rushingCardIndex_];
+		if (bfCard.isAlive) {
+			float rushProgress = rushingAnimTime_ / rushingAnimDuration_;
+			
+			// 计算冲刺能手动画效果
+			SDL_Rect renderRect = bfCard.rect;
+			
+			// 声明变量
+			float flashIntensity;
+			SDL_Rect shakeRect;
+			
+			// 检查是否是摇晃动画
+			if (isRushingShaking_) {
+				// 摇晃动画：不移动，只有震动效果
+				// 闪烁效果
+				flashIntensity = 0.5f + 0.5f * std::sin(rushProgress * 8.0f);
+				
+				// 摇晃特效：红色边框，震动效果
+				float shakeIntensity = 0.3f + 0.7f * std::sin(rushProgress * 16.0f);
+				shakeRect = renderRect;
+				shakeRect.x += static_cast<int>(shakeIntensity * 3.0f * (rand() % 3 - 1));
+				shakeRect.y += static_cast<int>(shakeIntensity * 2.0f * (rand() % 3 - 1));
+			} else {
+				// 正常移动动画：卡牌向目标方向移动（线性移动，无回弹）
+				float moveDistance = 120.0f * rushProgress;
+				renderRect.x += static_cast<int>(moveDistance * rushingDirection_);
+				
+				// 闪烁效果
+				flashIntensity = 0.5f + 0.5f * std::sin(rushProgress * 8.0f);
+				
+				// 冲刺能手特效：红色边框，震动效果
+				float shakeIntensity = 0.3f + 0.7f * std::sin(rushProgress * 16.0f);
+				shakeRect = renderRect;
+				shakeRect.x += static_cast<int>(shakeIntensity * 3.0f * (rand() % 3 - 1));
+				shakeRect.y += static_cast<int>(shakeIntensity * 2.0f * (rand() % 3 - 1));
+			}
+			
+			// 使用CardRenderer渲染卡牌，使用当前血量
+			Card tempCard = bfCard.card;
+			tempCard.health = bfCard.health; // 使用当前血量
+			CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+			
+			// 添加冲刺能手特效：红色边框
+			SDL_SetRenderDrawColor(r, 255, 100, 100, static_cast<Uint8>(255 * flashIntensity));
+			SDL_RenderDrawRect(r, &shakeRect);
+			
+			// 添加外圈高亮效果
+			SDL_SetRenderDrawColor(r, 255, 50, 50, static_cast<Uint8>(128 * flashIntensity));
+			SDL_Rect outerRect = shakeRect;
+			outerRect.x -= 3;
+			outerRect.y -= 3;
+			outerRect.w += 6;
+			outerRect.h += 6;
+			SDL_RenderDrawRect(r, &outerRect);
+			
+			// 添加冲刺特效：从卡牌中心向外扩散的圆圈
+			int centerX = renderRect.x + renderRect.w / 2;
+			int centerY = renderRect.y + renderRect.h / 2;
+			int effectRadius = static_cast<int>(30.0f * rushProgress);
+			
+			SDL_SetRenderDrawColor(r, 255, 150, 100, static_cast<Uint8>(200 * (1.0f - rushProgress)));
+			for (int i = 0; i < effectRadius; i += 2) {
+				SDL_Rect effectRect = { centerX - i, centerY - i, i * 2, i * 2 };
+				SDL_RenderDrawRect(r, &effectRect);
+			}
+			
+			// 检查是否是摇晃动画
+			if (!isRushingShaking_) {
+				// 只有正常移动动画才显示移动轨迹
+				
+				// 添加移动轨迹效果
+				int trailLength = static_cast<int>(40.0f * rushProgress);
+				SDL_SetRenderDrawColor(r, 255, 200, 100, static_cast<Uint8>(150 * (1.0f - rushProgress)));
+				for (int i = 0; i < trailLength; i += 4) {
+					int trailX = centerX - (i * rushingDirection_);
+					SDL_Rect trailRect = { trailX - 2, centerY - 2, 4, 4 };
+					SDL_RenderFillRect(r, &trailRect);
+				}
+			}
+		}
+	}
+	
+	// 蛮力冲撞动画渲染（最后渲染，确保在最上层）
+	if (isBruteForcing_ && bruteForceCardIndex_ >= 0 && bruteForceCardIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
+		const auto& bfCard = battlefield_[bruteForceCardIndex_];
+		if (bfCard.isAlive) {
+			float bruteForceProgress = bruteForceAnimTime_ / bruteForceAnimDuration_;
+
+			// 计算蛮力冲撞动画效果
+			SDL_Rect renderRect = bfCard.rect;
+
+			// 声明变量
+			float flashIntensity;
+			SDL_Rect shakeRect;
+
+			// 检查是否是摇晃动画
+			if (isBruteForceShaking_) {
+				// 摇晃动画：不移动，只有震动效果
+				// 闪烁效果
+				flashIntensity = 0.5f + 0.5f * std::sin(bruteForceProgress * 8.0f);
+
+				// 摇晃特效：橙色边框，震动效果
+				float shakeIntensity = 0.3f + 0.7f * std::sin(bruteForceProgress * 16.0f);
+				shakeRect = renderRect;
+				shakeRect.x += static_cast<int>(shakeIntensity * 3.0f * (rand() % 3 - 1));
+				shakeRect.y += static_cast<int>(shakeIntensity * 2.0f * (rand() % 3 - 1));
+			}
+			else {
+				// 正常推动动画：卡牌向目标方向移动（线性移动，无回弹）
+				float moveDistance = 120.0f * bruteForceProgress;
+				renderRect.x += static_cast<int>(moveDistance * bruteForceDirection_);
+
+				// 闪烁效果
+				flashIntensity = 0.5f + 0.5f * std::sin(bruteForceProgress * 8.0f);
+
+				// 蛮力冲撞特效：橙色边框，震动效果
+				float shakeIntensity = 0.3f + 0.7f * std::sin(bruteForceProgress * 16.0f);
+				shakeRect = renderRect;
+				shakeRect.x += static_cast<int>(shakeIntensity * 3.0f * (rand() % 3 - 1));
+				shakeRect.y += static_cast<int>(shakeIntensity * 2.0f * (rand() % 3 - 1));
+			}
+
+			// 使用CardRenderer渲染卡牌，使用当前血量
+			Card tempCard = bfCard.card;
+			tempCard.health = bfCard.health; // 使用当前血量
+			CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+
+			SDL_SetRenderDrawColor(r, 255, 150, 50, static_cast<Uint8>(255 * flashIntensity));
+			SDL_RenderDrawRect(r, &shakeRect);
+
+			// 添加外圈高亮效果
+			SDL_SetRenderDrawColor(r, 255, 100, 0, static_cast<Uint8>(128 * flashIntensity));
+			SDL_Rect outerRect = shakeRect;
+			outerRect.x -= 4;
+			outerRect.y -= 4;
+			outerRect.w += 8;
+			outerRect.h += 8;
+			SDL_RenderDrawRect(r, &outerRect);
+
+			// 添加推动特效：从卡牌中心向外扩散的圆圈
+			int centerX = renderRect.x + renderRect.w / 2;
+			int centerY = renderRect.y + renderRect.h / 2;
+			int effectRadius = static_cast<int>(30.0f * bruteForceProgress);
+
+			SDL_SetRenderDrawColor(r, 255, 200, 100, static_cast<Uint8>(200 * (1.0f - bruteForceProgress)));
+			for (int i = 0; i < effectRadius; i += 2) {
+				SDL_Rect effectRect = { centerX - i, centerY - i, i * 2, i * 2 };
+				SDL_RenderDrawRect(r, &effectRect);
+			}
+
+			// 检查是否是摇晃动画
+			if (!isBruteForceShaking_) {
+				// 只有正常推动动画才显示移动轨迹和方向箭头
+
+				// 添加移动轨迹效果
+				int trailLength = static_cast<int>(40.0f * bruteForceProgress);
+				SDL_SetRenderDrawColor(r, 255, 200, 100, static_cast<Uint8>(150 * (1.0f - bruteForceProgress)));
+				for (int i = 0; i < trailLength; i += 4) {
+					int trailX = centerX - (i * bruteForceDirection_);
+					SDL_Rect trailRect = { trailX - 2, centerY - 2, 4, 4 };
+					SDL_RenderFillRect(r, &trailRect);
+				}
+
+				// 添加方向箭头
+				SDL_SetRenderDrawColor(r, 255, 150, 50, static_cast<Uint8>(255 * flashIntensity));
+				int arrowX = shakeRect.x + (bruteForceDirection_ > 0 ? shakeRect.w - 10 : 10);
+				int arrowY = shakeRect.y + shakeRect.h / 2;
+
+				// 绘制箭头
+				if (bruteForceDirection_ > 0) {
+					// 向右箭头
+					SDL_RenderDrawLine(r, arrowX, arrowY, arrowX + 8, arrowY);
+					SDL_RenderDrawLine(r, arrowX + 6, arrowY - 2, arrowX + 8, arrowY);
+					SDL_RenderDrawLine(r, arrowX + 6, arrowY + 2, arrowX + 8, arrowY);
+				}
+				else {
+					// 向左箭头
+					SDL_RenderDrawLine(r, arrowX, arrowY, arrowX - 8, arrowY);
+					SDL_RenderDrawLine(r, arrowX - 6, arrowY - 2, arrowX - 8, arrowY);
+					SDL_RenderDrawLine(r, arrowX - 6, arrowY + 2, arrowX - 8, arrowY);
+				}
+			}
+		}
+	}
 	// 战斗牌位标注已删除
 }
 
@@ -2254,4 +2619,463 @@ void BattleState::renderUI(App& app) {
 	}
 }
 
-// 3D效果已移除，恢复到原始状态
+// 冲刺能手相关方法实现
+void BattleState::startRushing(int cardIndex) {
+	if (cardIndex < 0 || cardIndex >= TOTAL_BATTLEFIELD_SLOTS) {
+		return;
+	}
+	
+	const auto& card = battlefield_[cardIndex];
+	if (!card.isAlive || !card.isPlayer) {
+		return;
+	}
+	
+	// 计算当前位置
+	int currentRow = cardIndex / BATTLEFIELD_COLS;
+	int currentCol = cardIndex % BATTLEFIELD_COLS;
+	
+	// 检查是否在边界，如果在边界，设置初始方向为另一方向
+	if (currentCol == 0) {
+		rushingDirection_ = 1; // 在左边界，初始方向向右
+	} else if (currentCol == BATTLEFIELD_COLS - 1) {
+		rushingDirection_ = -1; // 在右边界，初始方向向左
+	}
+	
+	// 更新卡牌的方向
+	battlefield_[cardIndex].moveDirection = rushingDirection_;
+	
+	// 检测当前方向是否可以移动
+	bool canMove = checkRushingCanMove(currentRow, currentCol, rushingDirection_);
+	
+	if (canMove) {
+		// 可以移动，设置状态为横冲直撞
+		isRushing_ = true;
+		rushingCardIndex_ = cardIndex;
+		isRushingShaking_ = false;
+		rushingAnimTime_ = 0.0f;
+		statusMessage_ = "横冲直撞开始！";
+	} else {
+		// 不能移动，改变方向并播放摇晃动画，不检测新方向
+		rushingDirection_ = -rushingDirection_;
+		battlefield_[cardIndex].moveDirection = rushingDirection_;
+		isRushing_ = true;
+		rushingCardIndex_ = cardIndex;
+		isRushingShaking_ = true;
+		rushingAnimTime_ = 0.0f;
+		statusMessage_ = "横冲直撞被阻挡，改变方向并播放摇晃动画！";
+	}
+}
+
+// 添加 checkRushingCanMove 函数实现
+bool BattleState::checkRushingCanMove(int currentRow, int currentCol, int direction) {
+	int targetCol = currentCol + direction;
+	if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
+		int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
+		return !battlefield_[targetIndex].isAlive;
+	}
+	return false;
+}
+
+void BattleState::updateRushing(float dt) {
+	if (!isRushing_) return;
+	
+	rushingAnimTime_ += dt;
+	
+	// 动画持续时间
+	if (rushingAnimTime_ >= rushingAnimDuration_) {
+		// 动画结束，执行移动
+		executeRushing();
+	}
+}
+
+void BattleState::executeRushing() {
+	if (rushingCardIndex_ < 0 || rushingCardIndex_ >= TOTAL_BATTLEFIELD_SLOTS) {
+		// 重置状态
+		isRushing_ = false;
+		isRushingShaking_ = false;
+		rushingCardIndex_ = -1;
+		rushingAnimTime_ = 0.0f;
+		return;
+	}
+	
+	const auto& card = battlefield_[rushingCardIndex_];
+	if (!card.isAlive || !card.isPlayer) {
+		// 卡牌已死亡，重置状态
+		isRushing_ = false;
+		isRushingShaking_ = false;
+		rushingCardIndex_ = -1;
+		rushingAnimTime_ = 0.0f;
+		return;
+	}
+	int currentRow = rushingCardIndex_ / BATTLEFIELD_COLS;
+	int currentCol = rushingCardIndex_ % BATTLEFIELD_COLS;
+		
+	// 检查是否是摇晃动画
+	if (isRushingShaking_) {
+		// 摇晃动画，不执行移动
+		statusMessage_ = "冲刺能手摇晃完成，下回合将向新方向移动！";
+	} else {
+		// 正常移动动画，执行移动
+		// 计算当前位置
+		
+		// 移动到目标位置
+		int targetCol = currentCol + rushingDirection_;
+		if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
+			int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
+			
+			if (!battlefield_[targetIndex].isAlive) {
+				// 找到空位，移动到这里
+				SDL_Rect targetRect = battlefield_[targetIndex].rect;
+				
+				// 移动卡牌数据
+				battlefield_[targetIndex] = battlefield_[rushingCardIndex_];
+				// 保持目标位置的rect
+				battlefield_[targetIndex].rect = targetRect;
+				
+				// 清空原位置，标记为因移动死亡（不获得魂骨）
+				battlefield_[rushingCardIndex_].isAlive = false;
+				battlefield_[rushingCardIndex_].health = 0;
+				battlefield_[rushingCardIndex_].isMovedToDeath = true;
+			}
+		}
+	}
+	
+	// 检查移动后是否在边界
+	int newCol = currentCol + rushingDirection_;
+	if (newCol == 0 || newCol == BATTLEFIELD_COLS - 1) {
+		// 在边界，改变方向
+		rushingDirection_ = -rushingDirection_;
+		statusMessage_ = "冲刺能手到达边界，改变方向！";
+	} else {
+		statusMessage_ = "冲刺能手移动成功！";
+	}
+	
+	// 重置状态
+	isRushing_ = false;
+	isRushingShaking_ = false;
+	rushingCardIndex_ = -1;
+	rushingAnimTime_ = 0.0f;
+	
+	// 冲刺能手移动完成，检查是否还有更多移动卡牌
+	onMovementComplete();
+}
+
+// 推动检测辅助方法实现
+BattleState::PushResult BattleState::checkCanPush(int currentRow, int currentCol, int direction) {
+	PushResult result;
+	result.canPush = false;
+	result.cardsToPush.clear();
+	
+	// 沿路径检测所有格子，直到找到空位或到达边界
+	int checkCol = currentCol + direction;
+	
+	while (checkCol >= 0 && checkCol < BATTLEFIELD_COLS) {
+		int checkIndex = currentRow * BATTLEFIELD_COLS + checkCol;
+		
+		if (!battlefield_[checkIndex].isAlive) {
+			// 检测到空位，可以移动
+			result.canPush = true;
+			result.cardsToPush.push_back(checkIndex);
+			break;
+		}
+		
+		// 继续检查下一个格子
+		checkCol += direction;
+	}
+	
+	return result;
+}
+
+// 蛮力冲撞相关方法实现
+void BattleState::startBruteForce(int cardIndex) {
+	if (cardIndex < 0 || cardIndex >= TOTAL_BATTLEFIELD_SLOTS) {
+		return;
+	}
+	
+	const auto& card = battlefield_[cardIndex];
+	if (!card.isAlive || !card.isPlayer) {
+		return;
+	}
+	
+	// 计算当前位置
+	int currentRow = cardIndex / BATTLEFIELD_COLS;
+	int currentCol = cardIndex % BATTLEFIELD_COLS;
+	
+	// 检查是否在边界，如果在边界，设置初始方向为另一方向
+	if (currentCol == 0) {
+		bruteForceDirection_ = 1; // 在左边界，初始方向向右
+	} else if (currentCol == BATTLEFIELD_COLS - 1) {
+		bruteForceDirection_ = -1; // 在右边界，初始方向向左
+	}
+	
+	// 更新卡牌的方向
+	battlefield_[cardIndex].moveDirection = bruteForceDirection_;
+	
+	// 检测当前方向是否可以推动
+	PushResult pushResult = checkCanPush(currentRow, currentCol, bruteForceDirection_);
+	
+	if (pushResult.canPush) {
+		// 可以推动，设置状态为蛮力冲撞
+		isBruteForcing_ = true;
+		bruteForceCardIndex_ = cardIndex;
+		isBruteForceShaking_ = false;
+		bruteForceAnimTime_ = 0.0f;
+		statusMessage_ = "蛮力冲撞开始！";
+	} else {
+		// 不能推动，改变方向并播放摇晃动画，不检测新方向
+		bruteForceDirection_ = -bruteForceDirection_;
+		battlefield_[cardIndex].moveDirection = bruteForceDirection_;
+		isBruteForcing_ = true;
+		bruteForceCardIndex_ = cardIndex;
+		isBruteForceShaking_ = true;
+		bruteForceAnimTime_ = 0.0f;
+		statusMessage_ = "蛮力冲撞被阻挡，改变方向并播放摇晃动画！";
+	}
+}
+
+void BattleState::updateBruteForce(float dt) {
+	if (!isBruteForcing_) return;
+	
+	bruteForceAnimTime_ += dt;
+	
+	if (bruteForceAnimTime_ >= bruteForceAnimDuration_) {
+		// 蛮力冲撞动画完成，执行移动
+		executeBruteForce();
+	}
+}
+
+void BattleState::executeBruteForce() {
+	if (bruteForceCardIndex_ < 0 || bruteForceCardIndex_ >= TOTAL_BATTLEFIELD_SLOTS) {
+		// 重置状态
+		isBruteForcing_ = false;
+		bruteForceCardIndex_ = -1;
+		bruteForceAnimTime_ = 0.0f;
+		return;
+	}
+	
+	const auto& card = battlefield_[bruteForceCardIndex_];
+	if (!card.isAlive || !card.isPlayer) {
+		// 卡牌已死亡，重置状态
+		isBruteForcing_ = false;
+		bruteForceCardIndex_ = -1;
+		bruteForceAnimTime_ = 0.0f;
+		return;
+	}
+	
+	// 计算当前位置
+	int currentRow = bruteForceCardIndex_ / BATTLEFIELD_COLS;
+	int currentCol = bruteForceCardIndex_ % BATTLEFIELD_COLS;
+	
+	// 检查是否是摇晃动画
+	if (isBruteForceShaking_) {
+		// 摇晃动画，不执行移动
+		statusMessage_ = "蛮力冲撞摇晃完成，下回合将向新方向移动！";
+	} else {
+		// 正常推动动画，执行移动
+		// 重新检测推动路径
+		PushResult pushResult = checkCanPush(currentRow, currentCol, bruteForceDirection_);
+		
+		if (pushResult.canPush) {
+			// 执行推动：先移动路径上记录的可推动卡牌，再移动蛮力冲撞自己
+			
+			// 1. 移动记录的可推动卡牌，从远到近
+			for (size_t i = pushResult.cardsToPush.size(); i > 0; --i) {
+				int checkIndex = pushResult.cardsToPush[i - 1];
+				int col = checkIndex % BATTLEFIELD_COLS;
+				int nextCol = col + bruteForceDirection_;
+				if (nextCol >= 0 && nextCol < BATTLEFIELD_COLS) {
+					int nextIndex = currentRow * BATTLEFIELD_COLS + nextCol;
+					if (!battlefield_[nextIndex].isAlive) {
+						// 下一个位置是空的，移动卡牌
+						SDL_Rect nextRect = battlefield_[nextIndex].rect;
+						battlefield_[nextIndex] = battlefield_[checkIndex];
+						battlefield_[nextIndex].rect = nextRect;
+						
+						// 清空原位置，标记为因移动死亡（不获得魂骨）
+						battlefield_[checkIndex].isAlive = false;
+						battlefield_[checkIndex].health = 0;
+						battlefield_[checkIndex].isMovedToDeath = true;
+					}
+				}
+			}
+			
+			// 2. 移动蛮力冲撞自己到相邻位置
+			int targetCol = currentCol + bruteForceDirection_;
+			if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
+				int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
+				if (!battlefield_[targetIndex].isAlive) {
+					// 目标位置是空的，直接移动蛮力冲撞卡牌
+					SDL_Rect targetRect = battlefield_[targetIndex].rect;
+					battlefield_[targetIndex] = battlefield_[bruteForceCardIndex_];
+					battlefield_[targetIndex].rect = targetRect;
+					
+					// 清空原位置，标记为因移动死亡（不获得魂骨）
+					battlefield_[bruteForceCardIndex_].isAlive = false;
+					battlefield_[bruteForceCardIndex_].health = 0;
+					battlefield_[bruteForceCardIndex_].isMovedToDeath = true;
+				}
+			}
+		}
+	}
+	
+	// 检查移动后是否在边界
+	int newCol = currentCol + bruteForceDirection_;
+	if (newCol == 0 || newCol == BATTLEFIELD_COLS - 1) {
+		// 在边界，改变方向
+		bruteForceDirection_ = -bruteForceDirection_;
+		battlefield_[bruteForceCardIndex_].moveDirection = bruteForceDirection_;
+		statusMessage_ = "蛮力冲撞到达边界，改变方向！";
+	} else {
+		statusMessage_ = "蛮力冲撞推动成功！";
+	}
+	
+	// 检查是否是摇晃动画
+	if (isBruteForceShaking_) {
+		// 摇晃动画完成，不移动，直接结束
+		isBruteForceShaking_ = false;
+		statusMessage_ = "蛮力冲撞摇晃完成，下回合将向新方向移动！";
+	} else {
+		// 正常推动动画完成
+		statusMessage_ = "蛮力冲撞推动成功！";
+	}
+	
+	// 重置状态
+	isBruteForcing_ = false;
+	bruteForceCardIndex_ = -1;
+	bruteForceAnimTime_ = 0.0f;
+	
+	// 蛮力冲撞移动完成，检查是否还有更多移动卡牌
+	// 确保动画完成后才调用 onMovementComplete()
+	onMovementComplete();
+}
+
+
+// 被推动卡牌动画方法实现
+void BattleState::startPushedAnimation(const std::vector<int>& cardIndices, const std::vector<int>& directions) {
+	if (cardIndices.empty()) return;
+	
+	// 初始化被推动动画状态
+	isPushedAnimating_ = true;
+	pushedCardIndices_ = cardIndices;
+	pushedDirections_ = directions;
+	pushedAnimTime_ = 0.0f;
+	
+	statusMessage_ = "卡牌被推动！";
+}
+
+void BattleState::updatePushedAnimation(float dt) {
+	if (!isPushedAnimating_) return;
+	
+	pushedAnimTime_ += dt;
+	
+	// 被推动动画完成
+	if (pushedAnimTime_ >= pushedAnimDuration_) {
+		// 被推动动画完成，执行移动
+		executePushedAnimation();
+	}
+}
+
+void BattleState::executePushedAnimation() {
+	if (pushedCardIndices_.empty()) {
+		// 重置状态
+		isPushedAnimating_ = false;
+		pushedCardIndices_.clear();
+		pushedDirections_.clear();
+		pushedAnimTime_ = 0.0f;
+		return;
+	}
+	
+	// 执行所有被推动卡牌的移动
+	for (size_t i = 0; i < pushedCardIndices_.size(); ++i) {
+		int cardIndex = pushedCardIndices_[i];
+		int direction = pushedDirections_[i];
+		
+		if (cardIndex < 0 || cardIndex >= TOTAL_BATTLEFIELD_SLOTS) continue;
+		
+		const auto& card = battlefield_[cardIndex];
+		if (!card.isAlive) continue;
+		
+		// 重新计算当前位置和目标位置（因为卡牌可能已经移动过）
+		int currentRow = cardIndex / BATTLEFIELD_COLS;
+		int currentCol = cardIndex % BATTLEFIELD_COLS;
+		int targetCol = currentCol + direction;
+		
+		if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
+			int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
+			
+			// 检查目标位置是否为空
+			if (!battlefield_[targetIndex].isAlive) {
+				// 保存目标位置的rect
+				SDL_Rect targetRect = battlefield_[targetIndex].rect;
+				
+				// 移动卡牌数据
+				battlefield_[targetIndex] = battlefield_[cardIndex];
+				// 保持目标位置的rect
+				battlefield_[targetIndex].rect = targetRect;
+				
+				// 清空原位置，标记为因移动死亡（不获得魂骨）
+				battlefield_[cardIndex].isAlive = false;
+				battlefield_[cardIndex].health = 0;
+				battlefield_[cardIndex].isMovedToDeath = true;
+			}
+		}
+	}
+	
+	// 重置状态
+	isPushedAnimating_ = false;
+	pushedCardIndices_.clear();
+	pushedDirections_.clear();
+	pushedAnimTime_ = 0.0f;
+	
+	statusMessage_ = "推动完成！";
+	
+	// 被推动动画完成，检查是否还有更多移动卡牌
+	onMovementComplete();
+}
+
+// 移动卡牌队列处理方法实现
+void BattleState::processNextMovement() {
+	// 按照位置顺序处理，不区分类型
+	if (!pendingMovementCards_.empty()) {
+		int cardIndex = pendingMovementCards_[0];
+		pendingMovementCards_.erase(pendingMovementCards_.begin());
+		
+		// 根据卡牌类型启动相应的移动
+		if (hasMark(battlefield_[cardIndex].card, u8"冲刺能手")) {
+			startRushing(cardIndex);
+		} else if (hasMark(battlefield_[cardIndex].card, u8"蛮力冲撞")) {
+			startBruteForce(cardIndex);
+		}
+		
+		// 检查是否已经结束回合（改变方向后仍无法移动的情况）
+		if (currentPhase_ == GamePhase::EnemyTurn) {
+			// 回合已经结束，停止处理移动队列
+			isProcessingMovementQueue_ = false;
+			return;
+		}
+	} else {
+		// 没有更多移动卡牌，结束移动队列处理
+		isProcessingMovementQueue_ = false;
+		onMovementComplete();
+	}
+}
+
+void BattleState::onMovementComplete() {
+	// 检查是否还有更多移动卡牌需要处理
+	if (!pendingMovementCards_.empty()) {
+		// 还有更多移动卡牌，处理下一个
+		processNextMovement();
+	} else {
+		// 没有更多移动卡牌，结束移动队列处理
+		isProcessingMovementQueue_ = false;
+		
+		// 结束回合
+		currentPhase_ = GamePhase::EnemyTurn;
+		currentTurn_++; // 增加回合数
+		hasDrawnThisTurn_ = false; // 重置抽牌状态
+		mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+		
+		// 延迟执行敌人回合
+		enemyTurn();
+	}
+}

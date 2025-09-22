@@ -32,7 +32,7 @@ private:
 	// 回合信息
 	int currentTurn_ = 1;
 	int playerHealth_ = 20;
-	int enemyHealth_ = 20;
+	int enemyHealth_ = 100;
 	
 	// 战场区域 (3x4网格)
 	static constexpr int BATTLEFIELD_ROWS = 3;
@@ -46,9 +46,11 @@ private:
 		int health = 0;       // 当前生命值
 		bool isAlive = true;   // 是否存活
 		bool isSacrificed = false; // 是否被献祭
+		bool isMovedToDeath = false; // 是否因移动而死亡（不获得魂骨）
+		int moveDirection = 0; // 移动方向，1=右，-1=左，0=无方向
 	};
 	std::array<BattlefieldCard, TOTAL_BATTLEFIELD_SLOTS> battlefield_;
-	
+
 	// 手牌区
 	std::vector<Card> handCards_;
 	std::vector<SDL_Rect> handCardRects_;
@@ -93,6 +95,30 @@ private:
 	void setupTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
 	void setupDoubleTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
 	void setupTripleTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
+	
+	// 横冲直撞相关方法
+	void startRushing(int cardIndex);
+	void updateRushing(float dt);
+	void executeRushing();
+	bool checkRushingCanMove(int currentRow, int currentCol, int direction);
+	
+	// 蛮力冲撞相关方法
+	void startBruteForce(int cardIndex);
+	void updateBruteForce(float dt);
+	void executeBruteForce();
+	
+	// 推动检测辅助方法
+	struct PushResult {
+		bool canPush;
+		std::vector<int> cardsToPush;  // 被推动的卡牌索引
+	};
+	PushResult checkCanPush(int currentRow, int currentCol, int direction);
+	
+	
+	// 被推动卡牌动画方法
+	void startPushedAnimation(const std::vector<int>& cardIndices, const std::vector<int>& directions);
+	void updatePushedAnimation(float dt);
+	void executePushedAnimation();
 	
 	
 	// 墨尺和砚台
@@ -161,7 +187,7 @@ private:
 	int totalDamageDealt_ = 0;          // 本回合造成的总伤害
 	bool showDamage_ = false;           // 是否显示伤害
 	float damageDisplayTime_ = 0.0f;   // 伤害显示时间
-	float damageDisplayDuration_ = 2.0f; // 伤害显示持续时间
+	float damageDisplayDuration_ = 0.5f; // 伤害显示持续时间
 	
 	// 魂骨系统
 	int boneCount_ = 0;                 // 魂骨数量
@@ -192,6 +218,34 @@ private:
 	int currentTargetIndex_ = 0;
 	bool isSpecialAttackAnimating_ = false;
 	
+	// 横冲直撞系统
+	bool isRushing_ = false;           // 是否正在横冲直撞
+	int rushingCardIndex_ = -1;       // 正在横冲直撞的卡牌索引
+	int rushingDirection_ = 1;         // 横冲直撞方向（1=右，-1=左）
+	float rushingAnimTime_ = 0.0f;    // 横冲直撞动画时间
+	float rushingAnimDuration_ = 0.5f; // 横冲直撞动画持续时间
+	bool isRushingShaking_ = false;    // 是否正在摇晃动画（改变方向时）
+	
+	// 蛮力冲撞系统
+	bool isBruteForcing_ = false;     // 是否正在蛮力冲撞
+	int bruteForceCardIndex_ = -1;   // 正在蛮力冲撞的卡牌索引
+	int bruteForceDirection_ = 1;     // 蛮力冲撞方向（1=右，-1=左）
+	float bruteForceAnimTime_ = 0.0f; // 蛮力冲撞动画时间
+	float bruteForceAnimDuration_ = 0.6f; // 蛮力冲撞动画持续时间
+	bool isBruteForceShaking_ = false; // 是否正在摇晃动画（改变方向时）
+	
+	
+	// 被推动卡牌动画系统
+	bool isPushedAnimating_ = false;  // 是否正在播放被推动动画
+	std::vector<int> pushedCardIndices_; // 被推动的卡牌索引
+	std::vector<int> pushedDirections_; // 被推动的方向
+	float pushedAnimTime_ = 0.0f;     // 被推动动画时间
+	float pushedAnimDuration_ = 0.6f; // 被推动动画持续时间
+	
+	// 移动卡牌队列系统
+	std::vector<int> pendingMovementCards_; // 待处理的移动卡牌（按位置排序）
+	bool isProcessingMovementQueue_ = false; // 是否正在处理移动队列
+	
 	
 	// 私有方法
 	void initializeBattle();
@@ -206,4 +260,9 @@ private:
 	void renderBattlefield(App& app);
 	void renderHandCards(App& app);
 	void renderUI(App& app);
+	
+	// 移动卡牌队列处理方法
+	void processNextMovement();
+	void onMovementComplete();
+	
 };
