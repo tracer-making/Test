@@ -267,4 +267,25 @@ private:
 	void processNextMovement();
 	void onMovementComplete();
 
+	// 敌人前进（第一行向第二行）- 动画版
+	struct EnemyAdvanceStep {
+		int fromIndex;
+		int toIndex;
+		SDL_Rect fromRect;
+		SDL_Rect toRect;
+	};
+	std::vector<EnemyAdvanceStep> enemyAdvanceSteps_;
+	bool isEnemyAdvancing_ = false;
+	bool enemyAdvanceStartedThisFrame_ = false; // 启动当帧不执行落位，避免瞬移
+	float enemyAdvanceAnimTime_ = 0.0f;
+	float enemyAdvanceAnimDuration_ = 1.0f; // 延长动画时长，节奏更从容
+	float enemyAdvanceOvershootScale_ = 0.6f; // 超冲量按两格中心垂直距离的比例
+	float enemyAdvanceMinOvershootPx_ = 80.0f; // 超冲最小像素，确保位移感
+	void prepareEnemyAdvanceSteps();
+	bool startEnemyAdvanceIfAny();
+	void updateEnemyAdvance(float dt);
+	void executeEnemyAdvance();
+
+	void advanceEnemiesFrontRow();
+
 };

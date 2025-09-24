@@ -561,7 +561,6 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void BattleState::update(App& app, float dt) {
-
 	// 处理状态转换
 	if (pendingBackToTest_) {
 		pendingBackToTest_ = false;
@@ -569,6 +568,8 @@ void BattleState::update(App& app, float dt) {
 		return;
 	}
 
+	// 敌人前进动画更新（若有）
+	updateEnemyAdvance(dt);
 
 	// 更新伤害显示
 	if (showDamage_) {
@@ -1256,14 +1257,20 @@ void BattleState::endTurn() {
 		hasDrawnThisTurn_ = false; // 重置抽牌状态
 		mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
 
-		// 每回合开始时恢复一些墨量（已移除墨量系统）
-
-		// 延迟执行敌人回合
-		enemyTurn();
+		// 尝试先播放敌人前进动画，动画结束后再调用 enemyTurn()
+		if (!startEnemyAdvanceIfAny()) {
+			// 无动画，直接进入敌方回合
+			enemyTurn();
+		}
 	}
 }
 
 void BattleState::enemyTurn() {
+	// 再次确保前进动画先于攻击（以防在其它路径进入）
+	if (startEnemyAdvanceIfAny()) {
+		return; // 动画完成后会回调进入敌方攻击
+	}
+
 	// 收集所有可以攻击的敌方卡牌（从左到右）
 	attackingCards_.clear();
 	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
@@ -1294,6 +1301,76 @@ void BattleState::enemyTurn() {
 	}
 }
 
+bool BattleState::startEnemyAdvanceIfAny() {
+	// 若已有动画在进行，直接返回
+	if (isEnemyAdvancing_) return true;
+
+	// 准备步骤
+	prepareEnemyAdvanceSteps();
+	if (enemyAdvanceSteps_.empty()) return false;
+
+	// 启动动画
+	isEnemyAdvancing_ = true;
+	enemyAdvanceStartedThisFrame_ = true;
+	enemyAdvanceAnimTime_ = 0.0f;
+	statusMessage_ = "敌人前进中...";
+	return true;
+}
+
+void BattleState::prepareEnemyAdvanceSteps() {
+	enemyAdvanceSteps_.clear();
+	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+		int fromIndex = 0 * BATTLEFIELD_COLS + col;
+		int toIndex = 1 * BATTLEFIELD_COLS + col;
+		if (battlefield_[fromIndex].isAlive && !battlefield_[fromIndex].isPlayer && !battlefield_[toIndex].isAlive) {
+			EnemyAdvanceStep step;
+			step.fromIndex = fromIndex;
+			step.toIndex = toIndex;
+			step.fromRect = battlefield_[fromIndex].rect;
+			step.toRect = battlefield_[toIndex].rect;
+			enemyAdvanceSteps_.push_back(step);
+		}
+	}
+}
+
+void BattleState::updateEnemyAdvance(float dt) {
+	if (!isEnemyAdvancing_) return;
+	// 启动当帧不累计时间，避免瞬移
+	if (enemyAdvanceStartedThisFrame_) {
+		enemyAdvanceStartedThisFrame_ = false;
+		return;
+	}
+	enemyAdvanceAnimTime_ += dt;
+	if (enemyAdvanceAnimTime_ >= enemyAdvanceAnimDuration_) {
+		// 动画结束，执行落位
+		executeEnemyAdvance();
+		isEnemyAdvancing_ = false;
+		enemyAdvanceAnimTime_ = 0.0f;
+
+		// 动画完成后，进入敌方攻击流程
+		enemyTurn();
+	}
+}
+
+void BattleState::executeEnemyAdvance() {
+	// 将所有步骤一次性落位
+	for (const auto& step : enemyAdvanceSteps_) {
+		if (step.fromIndex >= 0 && step.fromIndex < TOTAL_BATTLEFIELD_SLOTS &&
+			step.toIndex >= 0 && step.toIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			if (battlefield_[step.fromIndex].isAlive && !battlefield_[step.toIndex].isAlive && !battlefield_[step.fromIndex].isPlayer) {
+				SDL_Rect targetRect = battlefield_[step.toIndex].rect;
+				battlefield_[step.toIndex] = battlefield_[step.fromIndex];
+				battlefield_[step.toIndex].rect = targetRect;
+
+				battlefield_[step.fromIndex].isAlive = false;
+				battlefield_[step.fromIndex].health = 0;
+				battlefield_[step.fromIndex].isMovedToDeath = false;
+			}
+		}
+	}
+	enemyAdvanceSteps_.clear();
+}
+
 void BattleState::checkGameOver() {
 	if (playerHealth_ <= 0) {
 		currentPhase_ = GamePhase::GameOver;
@@ -1313,8 +1390,6 @@ void BattleState::renderBattlefield(App& app) {
 	// 第一遍：绘制所有非攻击中的卡牌
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
 		const auto& bfCard = battlefield_[i];
-
-		// 检查是否正在播放攻击动画
 		bool isAttacking = false;
 		if (isAttackAnimating_ && currentAttackingIndex_ < static_cast<int>(attackingCards_.size())) {
 			int currentCardIndex = attackingCards_[currentAttackingIndex_];
@@ -1322,20 +1397,8 @@ void BattleState::renderBattlefield(App& app) {
 				isAttacking = true;
 			}
 		}
-
-		// 跳过正在攻击的卡牌，它们会在第二遍渲染
 		if (isAttacking) continue;
 
-		// 检查是否悬停，改变颜色
-		if (i == hoveredBattlefieldIndex_) {
-			// 悬停时的高亮效果
-			SDL_SetRenderDrawColor(r, 100, 150, 200, 100);
-			SDL_RenderFillRect(r, &bfCard.rect);
-			SDL_SetRenderDrawColor(r, 150, 200, 255, 255);
-			SDL_RenderDrawRect(r, &bfCard.rect);
-		}
-
-		// 检查是否正在播放摧毁动画
 		bool isAnimating = false;
 		float animProgress = 0.0f;
 		if (isDestroyAnimating_) {
@@ -1348,92 +1411,72 @@ void BattleState::renderBattlefield(App& app) {
 			}
 		}
 
-		// 检查是否正在冲刺能手或蛮力冲撞动画中
-		bool isMovingAnimating = false;
-		if (isRushing_ && rushingCardIndex_ == i) {
-			isMovingAnimating = true;
-		}
-		if (isBruteForcing_ && bruteForceCardIndex_ == i) {
-			isMovingAnimating = true;
-		}
-
-		// 检查是否正在被推动动画中
-		bool isPushedAnimating = false;
-		if (isPushedAnimating_) {
-			for (int cardIndex : pushedCardIndices_) {
-				if (cardIndex == i) {
-					isPushedAnimating = true;
+		// 敌人前进插值渲染：当 fromIndex 对应时，使用插值位置绘制
+		bool isAdvancingThis = false;
+		SDL_Rect advancingRect{};
+		if (isEnemyAdvancing_) {
+			// 刚启动当帧，固定为t=0，避免因为帧时长大导致直接接近终点
+			float t = enemyAdvanceStartedThisFrame_ ? 0.0f : std::min(1.0f, enemyAdvanceAnimTime_ / enemyAdvanceAnimDuration_);
+			// 更明显的缓入缓出（S-curve）
+			float t_ease = (1.0f - std::cos(3.1415926f * t)) * 0.5f;
+			for (const auto& step : enemyAdvanceSteps_) {
+				if (step.fromIndex == i) {
+					isAdvancingThis = true;
+					// 主插值
+					float baseX = step.fromRect.x + (step.toRect.x - step.fromRect.x) * t_ease;
+					float baseY = step.fromRect.y + (step.toRect.y - step.fromRect.y) * t_ease;
+					// 自适应超冲：按两格中心垂直距离计算
+					float centerFromY = step.fromRect.y + step.fromRect.h * 0.5f;
+					float centerToY = step.toRect.y + step.toRect.h * 0.5f;
+					float deltaCenterY = std::abs(centerToY - centerFromY);
+					float overshootMax = std::max(enemyAdvanceMinOvershootPx_, deltaCenterY * enemyAdvanceOvershootScale_);
+					// 钟形权重（中段最大）
+					float bell;
+					{
+						float mid = 0.5f;
+						float width = 0.38f;
+						float d = std::abs(t - mid) / width;
+						bell = d >= 1.0f ? 0.0f : (1.0f - d);
+					}
+					float overshoot = bell * overshootMax;
+					advancingRect.x = static_cast<int>(baseX);
+					advancingRect.y = static_cast<int>(baseY + overshoot);
+					advancingRect.w = step.fromRect.w;
+					advancingRect.h = step.fromRect.h;
 					break;
 				}
 			}
 		}
 
-		// 如果卡牌存活或者正在播放摧毁动画，则渲染（但不在移动动画中渲染原位置）
-		// 被推动动画中的卡牌需要特殊处理
-		if ((bfCard.isAlive || isAnimating) && !isMovingAnimating && !isPushedAnimating) {
-			// 计算动画效果
-			SDL_Rect renderRect = bfCard.rect;
+		bool isMovingAnimating = false;
+		if (isRushing_ && rushingCardIndex_ == i) isMovingAnimating = true;
+		if (isBruteForcing_ && bruteForceCardIndex_ == i) isMovingAnimating = true;
 
+		bool isPushedAnimating = false;
+		if (isPushedAnimating_) {
+			for (int cardIndex : pushedCardIndices_) {
+				if (cardIndex == i) isPushedAnimating = true; break;
+			}
+		}
+
+		if ((bfCard.isAlive || isAnimating) && !isMovingAnimating && !isPushedAnimating) {
+			SDL_Rect renderRect = isAdvancingThis ? advancingRect : bfCard.rect;
 			if (isAnimating) {
-				// 缩放动画（逐渐缩小）
 				float scale = 1.0f - animProgress;
 				scale = std::max(0.1f, scale);
-
 				int newWidth = static_cast<int>(bfCard.rect.w * scale);
 				int newHeight = static_cast<int>(bfCard.rect.h * scale);
-
 				renderRect.x = bfCard.rect.x + (bfCard.rect.w - newWidth) / 2;
 				renderRect.y = bfCard.rect.y + (bfCard.rect.h - newHeight) / 2;
 				renderRect.w = newWidth;
 				renderRect.h = newHeight;
 			}
 
-			// 使用CardRenderer渲染卡牌，使用当前血量
 			Card tempCard = bfCard.card;
-			tempCard.health = bfCard.health; // 使用当前血量
+			tempCard.health = bfCard.health;
 			CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
-
-			// 显示献祭符号（只有被点击献祭的卡牌才显示符号）
-			if (isSacrificing_ && bfCard.isPlayer && bfCard.isSacrificed) {
-				// 绘制献祭符号（红色X）
-				SDL_SetRenderDrawColor(r, 255, 0, 0, 255);
-				int centerX = bfCard.rect.x + bfCard.rect.w / 2;
-				int centerY = bfCard.rect.y + bfCard.rect.h / 2;
-				int symbolSize = 20;
-
-				// 绘制X符号
-				SDL_RenderDrawLine(r, centerX - symbolSize / 2, centerY - symbolSize / 2, centerX + symbolSize / 2, centerY + symbolSize / 2);
-				SDL_RenderDrawLine(r, centerX + symbolSize / 2, centerY - symbolSize / 2, centerX - symbolSize / 2, centerY + symbolSize / 2);
-
-				// 绘制外圈
-				SDL_SetRenderDrawColor(r, 255, 100, 100, 200);
-				SDL_Rect symbolRect{ centerX - symbolSize / 2 - 2, centerY - symbolSize / 2 - 2, symbolSize + 4, symbolSize + 4 };
-				SDL_RenderDrawRect(r, &symbolRect);
-			}
-
-			// 在卡牌上显示移动方向
-			if (bfCard.moveDirection != 0) {
-				std::string directionText = (bfCard.moveDirection == 1) ? "→" : "←";
-				SDL_Color directionColor{ 0, 0, 0, 255 };
-				SDL_Surface* directionSurface = TTF_RenderUTF8_Blended(cardNameFont_, directionText.c_str(), directionColor);
-				if (directionSurface) {
-					SDL_Texture* directionTexture = SDL_CreateTextureFromSurface(app.getRenderer(), directionSurface);
-					int directionWidth = directionSurface->w * 2; // 增大显示大小
-					int directionHeight = directionSurface->h * 2; // 增大显示大小
-					SDL_Rect directionRect = {
-						renderRect.x + (renderRect.w - directionWidth) / 2,
-						renderRect.y + renderRect.h / 2 - directionHeight / 2,
-						directionWidth,
-						directionHeight
-					};
-					SDL_RenderCopy(app.getRenderer(), directionTexture, nullptr, &directionRect);
-					SDL_DestroyTexture(directionTexture);
-					SDL_FreeSurface(directionSurface);
-				}
-			}
 		}
 		else {
-			// 绘制空槽位
 			SDL_SetRenderDrawColor(r, 60, 70, 80, 80);
 			SDL_RenderFillRect(r, &bfCard.rect);
 			SDL_SetRenderDrawColor(r, 100, 110, 120, 150);
@@ -2173,12 +2216,10 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	if (!target.isAlive) {
 		// 目标已死亡，攻击敌方本体
 		if (attacker.isPlayer) {
-			// 玩家攻击敌方本体
 			enemyHealth_ -= damage;
 			if (enemyHealth_ < 0) enemyHealth_ = 0;
 		}
 		else {
-			// 敌方攻击玩家本体
 			playerHealth_ -= damage;
 			if (playerHealth_ < 0) playerHealth_ = 0;
 		}
@@ -2186,68 +2227,17 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	}
 	if (attacker.isPlayer == target.isPlayer) return; // 不能攻击友军
 
-	// 空袭机制处理
-	if (hasAirStrike) {
-		// 检查对位是否有高跳印记
-		bool targetHasHighJump = hasMark(target.card, u8"高跳");
-
-		if (!targetHasHighJump) {
-			// 对位没有高跳印记，空袭直接攻击本体
-			if (attacker.isPlayer) {
-				// 玩家空袭攻击敌方本体
-				enemyHealth_ -= damage;
-				if (enemyHealth_ < 0) enemyHealth_ = 0;
-			}
-			else {
-				// 敌方空袭攻击玩家本体
-				playerHealth_ -= damage;
-				if (playerHealth_ < 0) playerHealth_ = 0;
-			}
-			return;
-		}
-		// 对位有高跳印记，空袭攻击对位的高跳卡牌
-		// 计算穿透伤害：如果攻击力大于对位血量，多余伤害穿透到第一行高跳卡牌
-		int remainingDamage = damage - target.health;
-		if (remainingDamage > 0) {
-			// 有穿透伤害，检查第一行是否有高跳卡牌
-			if (attacker.isPlayer) {
-				// 玩家攻击：检查敌方第一行（row 0）是否有高跳卡牌
-				int firstRowTargetIndex = targetIndex - BATTLEFIELD_COLS; // 第一行对应位置
-				if (firstRowTargetIndex >= 0 && firstRowTargetIndex < BATTLEFIELD_COLS) {
-					const auto& firstRowTarget = battlefield_[firstRowTargetIndex];
-					if (firstRowTarget.isAlive && hasMark(firstRowTarget.card, u8"高跳")) {
-						// 第一行有高跳卡牌，承受穿透伤害
-						battlefield_[firstRowTargetIndex].health -= remainingDamage;
-						if (battlefield_[firstRowTargetIndex].health <= 0) {
-							battlefield_[firstRowTargetIndex].isAlive = false;
-							cardsToDestroy_.push_back(firstRowTargetIndex);
-							isDestroyAnimating_ = true;
-							destroyAnimTime_ = 0.0f;
-						}
-					}
-				}
-			}
-			else {
-				// 敌方攻击：检查玩家第一行（row 2）是否有高跳卡牌
-				int firstRowTargetIndex = targetIndex + BATTLEFIELD_COLS; // 第一行对应位置
-				if (firstRowTargetIndex >= 2 * BATTLEFIELD_COLS && firstRowTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-					const auto& firstRowTarget = battlefield_[firstRowTargetIndex];
-					if (firstRowTarget.isAlive && hasMark(firstRowTarget.card, u8"高跳")) {
-						// 第一行有高跳卡牌，承受穿透伤害
-						battlefield_[firstRowTargetIndex].health -= remainingDamage;
-						if (battlefield_[firstRowTargetIndex].health <= 0) {
-							battlefield_[firstRowTargetIndex].isAlive = false;
-							cardsToDestroy_.push_back(firstRowTargetIndex);
-							isDestroyAnimating_ = true;
-							destroyAnimTime_ = 0.0f;
-						}
-					}
-				}
-			}
-		}
+	// 空袭与穿透规则：
+	// - 穿透对所有卡牌生效（溢出伤害继续结算到后排或本体）
+	// - 例外：若攻击者有"空袭"，则仅当对位目标有"高跳"时才允许穿透；否则不允许穿透
+	bool targetHasHighJump = hasMark(target.card, u8"高跳");
+	bool allowPenetration = true;
+	if (hasAirStrike && !targetHasHighJump) {
+		allowPenetration = false;
 	}
 
-	// 执行正常攻击
+	// 执行对位伤害
+	int remainingDamage = damage - target.health;
 	battlefield_[targetIndex].health -= damage;
 
 	// 检查目标是否死亡
@@ -2256,6 +2246,31 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		cardsToDestroy_.push_back(targetIndex);
 		isDestroyAnimating_ = true;
 		destroyAnimTime_ = 0.0f;
+	}
+
+	// 处理穿透伤害（仅当允许且有溢出）
+	if (remainingDamage > 0 && allowPenetration) {
+		if (attacker.isPlayer) {
+			// 玩家攻击：尝试穿透到敌方后排同列（row - 1）。没有后排或为空则不再穿透至本体。
+			int behindIndex = targetIndex - BATTLEFIELD_COLS;
+			if (behindIndex >= 0 && behindIndex < TOTAL_BATTLEFIELD_SLOTS) {
+				if (battlefield_[behindIndex].isAlive && !battlefield_[behindIndex].isPlayer) {
+					// 对后排同列单位造成剩余伤害
+					battlefield_[behindIndex].health -= remainingDamage;
+					if (battlefield_[behindIndex].health <= 0) {
+						battlefield_[behindIndex].isAlive = false;
+						cardsToDestroy_.push_back(behindIndex);
+						isDestroyAnimating_ = true;
+						destroyAnimTime_ = 0.0f;
+					}
+				}
+				// 如果后排为空或不是敌方单位，溢出伤害丢弃（不穿透到本体）
+			}
+			// 如果没有更后排，溢出伤害丢弃（不穿透到本体）
+		}
+		else {
+			// 敌方攻击：玩家在最下行，无更后排。溢出伤害不再打玩家本体，直接丢弃。
+		}
 	}
 }
 
@@ -2806,14 +2821,29 @@ void BattleState::startRushing(int cardIndex) {
 		statusMessage_ = "冲刺能手开始！";
 	}
 	else {
-		// 不能移动，改变方向并播放摇晃动画，不检测新方向
-		rushingDirection_ = -rushingDirection_;
-		battlefield_[cardIndex].moveDirection = rushingDirection_;
-		isRushing_ = true;
-		rushingCardIndex_ = cardIndex;
-		isRushingShaking_ = true;
-		rushingAnimTime_ = 0.0f;
-		statusMessage_ = "冲刺能手被阻挡，改变方向并播放摇晃动画！";
+		// 原方向不可行：自动切换方向并再次检测
+		int flipped = -rushingDirection_;
+		bool canMoveFlipped = checkRushingCanMove(currentRow, currentCol, flipped);
+		if (canMoveFlipped) {
+			// 直接采用相反方向移动
+			rushingDirection_ = flipped;
+			battlefield_[cardIndex].moveDirection = rushingDirection_;
+			isRushing_ = true;
+			rushingCardIndex_ = cardIndex;
+			isRushingShaking_ = false;
+			rushingAnimTime_ = 0.0f;
+			statusMessage_ = "冲刺能手自动转向并开始！";
+		}
+		else {
+			// 相反方向也不可行：播放摇晃动画
+			rushingDirection_ = flipped; // 预先转向，供下次尝试
+			battlefield_[cardIndex].moveDirection = rushingDirection_;
+			isRushing_ = true;
+			rushingCardIndex_ = cardIndex;
+			isRushingShaking_ = true;
+			rushingAnimTime_ = 0.0f;
+			statusMessage_ = "冲刺能手被阻挡，自动转向并播放摇晃动画！";
+		}
 	}
 }
 
@@ -2984,14 +3014,29 @@ void BattleState::startBruteForce(int cardIndex) {
 		statusMessage_ = "蛮力冲撞开始！";
 	}
 	else {
-		// 不能推动，改变方向并播放摇晃动画，不检测新方向
-		bruteForceDirection_ = -bruteForceDirection_;
-		battlefield_[cardIndex].moveDirection = bruteForceDirection_;
-		isBruteForcing_ = true;
-		bruteForceCardIndex_ = cardIndex;
-		isBruteForceShaking_ = true;
-		bruteForceAnimTime_ = 0.0f;
-		statusMessage_ = "蛮力冲撞被阻挡，改变方向并播放摇晃动画！";
+		// 原方向不可行：自动切换方向并再次检测
+		int flipped = -bruteForceDirection_;
+		PushResult flippedResult = checkCanPush(currentRow, currentCol, flipped);
+		if (flippedResult.canPush) {
+			// 直接采用相反方向推动
+			bruteForceDirection_ = flipped;
+			battlefield_[cardIndex].moveDirection = bruteForceDirection_;
+			isBruteForcing_ = true;
+			bruteForceCardIndex_ = cardIndex;
+			isBruteForceShaking_ = false;
+			bruteForceAnimTime_ = 0.0f;
+			statusMessage_ = "蛮力冲撞自动转向并开始！";
+		}
+		else {
+			// 相反方向也不可行：播放摇晃动画
+			bruteForceDirection_ = flipped; // 预先转向，供下次尝试
+			battlefield_[cardIndex].moveDirection = bruteForceDirection_;
+			isBruteForcing_ = true;
+			bruteForceCardIndex_ = cardIndex;
+			isBruteForceShaking_ = true;
+			bruteForceAnimTime_ = 0.0f;
+			statusMessage_ = "蛮力冲撞被阻挡，自动转向并播放摇晃动画！";
+		}
 	}
 }
 
@@ -3100,7 +3145,7 @@ void BattleState::executeBruteForce() {
 
 	// 检查移动后是否在边界
 	int newCol = currentCol + (pushResult.canPush ? bruteForceDirection_ : 0);
-	if (newCol == 0 || newCol == BATTLEFIELD_COLS - 1 && pushResult.canPush) {
+	if ((newCol == 0 || newCol == BATTLEFIELD_COLS - 1) && pushResult.canPush) {
 		// 在边界，改变方向
 		bruteForceDirection_ = -bruteForceDirection_;
 		battlefield_[bruteForceCardIndex_].moveDirection = bruteForceDirection_;
