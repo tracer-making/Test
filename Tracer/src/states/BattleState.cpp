@@ -80,19 +80,21 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		}
 		else if (e.key.keysym.sym == SDLK_a && godMode_) {
-			// A键在悬停位置生成碧蟾
+			// A键在悬停位置生成苍狼幼魂
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						// 生成碧蟾卡牌
-						Card bichan = CardDB::instance().make("bichan");
-						if (!bichan.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = bichan;
+						// 生成苍狼幼魂卡牌
+						Card wolfCub = CardDB::instance().make("canglang_youhun");
+						if (!wolfCub.id.empty()) {
+							battlefield_[hoveredBattlefieldIndex_].card = wolfCub;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = bichan.health;
+							battlefield_[hoveredBattlefieldIndex_].health = wolfCub.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
-							statusMessage_ = "在敌方区域生成碧蟾";
+							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
+							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
+							statusMessage_ = "在敌方区域生成苍狼幼魂";
 						}
 					}
 					else {
@@ -161,6 +163,35 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 			else {
 				statusMessage_ = "请悬停在敌方区域再按D键";
+			}
+		}
+		else if (e.key.keysym.sym == SDLK_f && godMode_) {
+			// F键在悬停位置生成苍狼幼魂
+			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
+				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
+				if (row < 2) { // 只能在敌方区域（前两行）生成
+					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
+						Card wolfCub = CardDB::instance().make("canglang_youhun");
+						if (!wolfCub.id.empty()) {
+							battlefield_[hoveredBattlefieldIndex_].card = wolfCub;
+							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
+							battlefield_[hoveredBattlefieldIndex_].health = wolfCub.health;
+							battlefield_[hoveredBattlefieldIndex_].isPlayer = false;
+							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
+							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
+							statusMessage_ = "在敌方区域生成苍狼幼魂(F)";
+						}
+					}
+					else {
+						statusMessage_ = "该位置已有卡牌";
+					}
+				}
+				else {
+					statusMessage_ = "只能在敌方区域（前两行）生成卡牌";
+				}
+			}
+			else {
+				statusMessage_ = "请悬停在敌方区域再按F键";
 			}
 		}
 	}
@@ -571,6 +602,68 @@ void BattleState::update(App& app, float dt) {
 	// 敌人前进动画更新（若有）
 	updateEnemyAdvance(dt);
 
+	// 成长动画推进
+	if (isGrowthAnimating_) {
+		growthAnimTime_ += dt;
+		if (growthAnimTime_ >= growthAnimDuration_) {
+			// 执行成长
+			for (const auto& step : pendingGrowth_) {
+				if (step.index < 0 || step.index >= TOTAL_BATTLEFIELD_SLOTS) continue;
+				auto& bf = battlefield_[step.index];
+				if (!bf.isAlive || bf.oneTurnGrowthApplied == true) continue;
+				if (step.willTransform) {
+					SDL_Rect keepRect = bf.rect;
+					bool keepIsPlayer = bf.isPlayer;
+					bf.card = step.targetCard;
+					bf.health = bf.card.health;
+					bf.rect = keepRect;
+					bf.isPlayer = keepIsPlayer;
+					bf.oneTurnGrowthApplied = true;
+				}
+				else {
+					bf.card.attack += step.addAttack;
+					bf.card.health += step.addHealth;
+					bf.health += step.addHealth;
+					bf.oneTurnGrowthApplied = true;
+				}
+			}
+			pendingGrowth_.clear();
+			isGrowthAnimating_ = false;
+			growthAnimTime_ = 0.0f;
+
+			if (growthForEnemyAttack_) {
+				// 敌人攻击前成长：成长完成后再进入敌人攻击
+				growthForEnemyAttack_ = false;
+				attackingCards_.clear();
+				for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+					int enemyIndex = 1 * BATTLEFIELD_COLS + col;  // 第二行（敌方攻击行）
+					if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer &&
+						battlefield_[enemyIndex].card.attack > 0) {
+						attackingCards_.push_back(enemyIndex);
+					}
+				}
+				if (!attackingCards_.empty()) {
+					isAttackAnimating_ = true;
+					attackAnimTime_ = 0.0f;
+					currentAttackingIndex_ = 0;
+					isPlayerAttacking_ = false;
+					statusMessage_ = "敌方开始攻击！";
+				}
+				else {
+					// 无可攻击则如常切回玩家回合并在回合开始处再尝试玩家成长
+					currentPhase_ = GamePhase::PlayerTurn;
+					if (scheduleTurnStartGrowth()) return;
+					if (mustDrawThisTurn_) statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！"; else statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
+				}
+			}
+			else if (growthAtTurnStart_) {
+				// 玩家回合开始成长：只显示回合提示
+				growthAtTurnStart_ = false;
+				if (mustDrawThisTurn_) statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！"; else statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
+			}
+		}
+	}
+
 	// 更新伤害显示
 	if (showDamage_) {
 		damageDisplayTime_ += dt;
@@ -607,7 +700,7 @@ void BattleState::update(App& app, float dt) {
 					currentTurn_++; // 增加回合数
 					hasDrawnThisTurn_ = false; // 重置抽牌状态
 					mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-
+					std::cout << "2" << std::endl;
 					// 延迟执行敌人回合
 					enemyTurn();
 				}
@@ -660,6 +753,23 @@ void BattleState::update(App& app, float dt) {
 		else {
 			// 所有卡牌攻击完成
 			if (isPlayerAttacking_) {
+				// 计算本段玩家伤害
+				int playerSegmentDamage = std::max(0, enemyHealthBeforePlayerAttack_ - enemyHealth_);
+				playerDamageThisCycle_ += playerSegmentDamage;
+
+				// 抵消逻辑：玩家伤害累加，敌人伤害在其段落扣减
+				int deltaTicks = playerSegmentDamage;
+				if (deltaTicks > 5) deltaTicks = 5;
+				if (deltaTicks < -5) deltaTicks = -5;
+				meterNet_ += deltaTicks;
+				if (meterNet_ > 5) meterNet_ = 5;
+				if (meterNet_ < -5) meterNet_ = -5;
+				meterStartPos_ = meterDisplayPos_;
+				meterTargetPos_ = meterNet_;
+				meterAnimTime_ = 0.0f;
+				isMeterAnimating_ = true;
+				lastPlayerDamage_ = playerSegmentDamage;
+
 				// 玩家攻击完成，显示伤害并准备移动动画
 				isAttackAnimating_ = false;
 				attackAnimTime_ = 0.0f;
@@ -678,37 +788,26 @@ void BattleState::update(App& app, float dt) {
 					damageDisplayTime_ = 0.0f;
 				}
 
-				// 检查是否有卡牌需要冲刺能手或蛮力冲撞
-				bool hasRushingCard = false;
-				bool hasBruteForceCard = false;
-
-				for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
-					if (battlefield_[i].isAlive && battlefield_[i].isPlayer) {
-						if (hasMark(battlefield_[i].card, u8"冲刺能手")) {
-							hasRushingCard = true;
-						}
-						if (hasMark(battlefield_[i].card, u8"蛮力冲撞")) {
-							hasBruteForceCard = true;
-						}
-					}
-				}
-
-				if (hasRushingCard || hasBruteForceCard) {
-					// 有移动卡牌，等待伤害显示完成后再开始移动
-					statusMessage_ = "攻击完成，准备移动...";
-				}
-				else {
-					// 没有移动卡牌，直接进入敌方回合
-					currentPhase_ = GamePhase::EnemyTurn;
-					currentTurn_++; // 增加回合数
-					hasDrawnThisTurn_ = false; // 重置抽牌状态
-					mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-
-					// 延迟执行敌人回合
-					enemyTurn();
-				}
+				// 移动与转入敌方回合的判定，统一在showDamage_结束后的分支执行
 			}
 			else {
+				// 敌方攻击完成，计算本段敌人伤害
+				int enemySegmentDamage = std::max(0, playerHealthBeforeEnemyTurn_ - playerHealth_);
+				enemyDamageThisCycle_ += enemySegmentDamage;
+
+				// 敌人伤害抵消玩家：记为负向刻度
+				int deltaTicks = -enemySegmentDamage;
+				if (deltaTicks > 5) deltaTicks = 5;
+				if (deltaTicks < -5) deltaTicks = -5;
+				meterNet_ += deltaTicks;
+				if (meterNet_ > 5) meterNet_ = 5;
+				if (meterNet_ < -5) meterNet_ = -5;
+				meterStartPos_ = meterDisplayPos_;
+				meterTargetPos_ = meterNet_;
+				meterAnimTime_ = 0.0f;
+				isMeterAnimating_ = true;
+				lastEnemyDamage_ = enemySegmentDamage;
+
 				// 敌方攻击完成，检查是否有可以移动的敌方卡牌
 				isAttackAnimating_ = false;
 				attackAnimTime_ = 0.0f;
@@ -912,6 +1011,19 @@ void BattleState::update(App& app, float dt) {
 
 	// 检查游戏结束
 	checkGameOver();
+
+	// 墨尺指针动画插值
+	if (isMeterAnimating_) {
+		meterAnimTime_ += dt;
+		float t = std::min(1.0f, meterAnimTime_ / meterAnimDuration_);
+		// easeInOut 曲线
+		float tEase = (1.0f - std::cos(3.1415926f * t)) * 0.5f;
+		meterDisplayPos_ = meterStartPos_ + (meterTargetPos_ - meterStartPos_) * tEase;
+		if (t >= 1.0f) {
+			isMeterAnimating_ = false;
+			meterDisplayPos_ = static_cast<float>(meterTargetPos_);
+		}
+	}
 }
 
 void BattleState::render(App& app) {
@@ -958,11 +1070,20 @@ void BattleState::initializeBattle() {
 
 	// 初始化固定玩家牌堆（两张玄牧、两张驼鹿、一张云糜）
 	playerDeck_.clear();
-	playerDeck_.push_back("xuanmu");             // 玄牧
-	playerDeck_.push_back("xuanmu");             // 玄牧
-	playerDeck_.push_back("qianfeng_tuolu");    // 千峰驼鹿
-	playerDeck_.push_back("qianfeng_tuolu");    // 千峰驼鹿
-	playerDeck_.push_back("yunqu_jumi");        // 云渠巨糜
+	// 改为：收集所有带有"一回合成长"词条的卡牌（不重复）
+	{
+		auto ids = CardDB::instance().allIds();
+		for (const auto& id : ids) {
+			Card card = CardDB::instance().make(id);
+			bool hasOneTurn = false;
+			for (const auto& mk : card.marks) {
+				if (mk.rfind(u8"一回合成长", 0) == 0) { hasOneTurn = true; break; }
+			}
+			if (hasOneTurn) {
+				playerDeck_.push_back(id);
+			}
+		}
+	}
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -1210,6 +1331,8 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 	battlefield_[battlefieldIndex].isAlive = true;
 	battlefield_[battlefieldIndex].health = card.health;
 	battlefield_[battlefieldIndex].isPlayer = true;
+	battlefield_[battlefieldIndex].placedTurn = currentTurn_;
+	battlefield_[battlefieldIndex].oneTurnGrowthApplied = false;
 
 	// 重置献祭状态
 	if (card.sacrificeCost > 0) {
@@ -1242,6 +1365,9 @@ void BattleState::endTurn() {
 	}
 
 	if (!attackingCards_.empty()) {
+		// 记录敌方血量基准，用于计算本段我方造成伤害
+		enemyHealthBeforePlayerAttack_ = enemyHealth_;
+
 		// 开始攻击动画
 		isAttackAnimating_ = true;
 		attackAnimTime_ = 0.0f;
@@ -1257,19 +1383,19 @@ void BattleState::endTurn() {
 		hasDrawnThisTurn_ = false; // 重置抽牌状态
 		mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
 
-		// 尝试先播放敌人前进动画，动画结束后再调用 enemyTurn()
-		if (!startEnemyAdvanceIfAny()) {
-			// 无动画，直接进入敌方回合
-			enemyTurn();
-		}
+		// 延迟执行敌人回合
+		enemyTurn();
 	}
 }
 
 void BattleState::enemyTurn() {
-	// 再次确保前进动画先于攻击（以防在其它路径进入）
+	// 敌方攻击开始前：先完成敌人前进（若有）
 	if (startEnemyAdvanceIfAny()) {
 		return; // 动画完成后会回调进入敌方攻击
 	}
+
+	// 敌方前进完成后：敌人攻击前成长（含动画）。若有成长，先return，动画结束后再进入攻击。
+	if (scheduleEnemyPreAttackGrowth()) return;
 
 	// 收集所有可以攻击的敌方卡牌（从左到右）
 	attackingCards_.clear();
@@ -1282,6 +1408,9 @@ void BattleState::enemyTurn() {
 	}
 
 	if (!attackingCards_.empty()) {
+		// 记录玩家血量基准，用于计算本段敌方造成伤害
+		playerHealthBeforeEnemyTurn_ = playerHealth_;
+
 		// 开始敌方攻击动画
 		isAttackAnimating_ = true;
 		attackAnimTime_ = 0.0f;
@@ -1292,6 +1421,8 @@ void BattleState::enemyTurn() {
 	else {
 		// 没有可攻击的敌方卡牌，直接回到玩家回合
 		currentPhase_ = GamePhase::PlayerTurn;
+		// 回合开始：抽牌提示前先成长。若有成长，先return，update中落位后再显示提示。
+		if (scheduleTurnStartGrowth()) return;
 		if (mustDrawThisTurn_) {
 			statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";
 		}
@@ -1362,6 +1493,13 @@ void BattleState::executeEnemyAdvance() {
 				battlefield_[step.toIndex] = battlefield_[step.fromIndex];
 				battlefield_[step.toIndex].rect = targetRect;
 
+				// 敌人进入第二行（攻击行）时，从这一回合开始重新计时成长
+				int toRow = step.toIndex / BATTLEFIELD_COLS;
+				if (toRow == 1) {
+					battlefield_[step.toIndex].placedTurn = currentTurn_;
+					battlefield_[step.toIndex].oneTurnGrowthApplied = false;
+				}
+
 				battlefield_[step.fromIndex].isAlive = false;
 				battlefield_[step.fromIndex].health = 0;
 				battlefield_[step.fromIndex].isMovedToDeath = false;
@@ -1411,33 +1549,22 @@ void BattleState::renderBattlefield(App& app) {
 			}
 		}
 
-		// 敌人前进插值渲染：当 fromIndex 对应时，使用插值位置绘制
+		// 敌人前进插值渲染
 		bool isAdvancingThis = false;
 		SDL_Rect advancingRect{};
 		if (isEnemyAdvancing_) {
-			// 刚启动当帧，固定为t=0，避免因为帧时长大导致直接接近终点
 			float t = enemyAdvanceStartedThisFrame_ ? 0.0f : std::min(1.0f, enemyAdvanceAnimTime_ / enemyAdvanceAnimDuration_);
-			// 更明显的缓入缓出（S-curve）
 			float t_ease = (1.0f - std::cos(3.1415926f * t)) * 0.5f;
 			for (const auto& step : enemyAdvanceSteps_) {
 				if (step.fromIndex == i) {
 					isAdvancingThis = true;
-					// 主插值
 					float baseX = step.fromRect.x + (step.toRect.x - step.fromRect.x) * t_ease;
 					float baseY = step.fromRect.y + (step.toRect.y - step.fromRect.y) * t_ease;
-					// 自适应超冲：按两格中心垂直距离计算
 					float centerFromY = step.fromRect.y + step.fromRect.h * 0.5f;
 					float centerToY = step.toRect.y + step.toRect.h * 0.5f;
 					float deltaCenterY = std::abs(centerToY - centerFromY);
 					float overshootMax = std::max(enemyAdvanceMinOvershootPx_, deltaCenterY * enemyAdvanceOvershootScale_);
-					// 钟形权重（中段最大）
-					float bell;
-					{
-						float mid = 0.5f;
-						float width = 0.38f;
-						float d = std::abs(t - mid) / width;
-						bell = d >= 1.0f ? 0.0f : (1.0f - d);
-					}
+					float bell; { float mid=0.5f, width=0.38f; float d=std::abs(t-mid)/width; bell = d>=1.0f?0.0f:(1.0f-d);} 
 					float overshoot = bell * overshootMax;
 					advancingRect.x = static_cast<int>(baseX);
 					advancingRect.y = static_cast<int>(baseY + overshoot);
@@ -1461,6 +1588,24 @@ void BattleState::renderBattlefield(App& app) {
 
 		if ((bfCard.isAlive || isAnimating) && !isMovingAnimating && !isPushedAnimating) {
 			SDL_Rect renderRect = isAdvancingThis ? advancingRect : bfCard.rect;
+
+			// 成长轻量动画：对待成长卡片做轻微放大与发光
+			if (isGrowthAnimating_) {
+				bool willGrowHere = false;
+				for (const auto& gs : pendingGrowth_) { if (gs.index == i) { willGrowHere = true; break; } }
+				if (willGrowHere) {
+					float t = std::min(1.0f, growthAnimTime_ / growthAnimDuration_);
+					float tEase = (1.0f - std::cos(3.1415926f * t)) * 0.5f;
+					float scale = 1.0f + 0.12f * std::sin(tEase * 3.1415926f);
+					int newW = static_cast<int>(renderRect.w * scale);
+					int newH = static_cast<int>(renderRect.h * scale);
+					renderRect.x += (renderRect.w - newW) / 2;
+					renderRect.y += (renderRect.h - newH) / 2;
+					renderRect.w = newW;
+					renderRect.h = newH;
+				}
+			}
+
 			if (isAnimating) {
 				float scale = 1.0f - animProgress;
 				scale = std::max(0.1f, scale);
@@ -1475,6 +1620,19 @@ void BattleState::renderBattlefield(App& app) {
 			Card tempCard = bfCard.card;
 			tempCard.health = bfCard.health;
 			CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+
+			// 显示献祭符号
+			if (isSacrificing_ && bfCard.isPlayer && bfCard.isSacrificed) {
+				SDL_SetRenderDrawColor(r, 255, 0, 0, 255);
+				int centerX = renderRect.x + renderRect.w / 2;
+				int centerY = renderRect.y + renderRect.h / 2;
+				int symbolSize = 20;
+				SDL_RenderDrawLine(r, centerX - symbolSize / 2, centerY - symbolSize / 2, centerX + symbolSize / 2, centerY + symbolSize / 2);
+				SDL_RenderDrawLine(r, centerX + symbolSize / 2, centerY - symbolSize / 2, centerX - symbolSize / 2, centerY + symbolSize / 2);
+				SDL_SetRenderDrawColor(r, 255, 100, 100, 200);
+				SDL_Rect symbolRect{ centerX - symbolSize / 2 - 2, centerY - symbolSize / 2 - 2, symbolSize + 4, symbolSize + 4 };
+				SDL_RenderDrawRect(r, &symbolRect);
+			}
 		}
 		else {
 			SDL_SetRenderDrawColor(r, 60, 70, 80, 80);
@@ -2396,8 +2554,9 @@ void BattleState::renderUI(App& app) {
 	}
 
 
-	// 绘制墨尺指针（在中间位置，水墨风格）
-	int pointerX = inkRulerRect_.x + inkRulerRect_.w / 2;
+	// 绘制墨尺指针（在中间位置，水墨风格），根据meterPosition_偏移
+	int stepPerTick = (inkRulerRect_.w / std::max(1, maxInk_));
+	int pointerX = inkRulerRect_.x + inkRulerRect_.w / 2 + static_cast<int>(std::round(meterDisplayPos_ * stepPerTick));
 	SDL_SetRenderDrawColor(r, 255, 255, 255, 255); // 水墨风格白色指针
 	// 主指针线（更粗更长）
 	SDL_RenderDrawLine(r, pointerX, inkRulerRect_.y + 50, pointerX, inkRulerRect_.y + 80);
@@ -3292,6 +3451,10 @@ void BattleState::onMovementComplete() {
 	else {
 		// 没有更多移动卡牌，结束移动队列处理
 		isProcessingMovementQueue_ = false;
+		// 如果正在播放成长动画，暂不进行相位切换，等待成长完成后由成长流程继续推进
+		if (isGrowthAnimating_) {
+			return;
+		}
 		if (currentPhase_ == GamePhase::EnemyTurn) {
 			currentPhase_ = GamePhase::PlayerTurn;
 			if (mustDrawThisTurn_) {
@@ -3303,12 +3466,126 @@ void BattleState::onMovementComplete() {
 		}
 		else if (currentPhase_ == GamePhase::PlayerTurn) {
 			currentPhase_ = GamePhase::EnemyTurn;
-			currentTurn_++; // 增加回合数
+			currentTurn_++; // 有移动时，从玩家回合切到敌方回合也需要递增回合数
 			hasDrawnThisTurn_ = false; // 重置抽牌状态
 			mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-
+			std::cout << "1" << std::endl;
 			// 延迟执行敌人回合
 			enemyTurn();
 		}
 	}
+}
+
+bool BattleState::parseOneTurnGrowthTarget(const Card& card, std::string& outTargetName) {
+	// 仅支持：
+	//  - "一回合成长"（仅数值成长）
+	//  - "一回合成长XXXX"（目标名直接拼接）
+	for (const auto& mk : card.marks) {
+		if (mk.rfind(u8"一回合成长", 0) == 0) {
+			// 取前缀后的剩余部分作为目标名（可能为空）
+			std::string tail = mk.substr(std::string(u8"一回合成长").size());
+			// 去除两端空白
+			while (!tail.empty() && (tail.front() == ' ' || tail.front() == '\t')) tail.erase(tail.begin());
+			while (!tail.empty() && (tail.back() == ' ' || tail.back() == '\t')) tail.pop_back();
+			outTargetName = tail; // 空字符串表示仅数值成长
+			return true;
+		}
+	}
+	return false;
+}
+
+std::string BattleState::findCardIdByName(const std::string& nameUtf8) {
+	if (nameUtf8.empty()) return std::string();
+	// 简单遍历 CardDB
+	auto ids = CardDB::instance().allIds();
+	for (const auto& id : ids) {
+		const Card* proto = CardDB::instance().find(id);
+		if (!proto) continue;
+		if (proto->name == nameUtf8) return id;
+	}
+	return std::string();
+}
+
+bool BattleState::scheduleTurnStartGrowth() {
+	pendingGrowth_.clear();
+	for (int row = 0; row < BATTLEFIELD_ROWS; ++row) {
+		for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+			int idx = row * BATTLEFIELD_COLS + col;
+			auto& bf = battlefield_[idx];
+			if (!bf.isAlive || !bf.isPlayer) continue;
+			if (bf.oneTurnGrowthApplied || bf.placedTurn <= 0 || currentTurn_ < bf.placedTurn + 1) continue;
+			std::string targetName;
+			if (!parseOneTurnGrowthTarget(bf.card, targetName)) continue;
+
+			GrowthStep step;
+			step.index = idx;
+			if (!targetName.empty()) {
+				std::string targetId = findCardIdByName(targetName);
+				if (!targetId.empty()) {
+					step.willTransform = true;
+					step.targetCard = CardDB::instance().make(targetId);
+					step.addAttack = 0;
+					step.addHealth = 0;
+					pendingGrowth_.push_back(step);
+					continue;
+				}
+			}
+			// 默认数值成长
+			step.willTransform = false;
+			step.addAttack = 1;
+			step.addHealth = 2;
+			pendingGrowth_.push_back(step);
+		}
+	}
+	if (!pendingGrowth_.empty()) {
+		isGrowthAnimating_ = true;
+		growthAnimTime_ = 0.0f;
+		growthAtTurnStart_ = true;
+		statusMessage_ = "成长中...";
+		return true;
+	}
+	return false;
+}
+
+bool BattleState::scheduleEnemyPreAttackGrowth() {
+	pendingGrowth_.clear();
+	for (int row = 1; row < 2; ++row) { // 仅第二行（敌方攻击行）
+		for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+			int idx = row * BATTLEFIELD_COLS + col;
+			auto& bf = battlefield_[idx];
+			if (!bf.isAlive || bf.isPlayer) continue;
+			// 只有进入第二行后的"下一个回合"才能成长
+			if (bf.oneTurnGrowthApplied || bf.placedTurn <= 0 || currentTurn_ < bf.placedTurn + 1) continue;
+			std::string targetName;
+			if (!parseOneTurnGrowthTarget(bf.card, targetName)) continue;
+
+			GrowthStep step;
+			step.index = idx;
+			if (!targetName.empty()) {
+				std::string targetId = findCardIdByName(targetName);
+				if (!targetId.empty()) {
+					step.willTransform = true;
+					step.targetCard = CardDB::instance().make(targetId);
+					step.addAttack = 0;
+					step.addHealth = 0;
+					pendingGrowth_.push_back(step);
+					continue;
+				}
+			}
+			// 默认数值成长
+			step.willTransform = false;
+			step.addAttack = 1;
+			step.addHealth = 2;
+			pendingGrowth_.push_back(step);
+		}
+	}
+	if (!pendingGrowth_.empty()) {
+		isGrowthAnimating_ = true;
+		growthAnimTime_ = 0.0f;
+		growthAtTurnStart_ = false;
+		growthForEnemyAttack_ = true;
+		statusMessage_ = "敌方成长中...";
+		return true;
+	}
+	return false;
 }

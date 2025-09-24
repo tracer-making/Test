@@ -8,6 +8,7 @@
 #include <SDL.h>
 #include <vector>
 #include <array>
+#include <iostream>
 
 class BattleState : public State {
 public:
@@ -48,6 +49,8 @@ private:
 		bool isSacrificed = false; // 是否被献祭
 		bool isMovedToDeath = false; // 是否因移动而死亡（不获得魂骨）
 		int moveDirection = 0; // 移动方向，1=右，-1=左，0=无方向
+		int placedTurn = 0; // 放置（上场）时的回合数
+		bool oneTurnGrowthApplied = false; // 一回合成长是否已触发
 	};
 	std::array<BattlefieldCard, TOTAL_BATTLEFIELD_SLOTS> battlefield_;
 
@@ -183,6 +186,24 @@ private:
 	bool hasDrawnThisTurn_ = false;      // 本回合是否已抽牌
 	bool mustDrawThisTurn_ = false;      // 本回合是否必须抽牌（第二回合开始）
 
+	// 墨尺指针与本轮伤害统计
+	int meterPosition_ = 0;             // 指针位置，-5..5，负向偏向玩家一侧，正向偏向敌人一侧
+	int playerDamageThisCycle_ = 0;      // 我方本轮（玩家攻+敌人攻比较周期）造成的伤害
+	int enemyDamageThisCycle_ = 0;       // 敌方本轮造成的伤害
+	int enemyHealthBeforePlayerAttack_ = 0; // 用于计算玩家阶段伤害
+	int playerHealthBeforeEnemyTurn_ = 0;   // 用于计算敌方阶段伤害
+	int lastPlayerDamage_ = 0;           // 上一次我方阶段造成的伤害
+	int lastEnemyDamage_ = 0;            // 上一次敌方阶段造成的伤害
+	int meterNet_ = 0;                  // 净伤平衡：玩家伤害累加，敌人伤害扣减（用于抵消），单位=刻度，范围最终夹在-5..5
+
+	// 墨尺指针动画
+	int meterTargetPos_ = 0;            // 目标刻度（-5..5）
+	float meterDisplayPos_ = 0.0f;       // 当前显示刻度（可为小数，用于插值）
+	float meterAnimTime_ = 0.0f;         // 动画计时
+	float meterAnimDuration_ = 0.35f;    // 动画时长（秒）
+	float meterStartPos_ = 0.0f;         // 动画起始刻度
+	bool isMeterAnimating_ = false;      // 是否正在播放指针动画
+
 	// 战斗系统
 	int totalDamageDealt_ = 0;          // 本回合造成的总伤害
 	bool showDamage_ = false;           // 是否显示伤害
@@ -287,5 +308,30 @@ private:
 	void executeEnemyAdvance();
 
 	void advanceEnemiesFrontRow();
+
+	// 一回合成长处理：保留解析与查找工具（可配合动画）
+	bool parseOneTurnGrowthTarget(const Card& card, std::string& outTargetName);
+	std::string findCardIdByName(const std::string& nameUtf8);
+
+	// 成长动画相关（恢复变量，便于后续使用）
+	struct GrowthStep {
+		int index;
+		bool willTransform;
+		Card targetCard; // willTransform==true 时有效
+		int addAttack;   // willTransform==false 时有效
+		int addHealth;   // willTransform==false 时有效
+	};
+	std::vector<GrowthStep> pendingGrowth_;
+	bool isGrowthAnimating_ = false;
+	float growthAnimTime_ = 0.0f;
+	float growthAnimDuration_ = 0.6f;
+	// 成长触发标志：本次成长是否发生在玩家回合开始（抽牌前）
+	bool growthAtTurnStart_ = false;
+	// 回合开始成长调度（抽牌前），若有成长则启动动画并返回true
+	bool scheduleTurnStartGrowth();
+	// 敌人攻击前成长调度（在敌人向前移动之后，攻击之前），若有成长则启动动画并返回true
+	bool scheduleEnemyPreAttackGrowth();
+	// 标志：本次成长用于敌人攻击前
+	bool growthForEnemyAttack_ = false;
 
 };
