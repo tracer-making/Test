@@ -140,19 +140,19 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		}
 		else if (e.key.keysym.sym == SDLK_d && godMode_) {
-			// D键在悬停位置生成岐角双歧鹿
+			// D键在悬停位置生成巴蛇
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						// 生成岐角双歧鹿卡牌
-						Card qijiao = CardDB::instance().make("qijiao_shuangqi");
-						if (!qijiao.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = qijiao;
+						// 生成巴蛇卡牌
+						Card bashe = CardDB::instance().make("bashe");
+						if (!bashe.id.empty()) {
+							battlefield_[hoveredBattlefieldIndex_].card = bashe;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = qijiao.health;
+							battlefield_[hoveredBattlefieldIndex_].health = bashe.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
-							statusMessage_ = "在敌方区域生成岐角双歧鹿";
+							statusMessage_ = "在敌方区域生成巴蛇(D)";
 						}
 					}
 					else {
@@ -948,6 +948,8 @@ void BattleState::update(App& app, float dt) {
 			isDestroyAnimating_ = false;
 			destroyAnimTime_ = 0.0f;
 			cardsToDestroy_.clear();
+
+			// 不死印记：改为即时回手，已在死亡检测处处理，这里无需再添加
 		}
 	}
 
@@ -968,6 +970,24 @@ void BattleState::update(App& app, float dt) {
 
 		// 如果卡牌从存活变为死亡，获得魂骨
 		if (wasAlive && !isAlive) {
+			// 不死印记：我方单位死亡时，立刻回到手牌（即时渲染）
+			if (battlefield_[i].isPlayer) {
+				const Card& deadCard = battlefield_[i].card;
+				if (hasMark(deadCard, std::string(u8"不死印记"))) {
+					Card fresh = CardDB::instance().make(deadCard.id);
+					if (!fresh.id.empty()) {
+						// 螣蛇自环：每次死亡永久+1/+1（以卡面基础数值为基准）
+						if (hasMark(deadCard, std::string(u8"每次死亡数值+1")) || deadCard.id == std::string("tengshe_zihuan")) {
+							fresh.attack = deadCard.attack + 1;
+							fresh.health = deadCard.health + 1;
+						}
+						handCards_.push_back(fresh);
+						// 立刻更新手牌布局以立即渲染
+						layoutHandCards();
+						statusMessage_ = std::string("不死回手：") + fresh.name;
+					}
+				}
+			}
 			// 检查是否是生生不息卡牌在献祭时死亡（这种情况已经在献祭逻辑中处理了魂骨）
 			bool wasSacrificed = battlefield_[i].isSacrificed;
 			bool hasImmortal = hasMark(battlefield_[i].card, u8"生生不息");
@@ -1084,10 +1104,10 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-	// 初始牌堆：翁间臭丞、黄鼬臭尉、雪尾鼬生
-	playerDeck_.push_back("wengjian_choucheng");
-	playerDeck_.push_back("huangyou_chouwei");
-	playerDeck_.push_back("xuewei_yousheng");
+	// 初始牌堆：巴蛇、螣蛇自环、蠹鱼不化
+	playerDeck_.push_back("bashe");
+	playerDeck_.push_back("tengshe_zihuan");
+	playerDeck_.push_back("duyu_buhua");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -2570,12 +2590,19 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	int remainingDamage = damage - target.health;
 	battlefield_[targetIndex].health -= damage;
 
+	// 死神之触：只要攻击到对面的卡牌（非本体），目标必定死亡
+	if (battlefield_[targetIndex].isAlive && hasMark(attacker.card, std::string(u8"死神之触"))) {
+		battlefield_[targetIndex].health = 0;
+	}
+
 	// 检查目标是否死亡
 	if (battlefield_[targetIndex].health <= 0) {
 		battlefield_[targetIndex].isAlive = false;
 		cardsToDestroy_.push_back(targetIndex);
 		isDestroyAnimating_ = true;
 		destroyAnimTime_ = 0.0f;
+
+		// 不死印记：回手逻辑改在摧毁动画结束时统一处理
 	}
 
 	// 处理穿透伤害（仅当允许且有溢出）

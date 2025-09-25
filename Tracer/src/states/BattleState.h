@@ -112,6 +112,9 @@ private:
 	void scheduleGuardianMove(int fromIndex, int toIndex);
 	void finalizeGuardianMoves();
 
+	// 不死印记：待回手的卡（动画结束后统一加入手牌）
+	std::vector<Card> pendingUndyingToHand_;
+
 	// 特殊攻击执行函数
 	void executeSpecialAttack(int attackerIndex, int targetCol, bool isPlayerAttacking);
 	void executeDiagonalAttack(int attackerIndex, int targetCol, bool isPlayerAttacking, int damage);
