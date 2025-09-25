@@ -166,16 +166,16 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		}
 		else if (e.key.keysym.sym == SDLK_f && godMode_) {
-			// F键在悬停位置生成苍狼幼魂
+			// F键在悬停位置生成青羽翠使，并给玩家牌堆前两张卡牌添加水袭印记
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						Card wolfCub = CardDB::instance().make("canglang_youhun");
-						if (!wolfCub.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = wolfCub;
+						Card qingyuCard = CardDB::instance().make("qingyu_cuishi");
+						if (!qingyuCard.id.empty()) {
+							battlefield_[hoveredBattlefieldIndex_].card = qingyuCard;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = wolfCub.health;
+							battlefield_[hoveredBattlefieldIndex_].health = qingyuCard.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false;
 							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
 							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
@@ -602,6 +602,9 @@ void BattleState::update(App& app, float dt) {
 	// 敌人前进动画更新（若有）
 	updateEnemyAdvance(dt);
 
+	// 水袭印记状态更新
+	updateWaterAttackMarks();
+
 	// 成长动画推进
 	if (isGrowthAnimating_) {
 		growthAnimTime_ += dt;
@@ -648,9 +651,11 @@ void BattleState::update(App& app, float dt) {
 					currentAttackingIndex_ = 0;
 					isPlayerAttacking_ = false;
 					statusMessage_ = "敌方开始攻击！";
+					std::cout << "4" << std::endl;
 				}
 				else {
 					// 无可攻击则如常切回玩家回合并在回合开始处再尝试玩家成长
+					std::cout << "3" << std::endl;
 					currentPhase_ = GamePhase::PlayerTurn;
 					if (scheduleTurnStartGrowth()) return;
 					if (mustDrawThisTurn_) statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！"; else statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
@@ -1068,18 +1073,21 @@ void BattleState::initializeBattle() {
 		handCards_.push_back(inkCard);
 	}
 
-	// 初始化固定玩家牌堆（两张玄牧、两张驼鹿、一张云糜）
 	playerDeck_.clear();
-	// 改为：收集所有带有"一回合成长"词条的卡牌（不重复）
+	playerDeck_.push_back("canglang_youhun");
+	// 改为：收集所有带有"水袭"印记的卡牌（不重复）
 	{
 		auto ids = CardDB::instance().allIds();
 		for (const auto& id : ids) {
 			Card card = CardDB::instance().make(id);
-			bool hasOneTurn = false;
+			bool hasWaterAttack = false;
 			for (const auto& mk : card.marks) {
-				if (mk.rfind(u8"一回合成长", 0) == 0) { hasOneTurn = true; break; }
+				if (mk == u8"水袭") { 
+					hasWaterAttack = true; 
+					break; 
+				}
 			}
-			if (hasOneTurn) {
+			if (hasWaterAttack) {
 				playerDeck_.push_back(id);
 			}
 		}
@@ -1617,9 +1625,40 @@ void BattleState::renderBattlefield(App& app) {
 				renderRect.h = newHeight;
 			}
 
-			Card tempCard = bfCard.card;
-			tempCard.health = bfCard.health;
-			CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+			// 检查是否是水袭卡牌且翻到反面
+			bool isWaterAttackFlipped = hasMark(bfCard.card, u8"水袭") && waterAttackFlipped_[i];
+			
+			if (isWaterAttackFlipped) {
+				// 水袭卡牌翻到反面：使用原牌面颜色，只显示水袭符号
+				// 先正常渲染卡牌背景（使用CardRenderer的默认颜色）
+				Card tempCard = bfCard.card;
+				tempCard.health = bfCard.health;
+				CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+				
+				// 在卡牌上覆盖半透明遮罩，保持原色但隐藏信息
+				SDL_SetRenderDrawColor(r, 0, 0, 0, 100);
+				SDL_RenderFillRect(r, &renderRect);
+				
+				// 绘制水袭符号（波浪形），使用原字体颜色
+				SDL_SetRenderDrawColor(r, 200, 200, 200, 255); // 使用原字体颜色
+				int centerX = renderRect.x + renderRect.w / 2;
+				int centerY = renderRect.y + renderRect.h / 2;
+				int symbolSize = 40;
+				
+				// 绘制波浪符号
+				for (int i = 0; i < symbolSize; i += 4) {
+					int x = centerX - symbolSize/2 + i;
+					int y1 = centerY - 8 + static_cast<int>(4 * std::sin(i * 0.3));
+					int y2 = centerY + 8 + static_cast<int>(4 * std::sin(i * 0.3));
+					SDL_RenderDrawLine(r, x, y1, x, y2);
+				}
+			}
+			else {
+				// 正常渲染卡牌
+				Card tempCard = bfCard.card;
+				tempCard.health = bfCard.health;
+				CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+			}
 
 			// 显示献祭符号
 			if (isSacrificing_ && bfCard.isPlayer && bfCard.isSacrificed) {
@@ -2385,7 +2424,39 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	}
 	if (attacker.isPlayer == target.isPlayer) return; // 不能攻击友军
 
-	// 空袭与穿透规则：
+	// 水袭印记检查：如果目标潜水，攻击者无法攻击到，直接攻击本体
+	if (target.isDiving) {
+		// 目标潜水，攻击直接打到本体
+		if (attacker.isPlayer) {
+			enemyHealth_ -= damage;
+			if (enemyHealth_ < 0) enemyHealth_ = 0;
+		}
+		else {
+			playerHealth_ -= damage;
+			if (playerHealth_ < 0) playerHealth_ = 0;
+		}
+		return;
+	}
+
+	// 空袭规则：空袭只能对高跳的敌人造成伤害，若对位不是高跳的敌人则直接对本体造成伤害
+	if (hasAirStrike) {
+		bool targetHasHighJump = hasMark(target.card, u8"高跳");
+		if (!targetHasHighJump) {
+			// 空袭攻击非高跳目标，直接攻击本体
+			if (attacker.isPlayer) {
+				enemyHealth_ -= damage;
+				if (enemyHealth_ < 0) enemyHealth_ = 0;
+			}
+			else {
+				playerHealth_ -= damage;
+				if (playerHealth_ < 0) playerHealth_ = 0;
+			}
+			return;
+		}
+		// 空袭攻击高跳目标，正常攻击卡牌
+	}
+
+	// 穿透规则：
 	// - 穿透对所有卡牌生效（溢出伤害继续结算到后排或本体）
 	// - 例外：若攻击者有"空袭"，则仅当对位目标有"高跳"时才允许穿透；否则不允许穿透
 	bool targetHasHighJump = hasMark(target.card, u8"高跳");
@@ -3588,4 +3659,68 @@ bool BattleState::scheduleEnemyPreAttackGrowth() {
 		return true;
 	}
 	return false;
+}
+
+// 水袭印记相关方法实现
+void BattleState::updateWaterAttackMarks() {
+	// 根据当前回合阶段更新水袭印记状态
+	if (currentPhase_ == GamePhase::PlayerTurn) {
+		// 玩家回合：我方水袭卡牌浮出，敌方水袭卡牌潜水
+		applyWaterAttackSurfacing();
+	}
+	else if (currentPhase_ == GamePhase::EnemyTurn) {
+		// 敌人回合：我方水袭卡牌潜水，敌方水袭卡牌浮出
+		applyWaterAttackDiving();
+	}
+	
+	// 水袭翻面逻辑：根据回合和卡牌归属控制翻面状态
+	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+		auto& bf = battlefield_[i];
+		if (bf.isAlive && hasMark(bf.card, u8"水袭")) {
+			if (currentPhase_ == GamePhase::PlayerTurn) {
+				// 我方回合：我方水袭卡牌翻到正面，敌方水袭卡牌翻到反面
+				waterAttackFlipped_[i] = !bf.isPlayer;
+			}
+			else if (currentPhase_ == GamePhase::EnemyTurn) {
+				// 敌方回合：我方水袭卡牌翻到反面，敌方水袭卡牌翻到正面
+				waterAttackFlipped_[i] = bf.isPlayer;
+			}
+		}
+	}
+}
+
+void BattleState::applyWaterAttackDiving() {
+	// 我方水袭卡牌在敌人回合潜水
+	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+		auto& bf = battlefield_[i];
+		if (bf.isAlive && bf.isPlayer && hasMark(bf.card, u8"水袭")) {
+			bf.isDiving = true;
+		}
+	}
+	
+	// 敌方水袭卡牌在敌人回合浮出
+	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+		auto& bf = battlefield_[i];
+		if (bf.isAlive && !bf.isPlayer && hasMark(bf.card, u8"水袭")) {
+			bf.isDiving = false;
+		}
+	}
+}
+
+void BattleState::applyWaterAttackSurfacing() {
+	// 我方水袭卡牌在玩家回合浮出
+	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+		auto& bf = battlefield_[i];
+		if (bf.isAlive && bf.isPlayer && hasMark(bf.card, u8"水袭")) {
+			bf.isDiving = false;
+		}
+	}
+	
+	// 敌方水袭卡牌在玩家回合潜水
+	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+		auto& bf = battlefield_[i];
+		if (bf.isAlive && !bf.isPlayer && hasMark(bf.card, u8"水袭")) {
+			bf.isDiving = true;
+		}
+	}
 }

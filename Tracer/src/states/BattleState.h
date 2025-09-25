@@ -51,6 +51,7 @@ private:
 		int moveDirection = 0; // 移动方向，1=右，-1=左，0=无方向
 		int placedTurn = 0; // 放置（上场）时的回合数
 		bool oneTurnGrowthApplied = false; // 一回合成长是否已触发
+		bool isDiving = false; // 水袭印记：是否潜水状态
 	};
 	std::array<BattlefieldCard, TOTAL_BATTLEFIELD_SLOTS> battlefield_;
 
@@ -83,6 +84,14 @@ private:
 
 	// 检查卡牌是否有特定印记
 	bool hasMark(const Card& card, const std::string& mark);
+
+	// 水袭印记相关方法
+	void updateWaterAttackMarks();
+	void applyWaterAttackDiving();
+	void applyWaterAttackSurfacing();
+	
+	// 水袭翻面状态
+	std::array<bool, TOTAL_BATTLEFIELD_SLOTS> waterAttackFlipped_; // 每个卡牌的翻面状态
 
 	// 特殊攻击执行函数
 	void executeSpecialAttack(int attackerIndex, int targetCol, bool isPlayerAttacking);
