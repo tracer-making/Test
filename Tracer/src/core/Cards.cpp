@@ -43,7 +43,7 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"lingque", u8"灵鹊", 2, u8"羽部", 1, 1, "face_lingque", {u8"空袭", u8"检索"}}; registerCard(c);
 	c = Card{"chiling_jiu", u8"赤翎鹫", 8, u8"羽部", 3, 3, "face_chiling", {u8"空袭", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"bangu_peng", u8"半骨鹏", 3, u8"羽部", 0, 4, "face_bangu", {u8"空袭", u8"攻击力为一半魂骨"}}; registerCard(c);
-	c = Card{"sangjiu", u8"桑鸠", 1, u8"羽部", 1, 1, "face_sangjiu", {u8"空袭", u8"滋生寄生虫10%概率下出玄乌之卵"}}; registerCard(c);
+	c = Card{"sangjiu", u8"桑鸠", 1, u8"羽部", 1, 1, "face_sangjiu", {u8"空袭", u8"滋生寄生虫"}}; registerCard(c);
 	
 	// 犬部
 	c = Card{"canglang_youhun", u8"苍狼幼魂", 1, u8"犬部", 1, 1, "face_canglang_young", {u8"一回合成长朔漠苍狼"}}; registerCard(c);
@@ -92,8 +92,11 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"mingwei_fengshe", u8"鸣尾风蛇", 3, u8"鳞部", 3, 1, "face_mingwei", {u8"消耗骨头"}}; registerCard(c);
 	c = Card{"xuanbei_dou", u8"玄贝蚪", 0, u8"鳞部", 0, 1, "face_xuanbei", {u8"水袭", u8"一回合成长碧蟾"}}; registerCard(c);
 	c = Card{"xuanwu_youzi", u8"玄武幼子", 2, u8"鳞部", 2, 2, "face_xuanwu_young", {u8"免疫第一次攻击"}}; registerCard(c);
+	c = Card{"tail_segment", u8"断尾", 0, u8"鳞部", 0, 2, "face_tail", {}}; registerCard(c);
 	
 	// 其他
+	// 破碎的卵（用于滋生寄生虫默认产物）
+	c = Card{"posui_deluan", u8"破碎的卵", 0, u8"其他", 0, 1, "face_posui", {}}; registerCard(c);
 	c = Card{"maoxiu_wo", u8"卯宿窝", 1, u8"其他", 0, 2, "face_maoxiu", {u8"打出得白毫仔0-1", u8"继承印记"}}; registerCard(c);
 	c = Card{"shuigong_tuoshi", u8"水工柁师", 2, u8"其他", 1, 3, "face_shuigong", {u8"筑坝师", u8"堤坝附带印记"}}; registerCard(c);
 	c = Card{"wengjian_choucheng", u8"瓮间臭丞", 2, u8"其他", 1, 2, "face_wengjian", {u8"臭臭", u8"消耗骨头"}}; registerCard(c);
@@ -105,9 +108,9 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"taiyi_hundun", u8"太一混沌", 2, u8"其他", 1, 2, "face_taiyi", {u8"随机标记"}}; registerCard(c);
 	c = Card{"moding", u8"墨锭", 0, u8"其他", 0, 1, "face_moding", {}}; registerCard(c);
 	c = Card{"xianchan_nu", u8"衔蝉奴", 1, u8"其他", 0, 1, "face_xianchan", {u8"生生不息"}}; registerCard(c);
-	c = Card{"jiance_jishu", u8"简册计数触", 1, u8"其他", 0, 1, "face_jiance", {u8"手牌数-1"}}; registerCard(c);
-	c = Card{"zhaogu_jingxu", u8"照骨镜须", 1, u8"其他", 0, 1, "face_zhaogu", {u8"对面攻击力-3"}}; registerCard(c);
-	c = Card{"duoling_suodi", u8"铎铃缩地须", 2, u8"其他", 0, 1, "face_duoling", {u8"铃铛距离-3"}}; registerCard(c);
+	c = Card{"jiance_jishu", u8"简册计数触", 1, u8"其他", 0, 1, "face_jiance", {u8"手牌数"}}; registerCard(c);
+	c = Card{"zhaogu_jingxu", u8"照骨镜须", 1, u8"其他", 0, 3, "face_zhaogu", {u8"对面攻击力"}}; registerCard(c);
+	c = Card{"duoling_suodi", u8"铎铃缩地须", 2, u8"其他", 0, 3, "face_duoling", {u8"铃铛距离"}}; registerCard(c);
 	c = Card{"chuanfen_yanzi", u8"穿坟鼹子", 1, u8"其他", 0, 4, "face_chuanfen_yan", {u8"守护者", u8"成长→穿坟隐士"}}; registerCard(c);
 	c = Card{"weijia_tong", u8"猬甲童", 1, u8"其他", 1, 2, "face_weijia", {u8"反伤"}}; registerCard(c);
 	c = Card{"hegong_tuozi", u8"河工柁子", 1, u8"其他", 1, 1, "face_hegong", {u8"水袭"}}; registerCard(c);

@@ -73,28 +73,28 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			// T键切换上帝模式
 			godMode_ = !godMode_;
 			if (godMode_) {
-				statusMessage_ = "上帝模式已开启！悬停在敌方区域按A键生成碧蟾，按S键生成玄乌，按D键生成岐角双歧鹿";
+				statusMessage_ = "上帝模式开启：A=桑鸠，S=雪尾鼬生，D=巴蛇，F=青羽翠使";
 			}
 			else {
 				statusMessage_ = "上帝模式已关闭";
 			}
 		}
 		else if (e.key.keysym.sym == SDLK_a && godMode_) {
-			// A键在悬停位置生成苍狼幼魂
+			// A键在悬停位置生成桑鸠
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						// 生成苍狼幼魂卡牌
-						Card wolfCub = CardDB::instance().make("canglang_youhun");
-						if (!wolfCub.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = wolfCub;
+						// 生成桑鸠卡牌
+						Card sangjiu = CardDB::instance().make("sangjiu");
+						if (!sangjiu.id.empty()) {
+							battlefield_[hoveredBattlefieldIndex_].card = sangjiu;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = wolfCub.health;
+							battlefield_[hoveredBattlefieldIndex_].health = sangjiu.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
 							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
 							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
-							statusMessage_ = "在敌方区域生成苍狼幼魂";
+							statusMessage_ = "在敌方区域生成桑鸠(A)";
 						}
 					}
 					else {
@@ -109,22 +109,22 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				statusMessage_ = "请悬停在敌方区域再按A键";
 			}
 		}
-		else if (e.key.keysym.sym == SDLK_s && godMode_) {
-			// S键在悬停位置生成雪尾鼬生
+        else if (e.key.keysym.sym == SDLK_s && godMode_) {
+            // S键在悬停位置生成山龙子
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						// 生成雪尾鼬生卡牌
-						Card xuewei = CardDB::instance().make("xuewei_yousheng");
-						if (!xuewei.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = xuewei;
+                        // 生成山龙子卡牌
+                        Card shanlong = CardDB::instance().make("shanlongzi");
+                        if (!shanlong.id.empty()) {
+                            battlefield_[hoveredBattlefieldIndex_].card = shanlong;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = xuewei.health;
+                            battlefield_[hoveredBattlefieldIndex_].health = shanlong.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
 							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
 							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
-							statusMessage_ = "在敌方区域生成雪尾鼬生(S)";
+                            statusMessage_ = "在敌方区域生成山龙子(S)";
 						}
 					}
 					else {
@@ -168,20 +168,20 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		}
 		else if (e.key.keysym.sym == SDLK_f && godMode_) {
-			// F键在悬停位置生成青羽翠使，并给玩家牌堆前两张卡牌添加水袭印记
+			// F键在悬停位置生成渭甲童
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						Card qingyuCard = CardDB::instance().make("qingyu_cuishi");
-						if (!qingyuCard.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = qingyuCard;
+						Card weijiaCard = CardDB::instance().make("weijia_tong");
+						if (!weijiaCard.id.empty()) {
+							battlefield_[hoveredBattlefieldIndex_].card = weijiaCard;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = qingyuCard.health;
+							battlefield_[hoveredBattlefieldIndex_].health = weijiaCard.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false;
 							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
 							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
-							statusMessage_ = "在敌方区域生成苍狼幼魂(F)";
+							statusMessage_ = "在敌方区域生成渭甲童(F)";
 						}
 					}
 					else {
@@ -606,6 +606,8 @@ void BattleState::update(App& app, float dt) {
 
 	// 水袭印记状态更新
 	updateWaterAttackMarks();
+	
+	
 
 	// 成长动画推进
 	if (isGrowthAnimating_) {
@@ -1070,6 +1072,7 @@ void BattleState::render(App& app) {
 	renderBattlefield(app);
 	renderHandCards(app);
 	renderUI(app);
+	
 }
 
 // 私有方法实现
@@ -1104,10 +1107,10 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-	// 初始牌堆：巴蛇、螣蛇自环、蠹鱼不化
-	playerDeck_.push_back("bashe");
-	playerDeck_.push_back("tengshe_zihuan");
-	playerDeck_.push_back("duyu_buhua");
+	// 初始牌堆：山龙子
+	playerDeck_.push_back("shanlongzi");
+	playerDeck_.push_back("shanlongzi");
+	playerDeck_.push_back("shanlongzi");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -1358,6 +1361,25 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 	battlefield_[battlefieldIndex].placedTurn = currentTurn_;
 	battlefield_[battlefieldIndex].oneTurnGrowthApplied = false;
 
+	// 滋生寄生虫：打出时若对位为空，生成对位单位（10%玄乌之卵，否则破碎的卵）
+	if (hasMark(card, std::string(u8"滋生寄生虫"))) {
+		int col = battlefieldIndex % BATTLEFIELD_COLS;
+		int opposeIndex = 1 * BATTLEFIELD_COLS + col; // 敌方对位
+		if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS && !battlefield_[opposeIndex].isAlive) {
+			int r = rand() % 100; // 简易概率
+			Card egg = CardDB::instance().make(r < 10 ? "xuanwu_zhi" : "posui_deluan");
+			if (!egg.id.empty()) {
+				battlefield_[opposeIndex].card = egg;
+				battlefield_[opposeIndex].isAlive = true;
+				battlefield_[opposeIndex].health = egg.health;
+				battlefield_[opposeIndex].isPlayer = false;
+				battlefield_[opposeIndex].placedTurn = currentTurn_;
+				battlefield_[opposeIndex].oneTurnGrowthApplied = false;
+				statusMessage_ = std::string("滋生寄生虫：对位生成 ") + egg.name;
+			}
+		}
+	}
+
 	// 重置献祭状态
 	if (card.sacrificeCost > 0) {
 		isSacrificing_ = false;
@@ -1597,6 +1619,26 @@ void BattleState::executeEnemyAdvance() {
 				if (toRow == 1) {
 					battlefield_[step.toIndex].placedTurn = currentTurn_;
 					battlefield_[step.toIndex].oneTurnGrowthApplied = false;
+
+					// 敌方“滋生寄生虫”进入第二行：若我方对位为空，生成单位（10%玄乌之卵，否则破碎的卵）
+					const auto& advCard = battlefield_[step.toIndex].card;
+					if (hasMark(advCard, std::string(u8"滋生寄生虫"))) {
+						int col = step.toIndex % BATTLEFIELD_COLS;
+						int opposeIndex = 2 * BATTLEFIELD_COLS + col; // 我方对位（第三行）
+						if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS && !battlefield_[opposeIndex].isAlive) {
+							int r = rand() % 100;
+							Card egg = CardDB::instance().make(r < 10 ? "xuanwu_zhi" : "posui_deluan");
+							if (!egg.id.empty()) {
+								battlefield_[opposeIndex].card = egg;
+								battlefield_[opposeIndex].isAlive = true;
+								battlefield_[opposeIndex].health = egg.health;
+								battlefield_[opposeIndex].isPlayer = true; // 生成在我方
+								battlefield_[opposeIndex].placedTurn = currentTurn_;
+								battlefield_[opposeIndex].oneTurnGrowthApplied = false;
+								statusMessage_ = std::string("滋生寄生虫：我方对位生成 ") + egg.name;
+							}
+						}
+					}
 				}
 
 				battlefield_[step.fromIndex].isAlive = false;
@@ -2522,13 +2564,79 @@ void BattleState::executeNormalAttack(int attackerIndex, int targetCol, bool isP
 
 // 攻击目标
 void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
-	if (targetIndex < 0 || targetIndex >= TOTAL_BATTLEFIELD_SLOTS) return;
+    if (targetIndex < 0 || targetIndex >= TOTAL_BATTLEFIELD_SLOTS) return;
 
-	const auto& attacker = battlefield_[attackerIndex];
-	const auto& target = battlefield_[targetIndex];
+    const auto& attacker = battlefield_[attackerIndex];
+    // 注意：target 在断尾求生后会变化，延后获取
 
 	// 检查攻击者是否有空袭印记
 	bool hasAirStrike = hasMark(attacker.card, u8"空袭");
+
+	// 断尾求生：被攻击前检查是否可以逃跑，让尾巴承伤
+	// 空袭单位不会触发断尾求生，除非目标自己有高跳
+	if (battlefield_[targetIndex].isAlive && hasMark(battlefield_[targetIndex].card, std::string(u8"断尾求生"))) {
+		// 检查攻击者是否有空袭印记
+		bool attackerHasAirStrike = hasMark(attacker.card, std::string(u8"空袭"));
+		// 检查目标是否有高跳印记
+		bool targetHasHighJump = hasMark(battlefield_[targetIndex].card, std::string(u8"高跳"));
+		
+		// 如果攻击者有空袭且目标没有高跳，不触发断尾求生
+		if (attackerHasAirStrike && !targetHasHighJump) {
+			// 不触发断尾求生，继续正常攻击流程
+		} else {
+		// 寻找同行空位
+		int targetRow = targetIndex / BATTLEFIELD_COLS;
+		int targetCol = targetIndex % BATTLEFIELD_COLS;
+		int newIndex = -1;
+		
+		// 检查同行相邻空位（左右各一个）
+		// 检查左边
+		if (targetCol > 0) {
+			int leftIndex = targetRow * BATTLEFIELD_COLS + (targetCol - 1);
+			if (leftIndex >= 0 && leftIndex < TOTAL_BATTLEFIELD_SLOTS && !battlefield_[leftIndex].isAlive) {
+				newIndex = leftIndex;
+			}
+		}
+		// 如果左边没有空位，检查右边
+		if (newIndex == -1 && targetCol < BATTLEFIELD_COLS - 1) {
+			int rightIndex = targetRow * BATTLEFIELD_COLS + (targetCol + 1);
+			if (rightIndex >= 0 && rightIndex < TOTAL_BATTLEFIELD_SLOTS && !battlefield_[rightIndex].isAlive) {
+				newIndex = rightIndex;
+			}
+		}
+		
+		// 如果找到空位，执行断尾求生
+		if (newIndex != -1) {
+			// 移动本体到新位置
+			SDL_Rect targetRect = battlefield_[newIndex].rect;
+			battlefield_[newIndex] = battlefield_[targetIndex];
+			battlefield_[newIndex].rect = targetRect;
+			
+			// 删除断尾求生印记
+			auto& movedCard = battlefield_[newIndex].card;
+			auto it = std::find(movedCard.marks.begin(), movedCard.marks.end(), std::string(u8"断尾求生"));
+			if (it != movedCard.marks.end()) {
+				movedCard.marks.erase(it);
+			}
+			
+			// 在原位置生成断尾
+			Card tailCard = CardDB::instance().make("tail_segment");
+			if (!tailCard.id.empty()) {
+				battlefield_[targetIndex].card = tailCard;
+				battlefield_[targetIndex].isAlive = true;
+				battlefield_[targetIndex].health = tailCard.health;
+				battlefield_[targetIndex].isPlayer = battlefield_[newIndex].isPlayer;
+				battlefield_[targetIndex].placedTurn = currentTurn_;
+				battlefield_[targetIndex].oneTurnGrowthApplied = false;
+			}
+			
+			statusMessage_ = "断尾求生！本体逃跑，尾巴承伤！";
+		}
+		}
+	}
+
+	// 断尾后再获取最新的 target 引用
+	const auto& target = battlefield_[targetIndex];
 
 	// 检查目标是否有效
 	if (!target.isAlive) {
@@ -2543,7 +2651,8 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		}
 		return;
 	}
-	if (attacker.isPlayer == target.isPlayer) return; // 不能攻击友军
+
+    if (attacker.isPlayer == target.isPlayer) return; // 不能攻击友军
 
 	// 水袭印记检查：如果目标潜水，攻击者无法攻击到，直接攻击本体
 	if (target.isDiving) {
@@ -2604,6 +2713,18 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 
 		// 不死印记：回手逻辑改在摧毁动画结束时统一处理
 	}
+    else {
+        // 目标存活：若目标带有反伤，以一次1点的攻击处理，允许连锁（有限深度）
+        if (hasMark(battlefield_[targetIndex].card, std::string(u8"反伤"))) {
+            if (attackerIndex >= 0 && attackerIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[attackerIndex].isAlive) {
+                if (thornsChainDepth_ < thornsChainMax_) {
+                    thornsChainDepth_++;
+                    attackTarget(targetIndex, attackerIndex, 1);
+                    thornsChainDepth_--;
+                }
+            }
+        }
+    }
 
 	// 处理穿透伤害（仅当允许且有溢出）
 	if (remainingDamage > 0 && allowPenetration) {
@@ -3852,3 +3973,4 @@ void BattleState::applyWaterAttackSurfacing() {
 		}
 	}
 }
+

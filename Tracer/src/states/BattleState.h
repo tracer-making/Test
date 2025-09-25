@@ -111,9 +111,15 @@ private:
 	std::array<bool, TOTAL_BATTLEFIELD_SLOTS> guardianMovingFrom_{}; // 动画期间隐藏源卡
 	void scheduleGuardianMove(int fromIndex, int toIndex);
 	void finalizeGuardianMoves();
+	
 
 	// 不死印记：待回手的卡（动画结束后统一加入手牌）
 	std::vector<Card> pendingUndyingToHand_;
+	
+	// 反伤连锁深度限制（避免无限递归）
+	int thornsChainDepth_ = 0;
+	int thornsChainMax_ = 16;
+	
 
 	// 特殊攻击执行函数
 	void executeSpecialAttack(int attackerIndex, int targetCol, bool isPlayerAttacking);
