@@ -112,7 +112,7 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"weijia_tong", u8"猬甲童", 1, u8"其他", 1, 2, "face_weijia", {u8"反伤"}}; registerCard(c);
 	c = Card{"hegong_tuozi", u8"河工柁子", 1, u8"其他", 1, 1, "face_hegong", {u8"水袭"}}; registerCard(c);
 	c = Card{"huangyou_chouwei", u8"黄鼬臭尉", 1, u8"其他", 0, 3, "face_huangyou", {u8"臭臭"}}; registerCard(c);
-	c = Card{"xuewei_yousheng", u8"雪尾鼬生", 1, u8"其他", 1, 2, "face_xuewei", {}}; registerCard(c);
+	c = Card{"xuewei_yousheng", u8"雪尾鼬生", 1, u8"其他", 1, 2, "face_xuewei", {u8"令人生厌"}}; registerCard(c);
 	c = Card{"cangdun_shuoshu", u8"仓囤硕鼠", 2, u8"其他", 2, 2, "face_cangdun", {u8"丰产之巢"}}; registerCard(c);
 	c = Card{"dulou_shuwang", u8"髑髅鼠王", 2, u8"其他", 2, 1, "face_dulou", {u8"骨王"}}; registerCard(c);
 	c = Card{"jiaoke", u8"鲛客", 3, u8"其他", 4, 2, "face_jiaoke", {u8"水袭"}}; registerCard(c);

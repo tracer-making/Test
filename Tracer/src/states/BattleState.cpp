@@ -110,19 +110,21 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		}
 		else if (e.key.keysym.sym == SDLK_s && godMode_) {
-			// S键在悬停位置生成玄乌
+			// S键在悬停位置生成雪尾鼬生
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						// 生成玄乌卡牌
-						Card xuanwu = CardDB::instance().make("xuanwu");
-						if (!xuanwu.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = xuanwu;
+						// 生成雪尾鼬生卡牌
+						Card xuewei = CardDB::instance().make("xuewei_yousheng");
+						if (!xuewei.id.empty()) {
+							battlefield_[hoveredBattlefieldIndex_].card = xuewei;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = xuanwu.health;
+							battlefield_[hoveredBattlefieldIndex_].health = xuewei.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
-							statusMessage_ = "在敌方区域生成玄乌";
+							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
+							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
+							statusMessage_ = "在敌方区域生成雪尾鼬生(S)";
 						}
 					}
 					else {
@@ -733,13 +735,16 @@ void BattleState::update(App& app, float dt) {
 				}
 			}
 			else {
-				// 普通攻击：执行普通攻击逻辑
+				// 普通攻击：执行普通攻击逻辑（以临时攻击力判断是否可打）
 				if (attackAnimTime_ >= attackAnimDuration_ / 2.0f && !hasAttacked_) {
 					hasAttacked_ = true; // 标记已攻击，防止重复执行
 
 					// 执行普通攻击
 					int col = currentCardIndex % BATTLEFIELD_COLS;
-					executeNormalAttack(currentCardIndex, col, isPlayerAttacking_, attacker.card.attack);
+					int tempAtk = getDisplayAttackForIndex(currentCardIndex);
+					if (tempAtk > 0) {
+						executeNormalAttack(currentCardIndex, col, isPlayerAttacking_, tempAtk);
+					}
 				}
 			}
 
@@ -1058,6 +1063,11 @@ void BattleState::initializeBattle() {
 	selectedHandCard_ = -1;
 	statusMessage_ = "战斗开始！";
 
+	// 初始化护主翻面状态数组（默认不翻面）
+	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+		waterAttackFlipped_[i] = false;
+	}
+
 	// 清空战场
 	for (auto& card : battlefield_) {
 		card.isAlive = false;
@@ -1074,24 +1084,10 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-	playerDeck_.push_back("canglang_youhun");
-	// 改为：收集所有带有"水袭"印记的卡牌（不重复）
-	{
-		auto ids = CardDB::instance().allIds();
-		for (const auto& id : ids) {
-			Card card = CardDB::instance().make(id);
-			bool hasWaterAttack = false;
-			for (const auto& mk : card.marks) {
-				if (mk == u8"水袭") { 
-					hasWaterAttack = true; 
-					break; 
-				}
-			}
-			if (hasWaterAttack) {
-				playerDeck_.push_back(id);
-			}
-		}
-	}
+	// 初始牌堆：翁间臭丞、黄鼬臭尉、雪尾鼬生
+	playerDeck_.push_back("wengjian_choucheng");
+	playerDeck_.push_back("huangyou_chouwei");
+	playerDeck_.push_back("xuewei_yousheng");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -1357,6 +1353,9 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 	showSacrificeInk_ = false;
 
 	statusMessage_ = "打出：" + card.name;
+
+	// 我方打出卡牌后：触发敌方护主补位到该对位（若满足条件）
+	applyGuardianForPlayerPlay(battlefieldIndex);
 }
 
 void BattleState::endTurn() {
@@ -1366,9 +1365,12 @@ void BattleState::endTurn() {
 	attackingCards_.clear();
 	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
 		int playerIndex = 2 * BATTLEFIELD_COLS + col; // 第三行
-		if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer &&
-			battlefield_[playerIndex].card.attack > 0) {
+		if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer) {
+			// 使用临时攻击力判断资格（受对位“臭臭/令人生厌”影响）
+			int displayAtk = getDisplayAttackForIndex(playerIndex);
+			if (displayAtk > 0) {
 			attackingCards_.push_back(playerIndex);
+			}
 		}
 	}
 
@@ -1405,13 +1407,18 @@ void BattleState::enemyTurn() {
 	// 敌方前进完成后：敌人攻击前成长（含动画）。若有成长，先return，动画结束后再进入攻击。
 	if (scheduleEnemyPreAttackGrowth()) return;
 
+	// 敌人前进与成长完成后：应用我方护主补位到对位（若满足条件）
+	applyGuardianForEnemyAttack();
+
 	// 收集所有可以攻击的敌方卡牌（从左到右）
 	attackingCards_.clear();
 	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
 		int enemyIndex = 1 * BATTLEFIELD_COLS + col;  // 第二行（敌方攻击行）
-		if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer &&
-			battlefield_[enemyIndex].card.attack > 0) {
+		if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer) {
+			int displayAtk = getDisplayAttackForIndex(enemyIndex);
+			if (displayAtk > 0) {
 			attackingCards_.push_back(enemyIndex);
+			}
 		}
 	}
 
@@ -1436,6 +1443,70 @@ void BattleState::enemyTurn() {
 		}
 		else {
 			statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
+		}
+	}
+}
+
+// 护主：敌方攻击前（敌人前进与成长完成后），我方护主补位到对位
+void BattleState::applyGuardianForEnemyAttack() {
+	// 敌方攻击行：第2行（row=1），我方防守行：第3行（row=2）
+	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+		int enemyIndex = 1 * BATTLEFIELD_COLS + col;   // 敌方攻击行位置
+		int playerIndex = 2 * BATTLEFIELD_COLS + col;  // 我方防守行对位
+
+		// 条件：敌方对位有敌人卡，且我方对位为空
+		if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer && !battlefield_[playerIndex].isAlive) {
+			// 在我方防守行中寻找任意带“护主”的卡
+			int candidateIndex = -1;
+			for (int searchCol = 0; searchCol < BATTLEFIELD_COLS; ++searchCol) {
+				int idx = 2 * BATTLEFIELD_COLS + searchCol;
+				if (battlefield_[idx].isAlive && battlefield_[idx].isPlayer && hasMark(battlefield_[idx].card, std::string(u8"护主"))) {
+					candidateIndex = idx;
+					break;
+				}
+			}
+
+			if (candidateIndex != -1) {
+				// 瞬时移位到对位（与推动/冲撞的落位一致，不产生额外动画）
+				SDL_Rect targetRect = battlefield_[playerIndex].rect;
+				battlefield_[playerIndex] = battlefield_[candidateIndex];
+				battlefield_[playerIndex].rect = targetRect;
+				battlefield_[candidateIndex].isAlive = false;
+				battlefield_[candidateIndex].health = 0;
+				battlefield_[candidateIndex].isMovedToDeath = true; // 复用标志，避免魂骨
+				statusMessage_ = "护主生效：我方防守到对位";
+			}
+		}
+	}
+}
+
+// 护主：我方打出卡牌后，敌方护主补位到该对位
+void BattleState::applyGuardianForPlayerPlay(int justPlacedIndex) {
+	// justPlacedIndex 一定在我方放置行（row=2），其对位在敌方防守行 row=1
+	int col = justPlacedIndex % BATTLEFIELD_COLS;
+	int enemyIndex = 1 * BATTLEFIELD_COLS + col;
+
+	// 条件：我方对位存在玩家卡，且敌方对位为空
+	if (battlefield_[justPlacedIndex].isAlive && battlefield_[justPlacedIndex].isPlayer && !battlefield_[enemyIndex].isAlive) {
+		// 在敌方防守行中寻找任意带“护主”的卡
+		int candidateIndex = -1;
+		for (int searchCol = 0; searchCol < BATTLEFIELD_COLS; ++searchCol) {
+			int idx = 1 * BATTLEFIELD_COLS + searchCol;
+			if (battlefield_[idx].isAlive && !battlefield_[idx].isPlayer && hasMark(battlefield_[idx].card, std::string(u8"护主"))) {
+				candidateIndex = idx;
+				break;
+			}
+		}
+
+		if (candidateIndex != -1) {
+			// 瞬时移位到对位
+			SDL_Rect targetRect = battlefield_[enemyIndex].rect;
+			battlefield_[enemyIndex] = battlefield_[candidateIndex];
+			battlefield_[enemyIndex].rect = targetRect;
+			battlefield_[candidateIndex].isAlive = false;
+			battlefield_[candidateIndex].health = 0;
+			battlefield_[candidateIndex].isMovedToDeath = true;
+			statusMessage_ = "护主生效：敌方防守到对位";
 		}
 	}
 }
@@ -1657,6 +1728,7 @@ void BattleState::renderBattlefield(App& app) {
 				// 正常渲染卡牌
 				Card tempCard = bfCard.card;
 				tempCard.health = bfCard.health;
+				tempCard.attack = getDisplayAttackForIndex(i);
 				CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
 			}
 
@@ -1716,6 +1788,7 @@ void BattleState::renderBattlefield(App& app) {
 				// 使用CardRenderer渲染卡牌，使用当前血量
 				Card tempCard = bfCard.card;
 				tempCard.health = bfCard.health; // 使用当前血量
+				tempCard.attack = getDisplayAttackForIndex(currentCardIndex);
 				CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
 
 				// 添加多层闪烁边框效果
@@ -1799,6 +1872,7 @@ void BattleState::renderBattlefield(App& app) {
 			// 使用CardRenderer渲染卡牌
 			Card tempCard = attacker.card;
 			tempCard.health = attacker.health;
+			tempCard.attack = getDisplayAttackForIndex(attackerIndex);
 			CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
 
 			// 根据攻击类型显示不同的边框颜色
@@ -2152,7 +2226,7 @@ BattleState::AttackType BattleState::getCardAttackType(const Card& card) {
 }
 
 // 检查卡牌是否有特定印记
-bool BattleState::hasMark(const Card& card, const std::string& mark) {
+bool BattleState::hasMark(const Card& card, const std::string& mark) const {
 	for (const auto& cardMark : card.marks) {
 		if (cardMark == mark) {
 			return true;
@@ -2161,14 +2235,41 @@ bool BattleState::hasMark(const Card& card, const std::string& mark) {
 	return false;
 }
 
+// 计算用于展示的攻击力（受对位“臭臭/令人生厌”临时影响）
+int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
+	if (battlefieldIndex < 0 || battlefieldIndex >= TOTAL_BATTLEFIELD_SLOTS) return 0;
+	const auto& self = battlefield_[battlefieldIndex];
+	if (!self.isAlive) return 0;
+	int display = self.card.attack;
+	// 查找对位目标
+	int row = battlefieldIndex / BATTLEFIELD_COLS;
+	int col = battlefieldIndex % BATTLEFIELD_COLS;
+	int opposeIndex = -1;
+	if (row == 2) opposeIndex = 1 * BATTLEFIELD_COLS + col; // 我方对位敌方
+	else if (row == 1) opposeIndex = 2 * BATTLEFIELD_COLS + col; // 敌方对位我方
+	else if (row == 0) opposeIndex = 1 * BATTLEFIELD_COLS + col; // 顶行对位第二行（通常为空）
+	if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS) {
+		const auto& opp = battlefield_[opposeIndex];
+		if (opp.isAlive) {
+			if (hasMark(opp.card, std::string(u8"臭臭"))) display -= 1;
+			if (hasMark(opp.card, std::string(u8"令人生厌"))) display += 1;
+		}
+	}
+	if (display < 0) display = 0;
+	return display;
+}
+
 // 执行特殊攻击
 void BattleState::executeSpecialAttack(int attackerIndex, int targetCol, bool isPlayerAttacking) {
 	const auto& attacker = battlefield_[attackerIndex];
 	BattleState::AttackType attackType = getCardAttackType(attacker.card);
 
-	// 如果是普通攻击，直接执行
+	// 如果是普通攻击，直接执行（以临时攻击力为准）
 	if (attackType == BattleState::AttackType::Normal) {
-		executeNormalAttack(attackerIndex, targetCol, isPlayerAttacking, attacker.card.attack);
+		int tempAtk = getDisplayAttackForIndex(attackerIndex);
+		if (tempAtk > 0) {
+			executeNormalAttack(attackerIndex, targetCol, isPlayerAttacking, tempAtk);
+		}
 		return;
 	}
 

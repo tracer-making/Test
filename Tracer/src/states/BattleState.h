@@ -83,7 +83,10 @@ private:
 	AttackType getCardAttackType(const Card& card);
 
 	// 检查卡牌是否有特定印记
-	bool hasMark(const Card& card, const std::string& mark);
+	bool hasMark(const Card& card, const std::string& mark) const;
+
+	// 计算用于展示的攻击力（受对位“臭臭/令人生厌”临时影响）
+	int getDisplayAttackForIndex(int battlefieldIndex) const;
 
 	// 水袭印记相关方法
 	void updateWaterAttackMarks();
@@ -92,6 +95,22 @@ private:
 	
 	// 水袭翻面状态
 	std::array<bool, TOTAL_BATTLEFIELD_SLOTS> waterAttackFlipped_; // 每个卡牌的翻面状态
+
+	// 护主印记：补位逻辑
+	void applyGuardianForEnemyAttack();   // 敌方攻击前（敌人前进与成长之后）我方护主补位
+	void applyGuardianForPlayerPlay(int justPlacedIndex); // 我方打牌后，敌方护主补位到其对位
+
+	// 护主补位动画系统
+	bool isGuardianAnimating_ = false;
+	float guardianAnimTime_ = 0.0f;
+	float guardianAnimDuration_ = 0.35f;
+	std::vector<int> guardianFromIndices_;
+	std::vector<int> guardianToIndices_;
+	std::vector<Card> guardianCardsSnapshot_;
+	std::vector<int> guardianHealthSnapshot_;
+	std::array<bool, TOTAL_BATTLEFIELD_SLOTS> guardianMovingFrom_{}; // 动画期间隐藏源卡
+	void scheduleGuardianMove(int fromIndex, int toIndex);
+	void finalizeGuardianMoves();
 
 	// 特殊攻击执行函数
 	void executeSpecialAttack(int attackerIndex, int targetCol, bool isPlayerAttacking);
