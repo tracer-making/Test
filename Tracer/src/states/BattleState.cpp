@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <sstream>
+#include <string>
 
 BattleState::BattleState() = default;
 
@@ -21,6 +22,23 @@ BattleState::~BattleState() {
 	if (infoFont_) TTF_CloseFont(infoFont_);
 	if (enemyFont_) TTF_CloseFont(enemyFont_);
 	if (backButton_) delete backButton_;
+}
+
+void BattleState::grantGravediggerBones(bool countEnemySide) {
+    int count = 0;
+    for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+        if (!battlefield_[i].isAlive) continue;
+        bool isEnemy = !battlefield_[i].isPlayer;
+        if (countEnemySide != isEnemy) continue; // 仅统计指定一侧
+        if (hasMark(battlefield_[i].card, std::string(u8"掘墓人"))) {
+            count += 1;
+        }
+    }
+    if (count > 0) {
+        boneCount_ += count;
+        statusMessage_ = (countEnemySide ? "掘墓人(敌方)：回合结束+" : "掘墓人(我方)：回合结束+")
+            + std::to_string(count) + " 魂骨（总计 " + std::to_string(boneCount_) + ")";
+    }
 }
 
 void BattleState::onEnter(App& app) {
@@ -69,32 +87,50 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 
 	// 处理键盘事件
 	if (e.type == SDL_KEYDOWN) {
-		if (e.key.keysym.sym == SDLK_t) {
+        if (e.key.keysym.sym == SDLK_t) {
 			// T键切换上帝模式
 			godMode_ = !godMode_;
 			if (godMode_) {
-				statusMessage_ = "上帝模式开启：A=桑鸠，S=雪尾鼬生，D=巴蛇，F=青羽翠使";
+                statusMessage_ = "上帝模式开启：A=狼戎酋首，S=雪尾鼬生，D=巴蛇，F=青羽翠使，H=锁血，J=+1魂骨";
 			}
 			else {
 				statusMessage_ = "上帝模式已关闭";
 			}
 		}
-		else if (e.key.keysym.sym == SDLK_a && godMode_) {
-			// A键在悬停位置生成桑鸠
+        else if (e.key.keysym.sym == SDLK_h && godMode_) {
+            // H键：锁定玩家本体血量与墨尺计数
+            lockPlayerHealth_ = !lockPlayerHealth_;
+            if (lockPlayerHealth_) {
+                lockedPlayerHealthValue_ = playerHealth_;
+                lockedMeterNetValue_ = meterNet_;
+                lockedMeterDisplayPos_ = meterDisplayPos_;
+                lockedMeterTarget_ = meterTargetPos_;
+                statusMessage_ = "上帝模式：玩家血量与墨尺已锁定";
+            } else {
+                statusMessage_ = "上帝模式：玩家血量与墨尺解锁";
+            }
+        }
+        else if (e.key.keysym.sym == SDLK_j && godMode_) {
+            // J键：魂骨+1
+            boneCount_ += 1;
+            statusMessage_ = "上帝模式：魂骨+1 (" + std::to_string(boneCount_) + ")";
+        }
+        else if (e.key.keysym.sym == SDLK_a && godMode_) {
+            // A键在悬停位置生成狼戎酋首
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						// 生成桑鸠卡牌
-						Card sangjiu = CardDB::instance().make("sangjiu");
-						if (!sangjiu.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = sangjiu;
+                        // 生成狼戎酋首卡牌
+                        Card chief = CardDB::instance().make("langrong_qiushou");
+                        if (!chief.id.empty()) {
+                            battlefield_[hoveredBattlefieldIndex_].card = chief;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = sangjiu.health;
+                            battlefield_[hoveredBattlefieldIndex_].health = chief.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
 							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
 							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
-							statusMessage_ = "在敌方区域生成桑鸠(A)";
+                            statusMessage_ = "在敌方区域生成狼戎酋首(A)";
 						}
 					}
 					else {
@@ -139,20 +175,20 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				statusMessage_ = "请悬停在敌方区域再按S键";
 			}
 		}
-		else if (e.key.keysym.sym == SDLK_d && godMode_) {
-			// D键在悬停位置生成巴蛇
+        else if (e.key.keysym.sym == SDLK_d && godMode_) {
+            // D键在悬停位置生成雪原狼胚
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						// 生成巴蛇卡牌
-						Card bashe = CardDB::instance().make("bashe");
-						if (!bashe.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = bashe;
+                        // 生成雪原狼胚卡牌
+                        Card cub = CardDB::instance().make("xueyuan_langpei");
+                        if (!cub.id.empty()) {
+                            battlefield_[hoveredBattlefieldIndex_].card = cub;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = bashe.health;
+                            battlefield_[hoveredBattlefieldIndex_].health = cub.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
-							statusMessage_ = "在敌方区域生成巴蛇(D)";
+                            statusMessage_ = "在敌方区域生成雪原狼胚(D)";
 						}
 					}
 					else {
@@ -866,8 +902,12 @@ void BattleState::update(App& app, float dt) {
 						statusMessage_ = "敌方卡牌开始移动！";
 					}
 					else {
-						// 如果没有可以移动的卡牌，直接回到玩家回合
-						currentPhase_ = GamePhase::PlayerTurn;
+                    // 如果没有可以移动的卡牌，直接回到玩家回合
+                    // 掘墓人：敌方回合结束时统计敌方单位
+                    grantGravediggerBones(true);
+                    currentPhase_ = GamePhase::PlayerTurn;
+                    // 切回玩家回合：先结算我方回合开始成长（若有成长则先返回，动画完毕后继续）
+                    if (scheduleTurnStartGrowth()) return;
 						if (mustDrawThisTurn_) {
 							statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";
 						}
@@ -877,8 +917,12 @@ void BattleState::update(App& app, float dt) {
 					}
 				}
 				else {
-					// 没有移动卡牌，直接回到玩家回合
-					currentPhase_ = GamePhase::PlayerTurn;
+                // 没有移动卡牌，直接回到玩家回合
+                // 掘墓人：敌方回合结束时统计敌方单位
+                grantGravediggerBones(true);
+                currentPhase_ = GamePhase::PlayerTurn;
+                // 切回玩家回合：先结算我方回合开始成长
+                if (scheduleTurnStartGrowth()) return;
 					if (mustDrawThisTurn_) {
 						statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";
 					}
@@ -995,11 +1039,15 @@ void BattleState::update(App& app, float dt) {
 			bool hasImmortal = hasMark(battlefield_[i].card, u8"生生不息");
 			bool isMovedToDeath = battlefield_[i].isMovedToDeath; // 检查是否因移动死亡
 
-			// 如果不是生生不息卡牌在献祭时死亡，且不是因移动死亡，则获得魂骨
-			if (!(wasSacrificed && hasImmortal) && !isMovedToDeath) {
-				boneCount_++;
-				statusMessage_ = "获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
-			}
+            // 如果不是生生不息卡牌在献祭时死亡，且不是因移动死亡，则获得魂骨
+            if (!(wasSacrificed && hasImmortal) && !isMovedToDeath) {
+                boneCount_++;
+                // 骨王：死亡时额外获得3根骨头（总计4根）
+                if (hasMark(battlefield_[i].card, std::string(u8"骨王"))) {
+                    boneCount_ += 3;
+                }
+                statusMessage_ = "获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
+            }
 		}
 
 		// 更新状态记录
@@ -1044,18 +1092,26 @@ void BattleState::update(App& app, float dt) {
 	// 检查游戏结束
 	checkGameOver();
 
-	// 墨尺指针动画插值
-	if (isMeterAnimating_) {
-		meterAnimTime_ += dt;
-		float t = std::min(1.0f, meterAnimTime_ / meterAnimDuration_);
-		// easeInOut 曲线
-		float tEase = (1.0f - std::cos(3.1415926f * t)) * 0.5f;
-		meterDisplayPos_ = meterStartPos_ + (meterTargetPos_ - meterStartPos_) * tEase;
-		if (t >= 1.0f) {
-			isMeterAnimating_ = false;
-			meterDisplayPos_ = static_cast<float>(meterTargetPos_);
-		}
-	}
+    // 墨尺指针动画插值（若锁定则保持不变）
+    if (isMeterAnimating_) {
+        if (!lockPlayerHealth_) {
+            meterAnimTime_ += dt;
+            float t = std::min(1.0f, meterAnimTime_ / meterAnimDuration_);
+            // easeInOut 曲线
+            float tEase = (1.0f - std::cos(3.1415926f * t)) * 0.5f;
+            meterDisplayPos_ = meterStartPos_ + (meterTargetPos_ - meterStartPos_) * tEase;
+            if (t >= 1.0f) {
+                isMeterAnimating_ = false;
+                meterDisplayPos_ = static_cast<float>(meterTargetPos_);
+            }
+        } else {
+            // 锁定：强制还原
+            meterNet_ = lockedMeterNetValue_;
+            meterDisplayPos_ = lockedMeterDisplayPos_;
+            meterTargetPos_ = lockedMeterTarget_;
+            isMeterAnimating_ = false;
+        }
+    }
 }
 
 void BattleState::render(App& app) {
@@ -1107,10 +1163,10 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-	// 初始牌堆：山龙子
-	playerDeck_.push_back("shanlongzi");
-	playerDeck_.push_back("shanlongzi");
-	playerDeck_.push_back("shanlongzi");
+    // 初始牌堆：山龙子 + 狼戎酋首 + 雪原狼胚
+    playerDeck_.push_back("shanlongzi");
+    playerDeck_.push_back("langrong_qiushou");
+    playerDeck_.push_back("xueyuan_langpei");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -1428,13 +1484,15 @@ void BattleState::endTurn() {
 		totalDamageDealt_ = 0;
 		statusMessage_ = "我方开始攻击！";
 	}
-	else {
+    else {
 		// 没有可攻击的卡牌，直接进入敌方回合
+        // 掘墓人：我方回合结束时统计我方单位
+        grantGravediggerBones(false);
 		currentPhase_ = GamePhase::EnemyTurn;
 		currentTurn_++; // 增加回合数
 		hasDrawnThisTurn_ = false; // 重置抽牌状态
 		mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-
+		std::cout << "1" << std::endl;
 		// 延迟执行敌人回合
 		enemyTurn();
 	}
@@ -2317,6 +2375,28 @@ int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
 			if (hasMark(opp.card, std::string(u8"令人生厌"))) display += 1;
 		}
 	}
+
+	// 领袖力量：同一行左右相邻的友方每有一张带该印记的卡牌，+1攻击
+	int leftCol = col - 1;
+	int rightCol = col + 1;
+	if (leftCol >= 0) {
+		int leftIndex = row * BATTLEFIELD_COLS + leftCol;
+		if (leftIndex >= 0 && leftIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			const auto& leftCard = battlefield_[leftIndex];
+			if (leftCard.isAlive && leftCard.isPlayer == self.isPlayer && hasMark(leftCard.card, std::string(u8"领袖力量"))) {
+				display += 1;
+			}
+		}
+	}
+	if (rightCol < BATTLEFIELD_COLS) {
+		int rightIndex = row * BATTLEFIELD_COLS + rightCol;
+		if (rightIndex >= 0 && rightIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			const auto& rightCard = battlefield_[rightIndex];
+			if (rightCard.isAlive && rightCard.isPlayer == self.isPlayer && hasMark(rightCard.card, std::string(u8"领袖力量"))) {
+				display += 1;
+			}
+		}
+	}
 	if (display < 0) display = 0;
 	return display;
 }
@@ -2646,8 +2726,10 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 			if (enemyHealth_ < 0) enemyHealth_ = 0;
 		}
 		else {
-			playerHealth_ -= damage;
-			if (playerHealth_ < 0) playerHealth_ = 0;
+            if (!lockPlayerHealth_) {
+                playerHealth_ -= damage;
+                if (playerHealth_ < 0) playerHealth_ = 0;
+            }
 		}
 		return;
 	}
@@ -2662,8 +2744,10 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 			if (enemyHealth_ < 0) enemyHealth_ = 0;
 		}
 		else {
-			playerHealth_ -= damage;
-			if (playerHealth_ < 0) playerHealth_ = 0;
+            if (!lockPlayerHealth_) {
+                playerHealth_ -= damage;
+                if (playerHealth_ < 0) playerHealth_ = 0;
+            }
 		}
 		return;
 	}
@@ -2678,8 +2762,10 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 				if (enemyHealth_ < 0) enemyHealth_ = 0;
 			}
 			else {
-				playerHealth_ -= damage;
-				if (playerHealth_ < 0) playerHealth_ = 0;
+                if (!lockPlayerHealth_) {
+                    playerHealth_ -= damage;
+                    if (playerHealth_ < 0) playerHealth_ = 0;
+                }
 			}
 			return;
 		}
@@ -3775,7 +3861,9 @@ void BattleState::onMovementComplete() {
 		if (isGrowthAnimating_) {
 			return;
 		}
-		if (currentPhase_ == GamePhase::EnemyTurn) {
+        if (currentPhase_ == GamePhase::EnemyTurn) {
+            // 敌方回合结束时：结算掘墓人（统计敌方单位）
+            grantGravediggerBones(true);
 			currentPhase_ = GamePhase::PlayerTurn;
 			if (mustDrawThisTurn_) {
 				statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";

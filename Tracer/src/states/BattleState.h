@@ -35,6 +35,13 @@ private:
 	int playerHealth_ = 20;
 	int enemyHealth_ = 100;
 
+	// 上帝模式：锁血与墨尺
+	bool lockPlayerHealth_ = false;
+	int lockedPlayerHealthValue_ = 0;
+	int lockedMeterNetValue_ = 0;
+	float lockedMeterDisplayPos_ = 0.0f;
+	int lockedMeterTarget_ = 0;
+
 	// 战场区域 (3x4网格)
 	static constexpr int BATTLEFIELD_ROWS = 3;
 	static constexpr int BATTLEFIELD_COLS = 4;
@@ -324,6 +331,10 @@ private:
 	// 移动卡牌队列处理方法
 	void processNextMovement();
 	void onMovementComplete();
+
+    // 掘墓人：回合结束时结算骨头增益（仅统计一方）
+    // countEnemySide=false 统计我方；true 统计敌方
+    void grantGravediggerBones(bool countEnemySide);
 
 	// 敌人前进（第一行向第二行）- 动画版
 	struct EnemyAdvanceStep {
