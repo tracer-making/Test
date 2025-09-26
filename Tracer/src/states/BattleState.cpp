@@ -485,17 +485,41 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 								showSacrificeInk_ = true;  // 开始显示献墨量
 
 								// 收集待摧毁的卡牌，检查生生不息印记
-								cardsToDestroy_.clear();
-								for (int j = 0; j < TOTAL_BATTLEFIELD_SLOTS; ++j) {
+                                cardsToDestroy_.clear();
+                                for (int j = 0; j < TOTAL_BATTLEFIELD_SLOTS; ++j) {
 									if (battlefield_[j].isSacrificed) {
 										// 检查是否有生生不息印记
 										bool hasImmortal = hasMark(battlefield_[j].card, u8"生生不息");
+                                        bool hasMorph = hasMark(battlefield_[j].card, u8"形态转换");
 
-										if (hasImmortal) {
-											// 生生不息：不死亡，但依然产生魂骨
-											boneCount_++;
-											statusMessage_ = "生生不息！获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
-										}
+                                        if (hasImmortal) {
+                                            // 生生不息：不死亡，但依然产生魂骨
+                                            boneCount_++;
+                                            statusMessage_ = "生生不息！获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
+                                            // 若同时带有“形态转换”，在此分支中进行形态变换
+                                            if (hasMorph) {
+                                                std::string currentId = battlefield_[j].card.id;
+                                                std::string nextId;
+                                                if (currentId == "dishisanzi") nextId = "dishisanzi_juexing";
+                                                else if (currentId == "dishisanzi_juexing") nextId = "dishisanzi";
+                                                if (!nextId.empty()) {
+                                                    SDL_Rect keepRect = battlefield_[j].rect;
+                                                    bool keepIsPlayer = battlefield_[j].isPlayer;
+                                                    Card next = CardDB::instance().make(nextId);
+                                                    if (!next.id.empty()) {
+                                                        battlefield_[j].card = next;
+                                                        battlefield_[j].health = next.health;
+                                                        battlefield_[j].rect = keepRect;
+                                                        battlefield_[j].isPlayer = keepIsPlayer;
+                                                        battlefield_[j].oneTurnGrowthApplied = false;
+                                                        battlefield_[j].placedTurn = currentTurn_;
+                                                        statusMessage_ += " | 形态转换：" + next.name;
+                                                    }
+                                                }
+                                            }
+                                            // 取消献祭标记，单位保留
+                                            battlefield_[j].isSacrificed = false;
+                                        }
 										else {
 											// 正常献祭：标记为死亡
 											battlefield_[j].isAlive = false;
@@ -1016,6 +1040,12 @@ void BattleState::update(App& app, float dt) {
 
 		// 如果卡牌从存活变为死亡，获得魂骨
 		if (wasAlive && !isAlive) {
+			// 忽略因“移动导致的死亡”（如位移清空等），不触发不死或食尸鬼
+			if (battlefield_[i].isMovedToDeath) {
+				// 清除标记并跳过
+				battlefield_[i].isMovedToDeath = false;
+				continue;
+			}
 			// 不死印记：我方单位死亡时，立刻回到手牌（即时渲染）
 			if (battlefield_[i].isPlayer) {
 				const Card& deadCard = battlefield_[i].card;
@@ -1031,6 +1061,34 @@ void BattleState::update(App& app, float dt) {
 						// 立刻更新手牌布局以立即渲染
 						layoutHandCards();
 						statusMessage_ = std::string("不死回手：") + fresh.name;
+					}
+				}
+				// 食尸鬼：若手牌中存在“食尸鬼”，在己方单位死亡时自动打出到该位置
+				else {
+					int ghoulHandIdx = -1;
+					for (size_t h = 0; h < handCards_.size(); ++h) {
+						for (const auto& mk : handCards_[h].marks) {
+							if (mk == std::string(u8"食尸鬼")) { ghoulHandIdx = static_cast<int>(h); break; }
+						}
+						if (ghoulHandIdx != -1) break;
+					}
+					if (ghoulHandIdx != -1) {
+						Card ghoul = handCards_[ghoulHandIdx];
+						handCards_.erase(handCards_.begin() + ghoulHandIdx);
+						layoutHandCards();
+						// 占位
+						battlefield_[i].card = ghoul;
+						battlefield_[i].isAlive = true;
+						battlefield_[i].health = ghoul.health;
+						battlefield_[i].isPlayer = true;
+						battlefield_[i].placedTurn = currentTurn_;
+						battlefield_[i].oneTurnGrowthApplied = false;
+						statusMessage_ = std::string("食尸鬼自动登场：") + ghoul.name;
+
+						// 若该索引在摧毁动画队列中，移除以避免渲染冲突
+						for (auto it = cardsToDestroy_.begin(); it != cardsToDestroy_.end(); ) {
+							if (*it == i) it = cardsToDestroy_.erase(it); else ++it;
+						}
 					}
 				}
 			}
@@ -1163,10 +1221,10 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-    // 初始牌堆：山龙子 + 狼戎酋首 + 雪原狼胚
-    playerDeck_.push_back("shanlongzi");
-    playerDeck_.push_back("langrong_qiushou");
-    playerDeck_.push_back("xueyuan_langpei");
+    // 初始牌堆：三张芸签蜂巢
+    playerDeck_.push_back("yunqian_fengchao");
+    playerDeck_.push_back("yunqian_fengchao");
+    playerDeck_.push_back("yunqian_fengchao");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -2797,6 +2855,16 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		isDestroyAnimating_ = true;
 		destroyAnimTime_ = 0.0f;
 
+		// 内心之蜂：即使被击杀也会生成手牌（仅我方单位）
+		if (battlefield_[targetIndex].isPlayer && hasMark(battlefield_[targetIndex].card, std::string(u8"内心之蜂"))) {
+			Card bee = CardDB::instance().make("yunchuang_fengshi");
+			if (!bee.id.empty()) {
+				handCards_.push_back(bee);
+				layoutHandCards();
+				statusMessage_ = std::string("内心之蜂：获得手牌 ") + bee.name;
+			}
+		}
+
 		// 不死印记：回手逻辑改在摧毁动画结束时统一处理
 	}
     else {
@@ -2807,6 +2875,18 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
                     thornsChainDepth_++;
                     attackTarget(targetIndex, attackerIndex, 1);
                     thornsChainDepth_--;
+                }
+            }
+        }
+        // 被击中后触发的被动（例如：内心之蜂）
+        if (targetIndex >= 0 && targetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+            // 不论存活与否，均可触发
+            if (hasMark(battlefield_[targetIndex].card, std::string(u8"内心之蜂"))) {
+                Card bee = CardDB::instance().make("yunchuang_fengshi");
+                if (!bee.id.empty()) {
+                    handCards_.push_back(bee);
+                    layoutHandCards();
+                    statusMessage_ = std::string("内心之蜂：获得手牌 ") + bee.name;
                 }
             }
         }
@@ -2837,6 +2917,8 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		}
 	}
 }
+
+//
 
 void BattleState::renderHandCards(App& app) {
 	SDL_Renderer* r = app.getRenderer();

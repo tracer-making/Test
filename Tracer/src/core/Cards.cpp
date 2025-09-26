@@ -57,7 +57,8 @@ void CardDB::loadBuiltinCards() {
 	// 鹿部
 	c = Card{"yunqu_youmi", u8"云渠幼麋", 1, u8"鹿部", 1, 1, "face_yunqu_young", {u8"冲刺能手", u8"一回合成长云渠巨麋"}}; registerCard(c);
 	c = Card{"yunqu_jumi", u8"云渠巨麋", 2, u8"鹿部", 2, 4, "face_yunqu_giant", {u8"冲刺能手", u8"成长→千峰驼鹿"}}; registerCard(c);
-	c = Card{"dishisanzi", u8"第十三子", 1, u8"鹿部", 0, 1, "face_dishisan", {u8"生生不息", u8"奇数次献祭→2-1"}}; registerCard(c);
+	c = Card{"dishisanzi", u8"第十三子", 1, u8"鹿部", 0, 1, "face_dishisan", {u8"生生不息", u8"形态转换"}}; registerCard(c);
+	c = Card{"dishisanzi_juexing", u8"第十三子", 1, u8"鹿部", 2, 1, "face_dishisan", {u8"形态转换",u8"空袭",u8"生生不息"}}; registerCard(c);
 	c = Card{"shuangti_heying", u8"霜蹄鹤影", 4, u8"鹿部", 1, 2, "face_shuangti", {u8"冲刺能手", u8"死亡之触", u8"每回合生长残简0-1"}}; registerCard(c);
 	c = Card{"xuanmu", u8"玄牡", 1, u8"鹿部", 0, 1, "face_xuanmu", {u8"优质祭品"}}; registerCard(c);
 	c = Card{"qijiao_shuangqi", u8"岐角双歧鹿", 2, u8"鹿部", 1, 3, "face_qijiao", {u8"冲刺能手", u8"双向攻击"}}; registerCard(c);
@@ -74,9 +75,9 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"yunqian_fengchao", u8"芸签蜂巢", 1, u8"介部", 0, 2, "face_yunqian", {u8"内心之蜂"}}; registerCard(c);
 	c = Card{"yunchuang_fengshi", u8"芸窗蜂使", 0, u8"介部", 1, 1, "face_yunchuang", {u8"空袭"}}; registerCard(c);
 	c = Card{"shuangdao_moke", u8"双刀墨客", 1, u8"介部", 1, 1, "face_shuangdao", {u8"双向攻击", u8"成长→刀笔吏"}}; registerCard(c);
-	c = Card{"diangao_yihou", u8"典诰蚁后", 2, u8"介部", 0, 3, "face_diangao", {u8"蚂蚁印记"}}; registerCard(c);
-	c = Card{"chaojing_gongyi", u8"抄经工蚁", 1, u8"介部", 0, 2, "face_chaojing", {u8"成长→典诰蚁后"}}; registerCard(c);
-	c = Card{"yifei_yi", u8"驿飞蚁", 1, u8"介部", 0, 1, "face_yifei", {u8"空袭", u8"成长→典诰蚁后"}}; registerCard(c);
+	c = Card{"diangao_yihou", u8"典诰蚁后", 2, u8"介部", 0, 3, "face_diangao", {u8"蚂蚁",u8"蚁后"}}; registerCard(c);
+	c = Card{"chaojing_gongyi", u8"抄经工蚁", 1, u8"介部", 0, 2, "face_chaojing", {u8"成长→典诰蚁后",u8"蚂蚁"}}; registerCard(c);
+	c = Card{"yifei_yi", u8"驿飞蚁", 1, u8"介部", 0, 1, "face_yifei", {u8"空袭", u8"成长→典诰蚁后",u8"蚂蚁"}}; registerCard(c);
 	c = Card{"duyu_buhua", u8"蠹鱼不化", 4, u8"介部", 1, 1, "face_duyu", {u8"不死印记", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"dushi_chong", u8"蠹尸虫", 5, u8"介部", 1, 2, "face_dushi", {u8"食尸鬼", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"qiushi", u8"裘虱", 4, u8"介部", 1, 1, "face_qiushi", {u8"双重攻击", u8"打出毛皮立刻上场", u8"消耗骨头"}}; registerCard(c);
