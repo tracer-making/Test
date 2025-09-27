@@ -2,6 +2,7 @@
 #include "TestState.h"
 #include "../core/App.h"
 
+
 #include "../core/Cards.h"
 #include <SDL.h>
 
@@ -268,6 +269,48 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 		int mouseX = e.button.x;
 		int mouseY = e.button.y;
 
+		// 检索状态：处理牌堆卡牌选择
+		if (isSearchingDeck_) {
+			// 计算牌堆卡牌的显示区域
+			int deckStartX = 50;
+			int deckStartY = 200;
+			int cardWidth = 80;
+			int cardHeight = 120;
+			int cardSpacing = 10;
+			int cardsPerRow = 4;
+			
+			for (size_t i = 0; i < playerDeck_.size(); ++i) {
+				int row = i / cardsPerRow;
+				int col = i % cardsPerRow;
+				int cardX = deckStartX + col * (cardWidth + cardSpacing);
+				int cardY = deckStartY + row * (cardHeight + cardSpacing);
+				
+				if (mouseX >= cardX && mouseX <= cardX + cardWidth &&
+					mouseY >= cardY && mouseY <= cardY + cardHeight) {
+					// 选中这张卡牌
+					selectedDeckCardIndex_ = static_cast<int>(i);
+					
+					// 从牌堆中移除选中的卡牌
+					std::string selectedCardId = playerDeck_[i];
+					playerDeck_.erase(playerDeck_.begin() + i);
+					playerPileCount_ = static_cast<int>(playerDeck_.size());
+					
+					// 将选中的卡牌加入手牌
+					Card selectedCard = CardDB::instance().make(selectedCardId);
+					if (!selectedCard.id.empty()) {
+						handCards_.push_back(selectedCard);
+						layoutHandCards();
+						statusMessage_ = std::string("检索：获得手牌 ") + selectedCard.name;
+					}
+					
+					// 退出检索状态
+					isSearchingDeck_ = false;
+					selectedDeckCardIndex_ = -1;
+					return;
+				}
+			}
+			return; // 检索状态下不处理其他点击
+		}
 
 		// 检查牌堆点击（回合制限制）
 		if (mouseX >= inkPileRect_.x && mouseX <= inkPileRect_.x + inkPileRect_.w &&
@@ -666,6 +709,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void BattleState::update(App& app, float dt) {
+
 	// 处理状态转换
 	if (pendingBackToTest_) {
 		pendingBackToTest_ = false;
@@ -1248,6 +1292,11 @@ void BattleState::render(App& app) {
 	renderHandCards(app);
 	renderUI(app);
 	
+	// 检索状态：渲染牌堆卡牌选择界面
+	if (isSearchingDeck_) {
+		renderDeckSelection(app);
+	}
+	
 }
 
 // 私有方法实现
@@ -1282,10 +1331,10 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-    // 初始牌堆：简册计数触 + 照骨镜须 + 铎铃缩地须 + 浣沙溪生 + 穿坟隐士
-    playerDeck_.push_back("jiance_jishu");
-    playerDeck_.push_back("zhaogu_jingxu");
-    playerDeck_.push_back("duoling_suodi");
+    // 初始牌堆：三张灵鹊 + 浣沙溪生 + 穿坟隐士
+    playerDeck_.push_back("lingque");
+    playerDeck_.push_back("lingque");
+    playerDeck_.push_back("lingque");
     playerDeck_.push_back("huansha_xisheng");
     playerDeck_.push_back("chuanfen_yinshi");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
@@ -1596,6 +1645,15 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 		layoutHandCards();
 		statusMessage_ = std::string("丰产之巢：获得手牌 ") + copyCard.name;
 	}
+
+	// 检索印记：打出时可以从牌堆中选择任意一张牌加入手牌
+	if (hasMark(card, std::string(u8"检索"))) {
+		// 启动检索状态
+		isSearchingDeck_ = true;
+		selectedDeckCardIndex_ = -1;
+		statusMessage_ = std::string("检索：请从牌堆中选择一张卡牌");
+	}
+
 
 	// 筑坝师印记：打出后将相邻两格空位变为堤坝
 	if (hasMark(card, std::string(u8"筑坝师"))) {
@@ -4428,4 +4486,51 @@ void BattleState::applyWaterAttackSurfacing() {
 		}
 	}
 }
+
+void BattleState::renderDeckSelection(App& app) {
+	SDL_Renderer* renderer = app.getRenderer();
+	
+	// 绘制半透明背景
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 128);
+	SDL_Rect overlayRect = { 0, 0, screenW_, screenH_ };
+	SDL_RenderFillRect(renderer, &overlayRect);
+	
+	// 计算牌堆卡牌的显示区域
+	int deckStartX = 50;
+	int deckStartY = 200;
+	int cardWidth = 80;
+	int cardHeight = 120;
+	int cardSpacing = 10;
+	int cardsPerRow = 4;
+	
+	// 渲染牌堆中的所有卡牌
+	for (size_t i = 0; i < playerDeck_.size(); ++i) {
+		int row = i / cardsPerRow;
+		int col = i % cardsPerRow;
+		int cardX = deckStartX + col * (cardWidth + cardSpacing);
+		int cardY = deckStartY + row * (cardHeight + cardSpacing);
+		
+		// 使用和战斗界面一样的卡牌渲染方式
+		Card card = CardDB::instance().make(playerDeck_[i]);
+		if (!card.id.empty()) {
+			SDL_Rect cardRect = { cardX, cardY, cardWidth, cardHeight };
+			// 使用CardRenderer渲染卡牌，和战斗界面保持一致
+			CardRenderer::renderCard(app, card, cardRect, cardNameFont_, cardStatFont_, false);
+		}
+	}
+	
+	// 显示提示文字
+	if (cardNameFont_) {
+		SDL_Color textColor = { 255, 255, 0, 255 };
+		SDL_Surface* textSurface = TTF_RenderUTF8_Blended(cardNameFont_, u8"请选择一张卡牌加入手牌", textColor);
+		if (textSurface) {
+			SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+			SDL_Rect textRect = { 50, 150, textSurface->w, textSurface->h };
+			SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+			SDL_DestroyTexture(textTexture);
+			SDL_FreeSurface(textSurface);
+		}
+	}
+}
+
 

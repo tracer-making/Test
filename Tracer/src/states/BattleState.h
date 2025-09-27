@@ -270,6 +270,11 @@ private:
 	std::vector<bool> previousCardStates_; // 上一帧的卡牌存活状态
 	std::vector<bool> previousEnemyCardStates_; // 上一帧的敌方卡牌存活状态
 
+	// 检索印记系统
+	bool isSearchingDeck_ = false;      // 是否正在检索牌堆
+	int selectedDeckCardIndex_ = -1;    // 选中的牌堆卡牌索引
+
+
 	// 上帝模式系统
 	bool godMode_ = false;             // 是否处于上帝模式
 	bool enemyTurnStarted_ = false;    // 敌方回合是否已开始
@@ -339,6 +344,7 @@ private:
 	void renderBattlefield(App& app);
 	void renderHandCards(App& app);
 	void renderUI(App& app);
+	void renderDeckSelection(App& app);
 
 	// 移动卡牌队列处理方法
 	void processNextMovement();

@@ -18,6 +18,7 @@ public:
 	void update(App& app, float dt) override;
 	void render(App& app) override;
 
+
 private:
 	struct CardView {
 		std::string name;
@@ -47,6 +48,7 @@ private:
 	SDL_Rect sliderTrack_{0,0,0,0};
 	SDL_Rect sliderThumb_{0,0,0,0};
 	bool sliderDragging_ = false;
+
 
 	void buildDemoDeck();
 	void layoutGrid();

@@ -5,6 +5,7 @@
 #include <cmath>
 
 DeckState::DeckState() = default;
+
 DeckState::~DeckState() {
 	if (titleTex_) SDL_DestroyTexture(titleTex_);
 	if (titleFont_) TTF_CloseFont(titleFont_);
@@ -61,6 +62,7 @@ void DeckState::handleEvent(App& app, const SDL_Event& e) {
 
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx=e.button.x, my=e.button.y;
+		
 		if (mx>=sliderTrack_.x && mx<=sliderTrack_.x+sliderTrack_.w && my>=sliderTrack_.y-6 && my<=sliderTrack_.y+sliderTrack_.h+6) {
 			sliderDragging_ = true;
 			updateSliderFromMouse(mx);
@@ -131,6 +133,7 @@ void DeckState::buildDemoDeck() {
 		cards_.push_back(cv);
 	}
 }
+
 
 void DeckState::layoutGrid() {
 	int n = (int)cards_.size();

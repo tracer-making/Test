@@ -190,6 +190,7 @@ void TestState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void TestState::update(App& app, float dt) {
+
 	// 延迟切换状态，避免在事件处理中销毁当前对象
 	if (pendingTarget_ != -1) {
 		int t = pendingTarget_;
