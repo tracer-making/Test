@@ -219,6 +219,14 @@ private:
 	int sacrificeTargetCost_ = 0;        // 目标献祭消耗
 	int currentSacrificeInk_ = 0;        // 当前献祭获得的墨量
 	std::vector<int> sacrificeCandidates_; // 可献祭的卡牌索引
+	
+	// 一口之量印记：存储被献祭的卡牌信息
+	struct SacrificedCard {
+		Card card;
+		int attack;
+		int health;
+	};
+	std::vector<SacrificedCard> sacrificedCards_; // 被献祭的卡牌信息
 
 	// 献祭动画系统
 	bool isSacrificeAnimating_ = false;  // 是否正在播放献祭动画

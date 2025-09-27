@@ -486,6 +486,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 
 								// 收集待摧毁的卡牌，检查生生不息印记
                                 cardsToDestroy_.clear();
+                                sacrificedCards_.clear(); // 清空之前被献祭的卡牌信息
                                 for (int j = 0; j < TOTAL_BATTLEFIELD_SLOTS; ++j) {
 									if (battlefield_[j].isSacrificed) {
 										// 检查是否有生生不息印记
@@ -521,7 +522,14 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
                                             battlefield_[j].isSacrificed = false;
                                         }
 										else {
-											// 正常献祭：标记为死亡
+											// 正常献祭：记录被献祭的卡牌信息（用于一口之量印记）
+											SacrificedCard sacrificedCard;
+											sacrificedCard.card = battlefield_[j].card;
+											sacrificedCard.attack = battlefield_[j].card.attack;
+											sacrificedCard.health = battlefield_[j].health;
+											sacrificedCards_.push_back(sacrificedCard);
+											
+											// 标记为死亡
 											battlefield_[j].isAlive = false;
 											cardsToDestroy_.push_back(j);
 										}
@@ -681,8 +689,23 @@ void BattleState::update(App& app, float dt) {
 				if (step.willTransform) {
 					SDL_Rect keepRect = bf.rect;
 					bool keepIsPlayer = bf.isPlayer;
+					
+					// 保存当前战场上的实际数值
+					int currentAttack = bf.card.attack;
+					int currentHealth = bf.health;
+					
+					// 计算目标卡牌与原始卡牌的差值
+					int attackDiff = step.targetCard.attack - step.addAttack; // step.addAttack 是原始卡牌的attack
+					int healthDiff = step.targetCard.health - step.addHealth; // step.addHealth 是原始卡牌的health
+					
+					// 更新卡牌属性
 					bf.card = step.targetCard;
+					
+					// 应用差值到当前数值
+					bf.card.attack = currentAttack + attackDiff;
+					bf.card.health = currentHealth + healthDiff;
 					bf.health = bf.card.health;
+					
 					bf.rect = keepRect;
 					bf.isPlayer = keepIsPlayer;
 					bf.oneTurnGrowthApplied = true;
@@ -1221,10 +1244,11 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-    // 初始牌堆：三张芸签蜂巢
-    playerDeck_.push_back("yunqian_fengchao");
-    playerDeck_.push_back("yunqian_fengchao");
-    playerDeck_.push_back("yunqian_fengchao");
+    // 初始牌堆：三张麺简虫 + 一张苍狼幼魂
+    playerDeck_.push_back("mianjian_chong");
+    playerDeck_.push_back("mianjian_chong");
+    playerDeck_.push_back("mianjian_chong");
+    playerDeck_.push_back("canglang_youhun");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -1492,6 +1516,44 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 				statusMessage_ = std::string("滋生寄生虫：对位生成 ") + egg.name;
 			}
 		}
+	}
+
+	// 蚁后印记：打出带有蚁后印记的卡牌时，手牌获得一张抄经工蚁
+	if (hasMark(card, std::string(u8"蚁后"))) {
+		Card ant = CardDB::instance().make("chaojing_gongyi");
+		if (!ant.id.empty()) {
+			handCards_.push_back(ant);
+			layoutHandCards();
+			statusMessage_ = std::string("蚁后：获得手牌 ") + ant.name;
+		}
+	}
+
+	// 一口之量印记：检查是否有被献祭的卡牌，如果有，为打出的卡牌增加攻击力和血量
+	if (!sacrificedCards_.empty()) {
+		int totalAttackBonus = 0;
+		int totalHealthBonus = 0;
+		std::string bonusMessage = "";
+		
+		for (const auto& sacrificedCard : sacrificedCards_) {
+			if (hasMark(sacrificedCard.card, std::string(u8"一口之量"))) {
+				totalAttackBonus += sacrificedCard.attack;
+				totalHealthBonus += sacrificedCard.health;
+				if (!bonusMessage.empty()) bonusMessage += " + ";
+				bonusMessage += sacrificedCard.card.name + "(" + std::to_string(sacrificedCard.attack) + "/" + std::to_string(sacrificedCard.health) + ")";
+			}
+		}
+		
+		if (totalAttackBonus > 0 || totalHealthBonus > 0) {
+			// 为打出的卡牌增加攻击力和血量
+			battlefield_[battlefieldIndex].card.attack += totalAttackBonus;
+			battlefield_[battlefieldIndex].health += totalHealthBonus;
+			battlefield_[battlefieldIndex].card.health += totalHealthBonus;
+			
+			statusMessage_ = std::string("一口之量：") + card.name + " 获得 " + bonusMessage + " 的加成！";
+		}
+		
+		// 清空被献祭的卡牌信息
+		sacrificedCards_.clear();
 	}
 
 	// 重置献祭状态
@@ -4014,8 +4076,10 @@ bool BattleState::scheduleTurnStartGrowth() {
 				if (!targetId.empty()) {
 					step.willTransform = true;
 					step.targetCard = CardDB::instance().make(targetId);
-					step.addAttack = 0;
-					step.addHealth = 0;
+					// 存储原始卡牌数据，用于计算差值
+					Card originalCard = CardDB::instance().make(bf.card.id);
+					step.addAttack = originalCard.attack;
+					step.addHealth = originalCard.health;
 					pendingGrowth_.push_back(step);
 					continue;
 				}
@@ -4056,8 +4120,10 @@ bool BattleState::scheduleEnemyPreAttackGrowth() {
 				if (!targetId.empty()) {
 					step.willTransform = true;
 					step.targetCard = CardDB::instance().make(targetId);
-					step.addAttack = 0;
-					step.addHealth = 0;
+					// 存储原始卡牌数据，用于计算差值
+					Card originalCard = CardDB::instance().make(bf.card.id);
+					step.addAttack = originalCard.attack;
+					step.addHealth = originalCard.health;
 					pendingGrowth_.push_back(step);
 					continue;
 				}
