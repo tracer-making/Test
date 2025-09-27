@@ -268,6 +268,7 @@ private:
 	// 魂骨系统
 	int boneCount_ = 0;                 // 魂骨数量
 	std::vector<bool> previousCardStates_; // 上一帧的卡牌存活状态
+	std::vector<bool> previousEnemyCardStates_; // 上一帧的敌方卡牌存活状态
 
 	// 上帝模式系统
 	bool godMode_ = false;             // 是否处于上帝模式

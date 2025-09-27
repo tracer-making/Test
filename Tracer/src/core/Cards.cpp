@@ -112,7 +112,7 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"moding", u8"墨锭", 0, u8"其他", 0, 1, "face_moding", {}}; registerCard(c);
 	c = Card{"xianchan_nu", u8"衔蝉奴", 1, u8"其他", 0, 1, "face_xianchan", {u8"生生不息"}}; registerCard(c);
 	c = Card{"jiance_jishu", u8"简册计数触", 1, u8"其他", 0, 1, "face_jiance", {u8"手牌数"}}; registerCard(c);
-	c = Card{"zhaogu_jingxu", u8"照骨镜须", 1, u8"其他", 0, 3, "face_zhaogu", {u8"对面攻击力"}}; registerCard(c);
+	c = Card{"zhaogu_jingxu", u8"照骨镜须", 1, u8"其他", 0, 3, "face_zhaogu", {u8"镜像"}}; registerCard(c);
 	c = Card{"duoling_suodi", u8"铎铃缩地须", 2, u8"其他", 0, 3, "face_duoling", {u8"铃铛距离"}}; registerCard(c);
 	c = Card{"chuanfen_yanzi", u8"穿坟鼹子", 1, u8"其他", 0, 4, "face_chuanfen_yan", {u8"守护者", u8"成长→穿坟隐士"}}; registerCard(c);
 	c = Card{"weijia_tong", u8"猬甲童", 1, u8"其他", 1, 2, "face_weijia", {u8"反伤"}}; registerCard(c);
@@ -126,7 +126,7 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"beizi_daisheng", u8"背子袋生", 2, u8"其他", 1, 1, "face_beizi", {u8"消耗骨头"}}; registerCard(c);
 	c = Card{"yefei_fuyi", u8"夜飞伏翼", 4, u8"其他", 2, 1, "face_yefei", {u8"空袭", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"dulou_yan", u8"髑髅烟", 0, u8"其他", 0, 1, "face_dulou_yan", {u8"骨王"}}; registerCard(c);
-	c = Card{"xiqushen_jiao", u8"犀渠神角", 2, u8"其他", 1, 5, "face_xiqushen", {u8"每杀一人攻击力+1", u8"局外成长"}}; registerCard(c);
-	c = Card{"huansha_xisheng", u8"浣沙溪生", 1, u8"其他", 1, 1, "face_huansha", {u8"在场时敌人死亦可得骨头"}}; registerCard(c);
-	c = Card{"xuanhuan", u8"玄獾", 5, u8"其他", 1, 3, "face_xuanhuan", {u8"每杀一人攻击力+1", u8"消耗骨头"}}; registerCard(c);
+	c = Card{"xiqushen_jiao", u8"犀渠神角", 2, u8"其他", 1, 5, "face_xiqushen", {u8"嗜血狂热"}}; registerCard(c);
+	c = Card{"huansha_xisheng", u8"浣沙溪生", 1, u8"其他", 1, 1, "face_huansha", {u8"拾荒者"}}; registerCard(c);
+	c = Card{"xuanhuan", u8"玄獾", 5, u8"其他", 1, 3, "face_xuanhuan", {u8"嗜血狂热", u8"消耗骨头"}}; registerCard(c);
 }

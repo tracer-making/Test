@@ -1067,7 +1067,7 @@ void BattleState::update(App& app, float dt) {
 
 		// 如果卡牌从存活变为死亡，获得魂骨
 		if (wasAlive && !isAlive) {
-			// 忽略因“移动导致的死亡”（如位移清空等），不触发不死或食尸鬼
+			// 忽略因"移动导致的死亡"（如位移清空等），不触发不死或食尸鬼
 			if (battlefield_[i].isMovedToDeath) {
 				// 清除标记并跳过
 				battlefield_[i].isMovedToDeath = false;
@@ -1090,7 +1090,7 @@ void BattleState::update(App& app, float dt) {
 						statusMessage_ = std::string("不死回手：") + fresh.name;
 					}
 				}
-				// 食尸鬼：若手牌中存在“食尸鬼”，在己方单位死亡时自动打出到该位置
+				// 食尸鬼：若手牌中存在"食尸鬼"，在己方单位死亡时自动打出到该位置
 				else {
 					int ghoulHandIdx = -1;
 					for (size_t h = 0; h < handCards_.size(); ++h) {
@@ -1137,6 +1137,40 @@ void BattleState::update(App& app, float dt) {
 
 		// 更新状态记录
 		previousCardStates_[i] = isAlive;
+	}
+
+	// 拾荒者印记：检查敌方卡牌死亡，如果有玩家的拾荒者在场，也产生魂骨
+	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+		bool wasAlive = previousEnemyCardStates_[i];
+		bool isAlive = battlefield_[i].isAlive && !battlefield_[i].isPlayer;
+
+		// 如果敌方卡牌从存活变为死亡，检查是否有玩家的拾荒者在场
+		if (wasAlive && !isAlive) {
+			// 忽略因"移动导致的死亡"
+			if (battlefield_[i].isMovedToDeath) {
+				battlefield_[i].isMovedToDeath = false;
+				continue;
+			}
+
+			// 检查场上是否有玩家的拾荒者印记的卡牌
+			bool hasPlayerScavenger = false;
+			std::string scavengerName = "";
+			for (int j = 0; j < TOTAL_BATTLEFIELD_SLOTS; ++j) {
+				if (battlefield_[j].isAlive && battlefield_[j].isPlayer && hasMark(battlefield_[j].card, std::string(u8"拾荒者"))) {
+					hasPlayerScavenger = true;
+					scavengerName = battlefield_[j].card.name;
+					break;
+				}
+			}
+
+			if (hasPlayerScavenger) {
+				boneCount_++;
+				statusMessage_ = std::string("拾荒者：") + scavengerName + " 获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
+			}
+		}
+
+		// 更新敌方状态记录
+		previousEnemyCardStates_[i] = isAlive;
 	}
 
 	// 更新手牌动画
@@ -1248,12 +1282,12 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-    // 初始牌堆：仓囤硕鼠 + 仓囤硕鼠 + 多张太一混沌
-    playerDeck_.push_back("cangdun_shuoshu");
-    playerDeck_.push_back("cangdun_shuoshu");
-    playerDeck_.push_back("taiyi_hundun");
-    playerDeck_.push_back("taiyi_hundun");
-    playerDeck_.push_back("taiyi_hundun");
+    // 初始牌堆：简册计数触 + 照骨镜须 + 铎铃缩地须 + 浣沙溪生 + 穿坟隐士
+    playerDeck_.push_back("jiance_jishu");
+    playerDeck_.push_back("zhaogu_jingxu");
+    playerDeck_.push_back("duoling_suodi");
+    playerDeck_.push_back("huansha_xisheng");
+    playerDeck_.push_back("chuanfen_yinshi");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -1289,6 +1323,7 @@ void BattleState::initializeBattle() {
 	// 初始化魂骨系统
 	boneCount_ = 0;
 	previousCardStates_.resize(TOTAL_BATTLEFIELD_SLOTS, false);
+	previousEnemyCardStates_.resize(TOTAL_BATTLEFIELD_SLOTS, false);
 
 	// 初始化上帝模式系统
 	godMode_ = false;
@@ -2613,6 +2648,34 @@ int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
 			}
 		}
 	}
+
+	// 手牌数印记：攻击力等于当前玩家的手牌数
+	if (hasMark(self.card, std::string(u8"手牌数"))) {
+		display = static_cast<int>(handCards_.size());
+	}
+
+	// 镜像印记：攻击力等于对位卡牌的攻击力
+	if (hasMark(self.card, std::string(u8"镜像"))) {
+		if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			const auto& opp = battlefield_[opposeIndex];
+			if (opp.isAlive) {
+				display = getDisplayAttackForIndex(opposeIndex);
+			} else {
+				display = 0; // 对位为空时攻击力为0
+			}
+		} else {
+			display = 0; // 没有对位时攻击力为0
+		}
+	}
+
+	// 铃铛距离印记：根据位置从左到右攻击力为4、3、2、1
+	if (hasMark(self.card, std::string(u8"铃铛距离"))) {
+		// 计算在行内的列位置（0-3）
+		int col = battlefieldIndex % BATTLEFIELD_COLS;
+		// 从左到右：位置0=4攻击力，位置1=3攻击力，位置2=2攻击力，位置3=1攻击力
+		display = 4 - col;
+	}
+
 	if (display < 0) display = 0;
 	return display;
 }
@@ -2936,18 +2999,54 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 
 	// 检查目标是否有效
 	if (!target.isAlive) {
-		// 目标已死亡，攻击敌方本体
+		// 守护者印记：空位被攻击时，守护者移动到该位置承伤
+		bool guardianMoved = false;
 		if (attacker.isPlayer) {
-			enemyHealth_ -= damage;
-			if (enemyHealth_ < 0) enemyHealth_ = 0;
+			// 玩家攻击敌方空位，寻找敌方守护者
+			for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+				if (battlefield_[i].isAlive && !battlefield_[i].isPlayer && hasMark(battlefield_[i].card, std::string(u8"守护者"))) {
+					// 找到敌方守护者，移动到空位承伤
+					SDL_Rect targetRect = battlefield_[targetIndex].rect;
+					battlefield_[targetIndex] = battlefield_[i];
+					battlefield_[targetIndex].rect = targetRect;
+					battlefield_[i].isAlive = false;
+					guardianMoved = true;
+					statusMessage_ = std::string("守护者：") + battlefield_[targetIndex].card.name + " 移动到空位承伤！";
+					break;
+				}
+			}
+		} else {
+			// 敌方攻击玩家空位，寻找玩家守护者
+			for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+				if (battlefield_[i].isAlive && battlefield_[i].isPlayer && hasMark(battlefield_[i].card, std::string(u8"守护者"))) {
+					// 找到玩家守护者，移动到空位承伤
+					SDL_Rect targetRect = battlefield_[targetIndex].rect;
+					battlefield_[targetIndex] = battlefield_[i];
+					battlefield_[targetIndex].rect = targetRect;
+					battlefield_[i].isAlive = false;
+					guardianMoved = true;
+					statusMessage_ = std::string("守护者：") + battlefield_[targetIndex].card.name + " 移动到空位承伤！";
+					break;
+				}
+			}
 		}
-		else {
-            if (!lockPlayerHealth_) {
-                playerHealth_ -= damage;
-                if (playerHealth_ < 0) playerHealth_ = 0;
-            }
+		
+		// 如果守护者移动了，继续攻击流程；否则攻击本体
+		if (!guardianMoved) {
+			// 目标已死亡，攻击敌方本体
+			if (attacker.isPlayer) {
+				enemyHealth_ -= damage;
+				if (enemyHealth_ < 0) enemyHealth_ = 0;
+			}
+			else {
+				if (!lockPlayerHealth_) {
+					playerHealth_ -= damage;
+					if (playerHealth_ < 0) playerHealth_ = 0;
+				}
+			}
+			return;
 		}
-		return;
+		// 守护者移动了，继续执行攻击流程，让攻击对守护者造成伤害
 	}
 
 	
@@ -3028,6 +3127,14 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		cardsToDestroy_.push_back(targetIndex);
 		isDestroyAnimating_ = true;
 		destroyAnimTime_ = 0.0f;
+
+		// 嗜血狂热印记：攻击者每杀死一个造物，攻击力+1
+		if (attackerIndex >= 0 && attackerIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[attackerIndex].isAlive) {
+			if (hasMark(battlefield_[attackerIndex].card, std::string(u8"嗜血狂热"))) {
+				battlefield_[attackerIndex].card.attack += 1;
+				statusMessage_ = std::string("嗜血狂热：") + battlefield_[attackerIndex].card.name + " 攻击力+1！";
+			}
+		}
 
 		// 内心之蜂：即使被击杀也会生成手牌（仅我方单位）
 		if (battlefield_[targetIndex].isPlayer && hasMark(battlefield_[targetIndex].card, std::string(u8"内心之蜂"))) {
