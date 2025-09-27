@@ -92,21 +92,23 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"bashe", u8"巴蛇", 2, u8"鳞部", 1, 1, "face_bashe", {u8"死神之触"}}; registerCard(c);
 	c = Card{"mingwei_fengshe", u8"鸣尾风蛇", 3, u8"鳞部", 3, 1, "face_mingwei", {u8"消耗骨头"}}; registerCard(c);
 	c = Card{"xuanbei_dou", u8"玄贝蚪", 0, u8"鳞部", 0, 1, "face_xuanbei", {u8"水袭", u8"一回合成长碧蟾"}}; registerCard(c);
-	c = Card{"xuanwu_youzi", u8"玄武幼子", 2, u8"鳞部", 2, 2, "face_xuanwu_young", {u8"免疫第一次攻击"}}; registerCard(c);
+	c = Card{"xuanwu", u8"玄武", 2, u8"鳞部", 2, 2, "face_xuanwu_young", {u8"坚硬之躯"}}; registerCard(c);
 	c = Card{"tail_segment", u8"断尾", 0, u8"鳞部", 0, 2, "face_tail", {}}; registerCard(c);
 	
 	// 其他
 	// 破碎的卵（用于滋生寄生虫默认产物）
 	c = Card{"posui_deluan", u8"破碎的卵", 0, u8"其他", 0, 1, "face_posui", {}}; registerCard(c);
-	c = Card{"maoxiu_wo", u8"卯宿窝", 1, u8"其他", 0, 2, "face_maoxiu", {u8"打出得白毫仔0-1", u8"继承印记"}}; registerCard(c);
+	c = Card{"maoxiu_wo", u8"卯宿窝", 1, u8"其他", 0, 2, "face_maoxiu", {u8"兔窝", u8"继承印记"}}; registerCard(c);
+	c = Card{"baimao_zi", u8"白毫仔", 0, u8"其他", 0, 1, "face_baimao", {}}; registerCard(c);
 	c = Card{"shuigong_tuoshi", u8"水工柁师", 2, u8"其他", 1, 3, "face_shuigong", {u8"筑坝师", u8"堤坝附带印记"}}; registerCard(c);
+	c = Card{"diba", u8"堤坝", 0, u8"其他", 0, 2, "face_diba", {}}; registerCard(c);
 	c = Card{"wengjian_choucheng", u8"瓮间臭丞", 2, u8"其他", 1, 2, "face_wengjian", {u8"臭臭", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"chuanfen_yinshi", u8"穿坟隐士", 1, u8"其他", 0, 6, "face_chuanfen", {u8"高跳", u8"守护者"}}; registerCard(c);
 	c = Card{"baina_ou", u8"百衲偶", 2, u8"其他", 3, 3, "face_baina", {u8"全物种", u8"蚂蚁类", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"shulin_shucheng", u8"书林署丞", 2, u8"其他", 2, 2, "face_shulin", {u8"道具商"}}; registerCard(c);
 	c = Card{"zhongshan_shilang", u8"钟山豕郎", 2, u8"其他", 2, 2, "face_zhongshan", {u8"鸣钟人"}}; registerCard(c);
 	c = Card{"maomin", u8"毛民", 4, u8"其他", 7, 7, "face_maomin", {}}; registerCard(c);
-	c = Card{"taiyi_hundun", u8"太一混沌", 2, u8"其他", 1, 2, "face_taiyi", {u8"随机标记"}}; registerCard(c);
+	c = Card{"taiyi_hundun", u8"太一混沌", 2, u8"其他", 1, 2, "face_taiyi", {u8"随机",u8"消耗骨头"}}; registerCard(c);
 	c = Card{"moding", u8"墨锭", 0, u8"其他", 0, 1, "face_moding", {}}; registerCard(c);
 	c = Card{"xianchan_nu", u8"衔蝉奴", 1, u8"其他", 0, 1, "face_xianchan", {u8"生生不息"}}; registerCard(c);
 	c = Card{"jiance_jishu", u8"简册计数触", 1, u8"其他", 0, 1, "face_jiance", {u8"手牌数"}}; registerCard(c);

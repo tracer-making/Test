@@ -294,6 +294,8 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			else if (inkPileCount_ > 0) {
 				Card inkCard = CardDB::instance().make("moding");
 				if (!inkCard.id.empty()) {
+					// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
+					applyRandomMarkEffect(inkCard);
 					handCards_.push_back(inkCard);
 					inkPileCount_--;
 					hasDrawnThisTurn_ = true;
@@ -332,6 +334,8 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				std::string cardId = playerDeck_[0];
 				Card newCard = CardDB::instance().make(cardId);
 				if (!newCard.id.empty()) {
+					// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
+					applyRandomMarkEffect(newCard);
 					handCards_.push_back(newCard);
 					playerDeck_.erase(playerDeck_.begin()); // 移除已抽取的牌
 					playerPileCount_--;
@@ -1244,11 +1248,12 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-    // 初始牌堆：三张麺简虫 + 一张苍狼幼魂
-    playerDeck_.push_back("mianjian_chong");
-    playerDeck_.push_back("mianjian_chong");
-    playerDeck_.push_back("mianjian_chong");
-    playerDeck_.push_back("canglang_youhun");
+    // 初始牌堆：仓囤硕鼠 + 仓囤硕鼠 + 多张太一混沌
+    playerDeck_.push_back("cangdun_shuoshu");
+    playerDeck_.push_back("cangdun_shuoshu");
+    playerDeck_.push_back("taiyi_hundun");
+    playerDeck_.push_back("taiyi_hundun");
+    playerDeck_.push_back("taiyi_hundun");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -1256,6 +1261,8 @@ void BattleState::initializeBattle() {
 		std::string cardId = playerDeck_[0];
 		Card card = CardDB::instance().make(cardId);
 		if (!card.id.empty()) {
+			// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
+			applyRandomMarkEffect(card);
 			handCards_.push_back(card);
 		}
 		// 从牌堆中移除已抽取的卡牌
@@ -1525,6 +1532,65 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 			handCards_.push_back(ant);
 			layoutHandCards();
 			statusMessage_ = std::string("蚁后：获得手牌 ") + ant.name;
+		}
+	}
+
+	// 兔窝印记：打出带有兔窝印记的卡牌时，手牌获得一张白毫仔
+	if (hasMark(card, std::string(u8"兔窝"))) {
+		Card rabbit = CardDB::instance().make("baimao_zi");
+		if (!rabbit.id.empty()) {
+			handCards_.push_back(rabbit);
+			layoutHandCards();
+			statusMessage_ = std::string("兔窝：获得手牌 ") + rabbit.name;
+		}
+	}
+
+	// 丰产之巢印记：打出时手牌获得一张和打出牌一模一样的卡牌，除了没有丰产之巢印记
+	if (hasMark(card, std::string(u8"丰产之巢"))) {
+		// 创建一张相同的卡牌
+		Card copyCard = card;
+		
+		// 移除丰产之巢印记
+		auto it = std::find(copyCard.marks.begin(), copyCard.marks.end(), std::string(u8"丰产之巢"));
+		if (it != copyCard.marks.end()) {
+			copyCard.marks.erase(it);
+		}
+		
+		// 添加到手牌
+		handCards_.push_back(copyCard);
+		layoutHandCards();
+		statusMessage_ = std::string("丰产之巢：获得手牌 ") + copyCard.name;
+	}
+
+	// 筑坝师印记：打出后将相邻两格空位变为堤坝
+	if (hasMark(card, std::string(u8"筑坝师"))) {
+		int row = battlefieldIndex / BATTLEFIELD_COLS;
+		int col = battlefieldIndex % BATTLEFIELD_COLS;
+		int damCount = 0;
+		
+		// 检查左右相邻位置
+		for (int offset : {-1, 1}) {
+			int adjacentCol = col + offset;
+			if (adjacentCol >= 0 && adjacentCol < BATTLEFIELD_COLS) {
+				int adjacentIndex = row * BATTLEFIELD_COLS + adjacentCol;
+				if (adjacentIndex >= 0 && adjacentIndex < TOTAL_BATTLEFIELD_SLOTS && !battlefield_[adjacentIndex].isAlive) {
+					// 空位，创建堤坝
+					Card dam = CardDB::instance().make("diba");
+					if (!dam.id.empty()) {
+						battlefield_[adjacentIndex].card = dam;
+						battlefield_[adjacentIndex].isAlive = true;
+						battlefield_[adjacentIndex].health = dam.health;
+						battlefield_[adjacentIndex].isPlayer = true; // 堤坝属于玩家
+						battlefield_[adjacentIndex].placedTurn = currentTurn_;
+						battlefield_[adjacentIndex].oneTurnGrowthApplied = false;
+						damCount++;
+					}
+				}
+			}
+		}
+		
+		if (damCount > 0) {
+			statusMessage_ = std::string("筑坝师：创建了 ") + std::to_string(damCount) + " 个堤坝！";
 		}
 	}
 
@@ -2475,6 +2541,36 @@ bool BattleState::hasMark(const Card& card, const std::string& mark) const {
 	return false;
 }
 
+// 随机印记效果：删去随机印记并添加任意一个印记
+void BattleState::applyRandomMarkEffect(Card& card) {
+	// 检查是否有随机印记
+	if (!hasMark(card, std::string(u8"随机"))) {
+		return;
+	}
+	
+	// 移除随机印记
+	auto it = std::find(card.marks.begin(), card.marks.end(), std::string(u8"随机"));
+	if (it != card.marks.end()) {
+		card.marks.erase(it);
+	}
+	
+	// 定义可选的印记列表
+	std::vector<std::string> availableMarks = {
+		u8"空袭", u8"水袭", u8"高跳", u8"护主", u8"领袖力量", u8"掘墓人",
+		u8"双重攻击", u8"双向攻击", u8"三向攻击", u8"冲刺能手", u8"蛮力冲撞",
+		u8"生生不息", u8"形态转换", u8"不死印记", u8"消耗骨头", u8"优质祭品",
+		u8"内心之蜂", u8"滋生寄生虫", u8"断尾求生", u8"反伤", u8"死神之触",
+		u8"令人生厌", u8"臭臭", u8"蚂蚁", u8"蚁后", u8"一口之量", u8"坚硬之躯",
+		u8"兔窝", u8"筑坝师", u8"堤坝附带印记", u8"继承印记", u8"检索"
+	};
+	
+	// 随机选择一个印记
+	if (!availableMarks.empty()) {
+		int randomIndex = rand() % availableMarks.size();
+		card.marks.push_back(availableMarks[randomIndex]);
+	}
+}
+
 // 计算用于展示的攻击力（受对位“臭臭/令人生厌”临时影响）
 int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
 	if (battlefieldIndex < 0 || battlefieldIndex >= TOTAL_BATTLEFIELD_SLOTS) return 0;
@@ -2854,6 +2950,8 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		return;
 	}
 
+	
+
     if (attacker.isPlayer == target.isPlayer) return; // 不能攻击友军
 
 	// 水袭印记检查：如果目标潜水，攻击者无法攻击到，直接攻击本体
@@ -2890,6 +2988,20 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 			return;
 		}
 		// 空袭攻击高跳目标，正常攻击卡牌
+	}
+
+	// 坚硬之躯印记：免疫第一次攻击（包括死神之触），受到攻击时印记消失
+	// 只有在真正攻击卡牌时才生效，空袭攻击本体、水袭潜水等情况不触发
+	if (hasMark(target.card, std::string(u8"坚硬之躯"))) {
+		// 移除坚硬之躯印记
+		auto& targetCard = battlefield_[targetIndex].card;
+		auto it = std::find(targetCard.marks.begin(), targetCard.marks.end(), std::string(u8"坚硬之躯"));
+		if (it != targetCard.marks.end()) {
+			targetCard.marks.erase(it);
+		}
+		
+		statusMessage_ = std::string("坚硬之躯：") + target.card.name + " 免疫了这次攻击！印记消失！";
+		return;
 	}
 
 	// 穿透规则：

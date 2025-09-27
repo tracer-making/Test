@@ -91,6 +91,9 @@ private:
 
 	// 检查卡牌是否有特定印记
 	bool hasMark(const Card& card, const std::string& mark) const;
+	
+	// 随机印记效果：删去随机印记并添加任意一个印记
+	void applyRandomMarkEffect(Card& card);
 
 	// 计算用于展示的攻击力（受对位“臭臭/令人生厌”临时影响）
 	int getDisplayAttackForIndex(int battlefieldIndex) const;
