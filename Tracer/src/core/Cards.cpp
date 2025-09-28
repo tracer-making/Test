@@ -42,7 +42,7 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"binque", u8"宾雀", 1, u8"羽部", 1, 2, "face_binque", {u8"空袭"}}; registerCard(c);
 	c = Card{"lingque", u8"灵鹊", 2, u8"羽部", 1, 1, "face_lingque", {u8"空袭", u8"检索"}}; registerCard(c);
 	c = Card{"chiling_jiu", u8"赤翎鹫", 8, u8"羽部", 3, 3, "face_chiling", {u8"空袭", u8"消耗骨头"}}; registerCard(c);
-	c = Card{"bangu_peng", u8"半骨鹏", 3, u8"羽部", 0, 4, "face_bangu", {u8"空袭", u8"攻击力为一半魂骨"}}; registerCard(c);
+	c = Card{"bangu_peng", u8"半骨鹏", 3, u8"羽部", 0, 4, "face_bangu", {u8"空袭", u8"半根骨头"}}; registerCard(c);
 	c = Card{"sangjiu", u8"桑鸠", 1, u8"羽部", 1, 1, "face_sangjiu", {u8"空袭", u8"滋生寄生虫"}}; registerCard(c);
 	
 	// 犬部
@@ -63,7 +63,7 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"xuanmu", u8"玄牡", 1, u8"鹿部", 0, 1, "face_xuanmu", {u8"优质祭品"}}; registerCard(c);
 	c = Card{"qijiao_shuangqi", u8"岐角双歧鹿", 2, u8"鹿部", 1, 3, "face_qijiao", {u8"冲刺能手", u8"双向攻击"}}; registerCard(c);
 	c = Card{"qianfeng_tuolu", u8"千峰驼鹿", 3, u8"鹿部", 3, 7, "face_qianfeng", {u8"蛮力冲撞"}}; registerCard(c);
-	c = Card{"danxia_ruilu", u8"丹霞瑞鹿", 2, u8"鹿部", 0, 2, "face_danxia", {u8"本回合献祭次数为攻击力", u8"冲刺能手"}}; registerCard(c);
+	c = Card{"danxia_ruilu", u8"丹霞瑞鹿", 2, u8"鹿部", 0, 2, "face_danxia", {u8"献祭之血", u8"冲刺能手"}}; registerCard(c);
 	c = Card{"jingguan_yeniu", u8"荆关野牛", 2, u8"鹿部", 3, 2, "face_jingguan", {u8"横冲直撞"}}; registerCard(c);
 	
 	// 介部
@@ -129,4 +129,23 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"xiqushen_jiao", u8"犀渠神角", 2, u8"其他", 1, 5, "face_xiqushen", {u8"嗜血狂热"}}; registerCard(c);
 	c = Card{"huansha_xisheng", u8"浣沙溪生", 1, u8"其他", 1, 1, "face_huansha", {u8"拾荒者"}}; registerCard(c);
 	c = Card{"xuanhuan", u8"玄獾", 5, u8"其他", 1, 3, "face_xuanhuan", {u8"嗜血狂热", u8"消耗骨头"}}; registerCard(c);
+	c = Card{"langpi", u8"狼皮", 0, u8"其他", 0, 2, "face_langpi", {}}; registerCard(c);
+	// 磐石之身测试卡牌
+	c = Card{"panshi", u8"磐石", 0, u8"其他", 0, 5, "face_panshi", {u8"磐石之身"}}; registerCard(c);
+	
+	// 半根骨头测试卡牌
+	c = Card{"bangen_gutou", u8"半根骨头", 1, u8"其他", 1, 2, "face_bangen", {u8"半根骨头"}}; registerCard(c);
+	
+	// 献祭之血测试卡牌
+	c = Card{"xianji_zhixue", u8"献祭之血", 2, u8"其他", 2, 3, "face_xianji", {u8"献祭之血"}}; registerCard(c);
+	
+	// 厌恶情绪测试卡牌
+	c = Card{"yanwu_qingxu", u8"厌恶情绪", 1, u8"其他", 0, 3, "face_yanwu", {u8"厌恶情绪"}}; registerCard(c);
+	
+	
+	// 铁兽夹测试卡牌
+	c = Card{"tieshou_jia", u8"铁兽夹", 0, u8"其他", 0, 1, "face_tieshou", {u8"铁兽夹"}}; registerCard(c);
+	
+	// 全向打击测试卡牌
+	c = Card{"quanxiang_daji", u8"全向打击", 1, u8"其他", 1, 3, "face_quanxiang", {u8"全向打击"}}; registerCard(c);
 }

@@ -83,7 +83,8 @@ private:
 		Triple,         // 三向攻击（对位+斜对位）
 		Twice,          // 双重攻击（对位两次）
 		DoubleTwice,    // 双向双重攻击（斜对位各攻击两次）
-		TripleTwice     // 三向双重攻击（对位+斜对位各攻击两次）
+		TripleTwice,    // 三向双重攻击（对位+斜对位各攻击两次）
+		AllDirection    // 全向打击（攻击对面全部卡牌）
 	};
 
 	// 获取卡牌的攻击类型
@@ -145,6 +146,7 @@ private:
 	void setupTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
 	void setupDoubleTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
 	void setupTripleTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
+	void setupAllDirectionTargets(int attackerIndex, int targetCol, bool isPlayerAttacking);
 
 	// 横冲直撞相关方法
 	void startRushing(int cardIndex);
@@ -269,6 +271,9 @@ private:
 	int boneCount_ = 0;                 // 魂骨数量
 	std::vector<bool> previousCardStates_; // 上一帧的卡牌存活状态
 	std::vector<bool> previousEnemyCardStates_; // 上一帧的敌方卡牌存活状态
+	
+	// 献祭之血印记：本回合献祭次数
+	int sacrificeCountThisTurn_ = 0;   // 本回合献祭次数
 
 	// 检索印记系统
 	bool isSearchingDeck_ = false;      // 是否正在检索牌堆
@@ -296,7 +301,7 @@ private:
 
 	// 特殊攻击动画系统
 	AttackType currentAttackType_ = AttackType::Normal;
-	int specialAttackTargets_[3] = { -1, -1, -1 }; // 最多3个目标（三向攻击）
+	int specialAttackTargets_[8] = { -1, -1, -1, -1, -1, -1, -1, -1 }; // 最多8个目标（全向打击）
 	int currentTargetIndex_ = 0;
 	bool isSpecialAttackAnimating_ = false;
 

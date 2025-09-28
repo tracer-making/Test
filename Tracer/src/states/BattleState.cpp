@@ -92,7 +92,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			// T键切换上帝模式
 			godMode_ = !godMode_;
 			if (godMode_) {
-                statusMessage_ = "上帝模式开启：A=狼戎酋首，S=雪尾鼬生，D=巴蛇，F=青羽翠使，H=锁血，J=+1魂骨";
+                statusMessage_ = "上帝模式开启：A=巴蛇，S=雪尾鼬生，D=巴蛇，F=青羽翠使，H=锁血，J=+1魂骨";
 			}
 			else {
 				statusMessage_ = "上帝模式已关闭";
@@ -122,16 +122,16 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-                        // 生成狼戎酋首卡牌
-                        Card chief = CardDB::instance().make("langrong_qiushou");
-                        if (!chief.id.empty()) {
-                            battlefield_[hoveredBattlefieldIndex_].card = chief;
+                        // 生成巴蛇卡牌
+                        Card bashe = CardDB::instance().make("bashe");
+                        if (!bashe.id.empty()) {
+                            battlefield_[hoveredBattlefieldIndex_].card = bashe;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-                            battlefield_[hoveredBattlefieldIndex_].health = chief.health;
+                            battlefield_[hoveredBattlefieldIndex_].health = bashe.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
 							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
 							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
-                            statusMessage_ = "在敌方区域生成狼戎酋首(A)";
+                            statusMessage_ = "在敌方区域生成巴蛇(A)";
 						}
 					}
 					else {
@@ -152,16 +152,16 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-                        // 生成山龙子卡牌
-                        Card shanlong = CardDB::instance().make("shanlongzi");
-                        if (!shanlong.id.empty()) {
-                            battlefield_[hoveredBattlefieldIndex_].card = shanlong;
+                        // 生成厌恶情绪卡牌
+                        Card yanwu = CardDB::instance().make("yanwu_qingxu");
+                        if (!yanwu.id.empty()) {
+                            battlefield_[hoveredBattlefieldIndex_].card = yanwu;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-                            battlefield_[hoveredBattlefieldIndex_].health = shanlong.health;
+                            battlefield_[hoveredBattlefieldIndex_].health = yanwu.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
 							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
 							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
-                            statusMessage_ = "在敌方区域生成山龙子(S)";
+                            statusMessage_ = "在敌方区域生成厌恶情绪(S)";
 						}
 					}
 					else {
@@ -177,19 +177,19 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		}
         else if (e.key.keysym.sym == SDLK_d && godMode_) {
-            // D键在悬停位置生成雪原狼胚
+            // D键在悬停位置生成铁兽夹
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-                        // 生成雪原狼胚卡牌
-                        Card cub = CardDB::instance().make("xueyuan_langpei");
-                        if (!cub.id.empty()) {
-                            battlefield_[hoveredBattlefieldIndex_].card = cub;
+                        // 生成铁兽夹卡牌
+                        Card tieshou = CardDB::instance().make("tieshou_jia");
+                        if (!tieshou.id.empty()) {
+                            battlefield_[hoveredBattlefieldIndex_].card = tieshou;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-                            battlefield_[hoveredBattlefieldIndex_].health = cub.health;
+                            battlefield_[hoveredBattlefieldIndex_].health = tieshou.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
-                            statusMessage_ = "在敌方区域生成雪原狼胚(D)";
+                            statusMessage_ = "在敌方区域生成铁兽夹(D)";
 						}
 					}
 					else {
@@ -204,21 +204,20 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				statusMessage_ = "请悬停在敌方区域再按D键";
 			}
 		}
-		else if (e.key.keysym.sym == SDLK_f && godMode_) {
-			// F键在悬停位置生成渭甲童
+        else if (e.key.keysym.sym == SDLK_f && godMode_) {
+            // F键在悬停位置生成全向打击
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-						Card weijiaCard = CardDB::instance().make("weijia_tong");
-						if (!weijiaCard.id.empty()) {
-							battlefield_[hoveredBattlefieldIndex_].card = weijiaCard;
+                        // 生成全向打击卡牌
+                        Card quanxiang = CardDB::instance().make("quanxiang_daji");
+                        if (!quanxiang.id.empty()) {
+                            battlefield_[hoveredBattlefieldIndex_].card = quanxiang;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-							battlefield_[hoveredBattlefieldIndex_].health = weijiaCard.health;
-							battlefield_[hoveredBattlefieldIndex_].isPlayer = false;
-							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
-							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
-							statusMessage_ = "在敌方区域生成渭甲童(F)";
+                            battlefield_[hoveredBattlefieldIndex_].health = quanxiang.health;
+							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
+                            statusMessage_ = "在敌方区域生成全向打击(F)";
 						}
 					}
 					else {
@@ -271,19 +270,44 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 
 		// 检索状态：处理牌堆卡牌选择
 		if (isSearchingDeck_) {
-			// 计算牌堆卡牌的显示区域
-			int deckStartX = 50;
-			int deckStartY = 200;
-			int cardWidth = 80;
-			int cardHeight = 120;
-			int cardSpacing = 10;
-			int cardsPerRow = 4;
+			// 计算牌堆卡牌的显示区域 - 与渲染逻辑保持一致
+			int cardWidth = 120;  // 增大卡牌宽度
+			int cardHeight = 180; // 增大卡牌高度
+			int cardSpacing = 15; // 增大卡牌间距
+			int rowSpacing = 20;  // 增大行间距
+			
+			int totalCards = static_cast<int>(playerDeck_.size());
+			if (totalCards == 0) return;
+			
+			// 根据屏幕宽度和卡牌数量动态计算每行卡牌数
+			int maxCardsPerRow = (screenW_ - 100) / (cardWidth + cardSpacing);
+			int cardsPerRow = std::min(maxCardsPerRow, totalCards);
+			if (cardsPerRow < 1) cardsPerRow = 1;
+			
+			// 计算总行数
+			int totalRows = (totalCards + cardsPerRow - 1) / cardsPerRow;
+			
+			// 计算每行实际卡牌数（最后一行可能不满）
+			int cardsInLastRow = totalCards % cardsPerRow;
+			if (cardsInLastRow == 0) cardsInLastRow = cardsPerRow;
+			
+			// 计算整体布局的起始位置（水平和垂直居中）
+			int totalLayoutHeight = totalRows * cardHeight + (totalRows - 1) * rowSpacing;
+			int startY = (screenH_ - totalLayoutHeight) / 2;
 			
 			for (size_t i = 0; i < playerDeck_.size(); ++i) {
-				int row = i / cardsPerRow;
-				int col = i % cardsPerRow;
-				int cardX = deckStartX + col * (cardWidth + cardSpacing);
-				int cardY = deckStartY + row * (cardHeight + cardSpacing);
+				int row = static_cast<int>(i) / cardsPerRow;
+				int col = static_cast<int>(i) % cardsPerRow;
+				
+				// 计算当前行的卡牌数
+				int cardsInCurrentRow = (row == totalRows - 1) ? cardsInLastRow : cardsPerRow;
+				
+				// 计算当前行的起始位置（居中）
+				int currentRowWidth = cardsInCurrentRow * cardWidth + (cardsInCurrentRow - 1) * cardSpacing;
+				int currentRowStartX = (screenW_ - currentRowWidth) / 2;
+				
+				int cardX = currentRowStartX + col * (cardWidth + cardSpacing);
+				int cardY = startY + row * (cardHeight + rowSpacing);
 				
 				if (mouseX >= cardX && mouseX <= cardX + cardWidth &&
 					mouseY >= cardY && mouseY <= cardY + cardHeight) {
@@ -527,6 +551,9 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 
 							// 检查是否献祭足够
 							if (currentSacrificeInk_ >= sacrificeTargetCost_) {
+								// 献祭完成，增加献祭次数
+								sacrificeCountThisTurn_++;
+								
 								// 献祭完成，开始摧毁动画
 								isSacrificing_ = false;
 								showSacrificeInk_ = true;  // 开始显示献墨量
@@ -792,6 +819,8 @@ void BattleState::update(App& app, float dt) {
 					// 无可攻击则如常切回玩家回合并在回合开始处再尝试玩家成长
 					std::cout << "3" << std::endl;
 					currentPhase_ = GamePhase::PlayerTurn;
+					// 重置本回合献祭次数
+					sacrificeCountThisTurn_ = 0;
 					if (scheduleTurnStartGrowth()) return;
 					if (mustDrawThisTurn_) statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！"; else statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
 				}
@@ -1016,6 +1045,8 @@ void BattleState::update(App& app, float dt) {
                 // 掘墓人：敌方回合结束时统计敌方单位
                 grantGravediggerBones(true);
                 currentPhase_ = GamePhase::PlayerTurn;
+                // 重置本回合献祭次数
+                sacrificeCountThisTurn_ = 0;
                 // 切回玩家回合：先结算我方回合开始成长
                 if (scheduleTurnStartGrowth()) return;
 					if (mustDrawThisTurn_) {
@@ -1034,7 +1065,7 @@ void BattleState::update(App& app, float dt) {
 		attackAnimTime_ += dt;
 
 		// 检查当前目标是否有效
-		if (currentTargetIndex_ < 3 && specialAttackTargets_[currentTargetIndex_] != -1) {
+		if (currentTargetIndex_ < 8 && specialAttackTargets_[currentTargetIndex_] != -1) {
 			int currentTargetIndex = specialAttackTargets_[currentTargetIndex_];
 
 			// 攻击动画进行到一半时执行攻击逻辑
@@ -1043,7 +1074,7 @@ void BattleState::update(App& app, float dt) {
 
 				// 执行对当前目标的攻击
 				int attackerIndex = attackingCards_[currentAttackingIndex_];
-				int damage = battlefield_[attackerIndex].card.attack;
+				int damage = getDisplayAttackForIndex(attackerIndex);
 				attackTarget(attackerIndex, currentTargetIndex, damage);
 			}
 
@@ -1054,7 +1085,7 @@ void BattleState::update(App& app, float dt) {
 				hasAttacked_ = false;
 
 				// 检查是否所有目标都攻击完成
-				if (currentTargetIndex_ >= 3 || specialAttackTargets_[currentTargetIndex_] == -1) {
+				if (currentTargetIndex_ >= 8 || specialAttackTargets_[currentTargetIndex_] == -1) {
 					isSpecialAttackAnimating_ = false;
 					// 继续正常的攻击流程
 					currentAttackingIndex_++;
@@ -1331,12 +1362,12 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-    // 初始牌堆：三张灵鹊 + 浣沙溪生 + 穿坟隐士
-    playerDeck_.push_back("lingque");
-    playerDeck_.push_back("lingque");
-    playerDeck_.push_back("lingque");
-    playerDeck_.push_back("huansha_xisheng");
-    playerDeck_.push_back("chuanfen_yinshi");
+    // 初始牌堆：三张守宫 + 一张刀笔吏 + 一张蛇自环
+    playerDeck_.push_back("shougong");
+    playerDeck_.push_back("shougong");
+    playerDeck_.push_back("shougong");
+    playerDeck_.push_back("daobi_li");
+    playerDeck_.push_back("tengshe_zihuan");
 	playerPileCount_ = static_cast<int>(playerDeck_.size());
 
 	// 抽3张玩家牌（从固定玩家牌堆中抽取）
@@ -1743,10 +1774,19 @@ void BattleState::endTurn() {
 	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
 		int playerIndex = 2 * BATTLEFIELD_COLS + col; // 第三行
 		if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer) {
-			// 使用临时攻击力判断资格（受对位“臭臭/令人生厌”影响）
+			// 使用临时攻击力判断资格（受对位"臭臭/令人生厌"影响）
 			int displayAtk = getDisplayAttackForIndex(playerIndex);
+			
+			// 检查是否会被"厌恶情绪"影响
+			int opposeIndex = 1 * BATTLEFIELD_COLS + col; // 敌方对位
+			if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[opposeIndex].isAlive) {
+				if (hasMark(battlefield_[opposeIndex].card, std::string(u8"厌恶情绪"))) {
+					displayAtk = 0; // 厌恶情绪使攻击力变为0
+				}
+			}
+			
 			if (displayAtk > 0) {
-			attackingCards_.push_back(playerIndex);
+				attackingCards_.push_back(playerIndex);
 			}
 		}
 	}
@@ -1795,8 +1835,17 @@ void BattleState::enemyTurn() {
 		int enemyIndex = 1 * BATTLEFIELD_COLS + col;  // 第二行（敌方攻击行）
 		if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer) {
 			int displayAtk = getDisplayAttackForIndex(enemyIndex);
+			
+			// 检查是否会被"厌恶情绪"影响
+			int opposeIndex = 2 * BATTLEFIELD_COLS + col; // 我方对位
+			if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[opposeIndex].isAlive) {
+				if (hasMark(battlefield_[opposeIndex].card, std::string(u8"厌恶情绪"))) {
+					displayAtk = 0; // 厌恶情绪使攻击力变为0
+				}
+			}
+			
 			if (displayAtk > 0) {
-			attackingCards_.push_back(enemyIndex);
+				attackingCards_.push_back(enemyIndex);
 			}
 		}
 	}
@@ -1815,6 +1864,8 @@ void BattleState::enemyTurn() {
 	else {
 		// 没有可攻击的敌方卡牌，直接回到玩家回合
 		currentPhase_ = GamePhase::PlayerTurn;
+		// 重置本回合献祭次数
+		sacrificeCountThisTurn_ = 0;
 		// 回合开始：抽牌提示前先成长。若有成长，先return，update中落位后再显示提示。
 		if (scheduleTurnStartGrowth()) return;
 		if (mustDrawThisTurn_) {
@@ -2218,7 +2269,7 @@ void BattleState::renderBattlefield(App& app) {
 	}
 
 	// 第三遍：绘制特殊攻击的卡牌动画
-	if (isSpecialAttackAnimating_ && currentTargetIndex_ < 3 && specialAttackTargets_[currentTargetIndex_] != -1 && currentAttackingIndex_ < static_cast<int>(attackingCards_.size())) {
+	if (isSpecialAttackAnimating_ && currentTargetIndex_ < 8 && specialAttackTargets_[currentTargetIndex_] != -1 && currentAttackingIndex_ < static_cast<int>(attackingCards_.size())) {
 		int currentTargetIndex = specialAttackTargets_[currentTargetIndex_];
 		int attackerIndex = attackingCards_[currentAttackingIndex_];
 		const auto& attacker = battlefield_[attackerIndex];
@@ -2290,6 +2341,9 @@ void BattleState::renderBattlefield(App& app) {
 				break;
 			case BattleState::AttackType::TripleTwice:
 				SDL_SetRenderDrawColor(r, 255, 255, 255, static_cast<Uint8>(255 * flashIntensity)); // 白色 - 三向双重攻击
+				break;
+			case BattleState::AttackType::AllDirection:
+				SDL_SetRenderDrawColor(r, 255, 0, 255, static_cast<Uint8>(255 * flashIntensity)); // 紫色 - 全向打击
 				break;
 			default:
 				SDL_SetRenderDrawColor(r, 255, 255, 0, static_cast<Uint8>(255 * flashIntensity)); // 黄色 - 普通攻击
@@ -2590,6 +2644,7 @@ BattleState::AttackType BattleState::getCardAttackType(const Card& card) {
 	bool hasTriple = false;
 	bool hasDouble = false;
 	bool hasTwice = false;
+	bool hasAllDirection = false;
 
 	// 检查所有印记
 	for (const auto& mark : card.marks) {
@@ -2602,10 +2657,16 @@ BattleState::AttackType BattleState::getCardAttackType(const Card& card) {
 		else if (mark == u8"双重攻击") {
 			hasTwice = true;
 		}
+		else if (mark == u8"全向打击") {
+			hasAllDirection = true;
+		}
 	}
 
 	// 按优先级返回攻击类型（组合攻击优先）
-	if (hasTriple && hasTwice) {
+	if (hasAllDirection) {
+		return BattleState::AttackType::AllDirection;
+	}
+	else if (hasTriple && hasTwice) {
 		return BattleState::AttackType::TripleTwice;
 	}
 	else if (hasDouble && hasTwice) {
@@ -2654,7 +2715,7 @@ void BattleState::applyRandomMarkEffect(Card& card) {
 		u8"生生不息", u8"形态转换", u8"不死印记", u8"消耗骨头", u8"优质祭品",
 		u8"内心之蜂", u8"滋生寄生虫", u8"断尾求生", u8"反伤", u8"死神之触",
 		u8"令人生厌", u8"臭臭", u8"蚂蚁", u8"蚁后", u8"一口之量", u8"坚硬之躯",
-		u8"兔窝", u8"筑坝师", u8"堤坝附带印记", u8"继承印记", u8"检索"
+		u8"兔窝", u8"筑坝师", u8"堤坝附带印记", u8"继承印记", u8"检索", u8"磐石之身", u8"半根骨头", u8"献祭之血", u8"厌恶情绪", u8"铁兽夹", u8"全向打击"
 	};
 	
 	// 随机选择一个印记
@@ -2680,8 +2741,11 @@ int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
 	if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS) {
 		const auto& opp = battlefield_[opposeIndex];
 		if (opp.isAlive) {
-			if (hasMark(opp.card, std::string(u8"臭臭"))) display -= 1;
-			if (hasMark(opp.card, std::string(u8"令人生厌"))) display += 1;
+			// 磐石之身印记：免疫臭臭和令人生厌效果
+			if (!hasMark(self.card, std::string(u8"磐石之身"))) {
+				if (hasMark(opp.card, std::string(u8"臭臭"))) display -= 1;
+				if (hasMark(opp.card, std::string(u8"令人生厌"))) display += 1;
+			}
 		}
 	}
 
@@ -2710,6 +2774,16 @@ int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
 	// 手牌数印记：攻击力等于当前玩家的手牌数
 	if (hasMark(self.card, std::string(u8"手牌数"))) {
 		display = static_cast<int>(handCards_.size());
+	}
+
+	// 半根骨头印记：攻击力加上当前魂骨数的一半（向下取整）
+	if (hasMark(self.card, std::string(u8"半根骨头"))) {
+		display += boneCount_ / 2;
+	}
+
+	// 献祭之血印记：攻击力加上本回合献祭次数
+	if (hasMark(self.card, std::string(u8"献祭之血"))) {
+		display += sacrificeCountThisTurn_;
 	}
 
 	// 镜像印记：攻击力等于对位卡牌的攻击力
@@ -2759,7 +2833,7 @@ void BattleState::executeSpecialAttack(int attackerIndex, int targetCol, bool is
 	attackAnimTime_ = 0.0f;
 
 	// 清空目标数组
-	for (int i = 0; i < 3; ++i) {
+	for (int i = 0; i < 8; ++i) {
 		specialAttackTargets_[i] = -1;
 	}
 
@@ -2790,6 +2864,11 @@ void BattleState::executeSpecialAttack(int attackerIndex, int targetCol, bool is
 		setupTripleTwiceTargets(attackerIndex, targetCol, isPlayerAttacking);
 		break;
 	}
+	case BattleState::AttackType::AllDirection: {
+		// 全向打击：设置对面全部卡牌目标
+		setupAllDirectionTargets(attackerIndex, targetCol, isPlayerAttacking);
+		break;
+	}
 	default:
 		break;
 	}
@@ -2804,7 +2883,10 @@ void BattleState::setupDiagonalTargets(int attackerIndex, int targetCol, bool is
 		int leftTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + (targetCol - 1)) :
 			(2 * BATTLEFIELD_COLS + (targetCol - 1));
-		specialAttackTargets_[targetCount++] = leftTargetIndex;
+		
+		if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			specialAttackTargets_[targetCount++] = leftTargetIndex;
+		}
 	}
 
 	// 右斜对位
@@ -2812,7 +2894,10 @@ void BattleState::setupDiagonalTargets(int attackerIndex, int targetCol, bool is
 		int rightTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + (targetCol + 1)) :
 			(2 * BATTLEFIELD_COLS + (targetCol + 1));
-		specialAttackTargets_[targetCount++] = rightTargetIndex;
+		
+		if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			specialAttackTargets_[targetCount++] = rightTargetIndex;
+		}
 	}
 }
 
@@ -2827,21 +2912,30 @@ void BattleState::setupTripleTargets(int attackerIndex, int targetCol, bool isPl
 		int leftTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + (targetCol - 1)) :
 			(2 * BATTLEFIELD_COLS + (targetCol - 1));
-		specialAttackTargets_[targetCount++] = leftTargetIndex;
+		
+		if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			specialAttackTargets_[targetCount++] = leftTargetIndex;
+		}
 	}
 
 	// 2. 对位
 	int frontTargetIndex = isPlayerAttacking ?
 		(1 * BATTLEFIELD_COLS + targetCol) :
 		(2 * BATTLEFIELD_COLS + targetCol);
-	specialAttackTargets_[targetCount++] = frontTargetIndex;
+	
+	if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+		specialAttackTargets_[targetCount++] = frontTargetIndex;
+	}
 
 	// 3. 右斜对位
 	if (targetCol < BATTLEFIELD_COLS - 1) {
 		int rightTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + (targetCol + 1)) :
 			(2 * BATTLEFIELD_COLS + (targetCol + 1));
-		specialAttackTargets_[targetCount++] = rightTargetIndex;
+		
+		if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			specialAttackTargets_[targetCount++] = rightTargetIndex;
+		}
 	}
 }
 
@@ -2851,32 +2945,49 @@ void BattleState::setupTwiceTargets(int attackerIndex, int targetCol, bool isPla
 		(1 * BATTLEFIELD_COLS + targetCol) :
 		(2 * BATTLEFIELD_COLS + targetCol);
 
-	// 同一个目标攻击两次
-	specialAttackTargets_[0] = targetIndex;
-	specialAttackTargets_[1] = targetIndex;
+	if (targetIndex >= 0 && targetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+		// 同一个目标攻击两次
+		specialAttackTargets_[0] = targetIndex;
+		specialAttackTargets_[1] = targetIndex;
+	}
 }
 
 // 设置双向双重攻击目标
 void BattleState::setupDoubleTwiceTargets(int attackerIndex, int targetCol, bool isPlayerAttacking) {
 	int targetCount = 0;
 
-	// 左斜对位攻击两次
+	// 左斜对位攻击一次
 	if (targetCol > 0) {
 		int leftTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + (targetCol - 1)) :
 			(2 * BATTLEFIELD_COLS + (targetCol - 1));
-		specialAttackTargets_[targetCount++] = leftTargetIndex;
-		specialAttackTargets_[targetCount++] = leftTargetIndex;
+		
+		if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			specialAttackTargets_[targetCount++] = leftTargetIndex;
+		}
 	}
 
-	// 右斜对位攻击两次
+	// 右斜对位攻击一次
 	if (targetCol < BATTLEFIELD_COLS - 1) {
 		int rightTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + (targetCol + 1)) :
 			(2 * BATTLEFIELD_COLS + (targetCol + 1));
-		specialAttackTargets_[targetCount++] = rightTargetIndex;
-		specialAttackTargets_[targetCount++] = rightTargetIndex;
+		
+		if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			specialAttackTargets_[targetCount++] = rightTargetIndex;
+		}
 	}
+
+	// 对位攻击两次
+	int frontTargetIndex = isPlayerAttacking ?
+		(1 * BATTLEFIELD_COLS + targetCol) :
+		(2 * BATTLEFIELD_COLS + targetCol);
+	
+	if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+		specialAttackTargets_[targetCount++] = frontTargetIndex;
+		specialAttackTargets_[targetCount++] = frontTargetIndex;
+	}
+
 }
 
 // 设置三向双重攻击目标
@@ -2885,29 +2996,60 @@ void BattleState::setupTripleTwiceTargets(int attackerIndex, int targetCol, bool
 
 	// 三向双重攻击顺序：左斜对位 → 对位 → 右斜对位（每个目标攻击两次）
 
-	// 1. 左斜对位攻击两次
+	// 1. 左斜对位攻击一次
 	if (targetCol > 0) {
 		int leftTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + (targetCol - 1)) :
 			(2 * BATTLEFIELD_COLS + (targetCol - 1));
-		specialAttackTargets_[targetCount++] = leftTargetIndex;
-		specialAttackTargets_[targetCount++] = leftTargetIndex;
+		
+		if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			specialAttackTargets_[targetCount++] = leftTargetIndex;
+		}
 	}
 
 	// 2. 对位攻击两次
 	int frontTargetIndex = isPlayerAttacking ?
 		(1 * BATTLEFIELD_COLS + targetCol) :
 		(2 * BATTLEFIELD_COLS + targetCol);
-	specialAttackTargets_[targetCount++] = frontTargetIndex;
-	specialAttackTargets_[targetCount++] = frontTargetIndex;
+	
+	if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+		specialAttackTargets_[targetCount++] = frontTargetIndex;
+		specialAttackTargets_[targetCount++] = frontTargetIndex;
+	}
 
-	// 3. 右斜对位攻击两次
+	// 3. 右斜对位攻击一次
 	if (targetCol < BATTLEFIELD_COLS - 1) {
 		int rightTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + (targetCol + 1)) :
 			(2 * BATTLEFIELD_COLS + (targetCol + 1));
-		specialAttackTargets_[targetCount++] = rightTargetIndex;
-		specialAttackTargets_[targetCount++] = rightTargetIndex;
+		
+		if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			specialAttackTargets_[targetCount++] = rightTargetIndex;
+		}
+	}
+}
+
+// 设置全向打击目标
+void BattleState::setupAllDirectionTargets(int attackerIndex, int targetCol, bool isPlayerAttacking) {
+	int targetCount = 0;
+	
+	// 全向打击：攻击对面四个位置
+	if (isPlayerAttacking) {
+		// 玩家攻击：攻击敌方前排（第二行）的四个位置
+		for (int col = 0; col < 4; ++col) {
+			int enemyFrontIndex = 1 * BATTLEFIELD_COLS + col;
+			if (enemyFrontIndex >= 0 && enemyFrontIndex < TOTAL_BATTLEFIELD_SLOTS) {
+				specialAttackTargets_[targetCount++] = enemyFrontIndex;
+			}
+		}
+	} else {
+		// 敌方攻击：攻击玩家前排（第三行）的四个位置
+		for (int col = 0; col < 4; ++col) {
+			int playerIndex = 2 * BATTLEFIELD_COLS + col;
+			if (playerIndex >= 0 && playerIndex < TOTAL_BATTLEFIELD_SLOTS) {
+				specialAttackTargets_[targetCount++] = playerIndex;
+			}
+		}
 	}
 }
 
@@ -3170,21 +3312,33 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		allowPenetration = false;
 	}
 
+	// 厌恶情绪印记：攻击者攻击带有该印记的目标时，攻击力变为0
+	if (hasMark(battlefield_[targetIndex].card, std::string(u8"厌恶情绪"))) {
+		damage = 0; // 攻击者压下攻击念头，攻击力变为0
+	}
+
 	// 执行对位伤害
 	int remainingDamage = damage - target.health;
 	battlefield_[targetIndex].health -= damage;
 
 	// 死神之触：只要攻击到对面的卡牌（非本体），目标必定死亡
+	// 磐石之身印记：免疫死神之触效果
 	if (battlefield_[targetIndex].isAlive && hasMark(attacker.card, std::string(u8"死神之触"))) {
-		battlefield_[targetIndex].health = 0;
+		if (!hasMark(battlefield_[targetIndex].card, std::string(u8"磐石之身"))) {
+			battlefield_[targetIndex].health = 0;
+		}
 	}
 
 	// 检查目标是否死亡
 	if (battlefield_[targetIndex].health <= 0) {
 		battlefield_[targetIndex].isAlive = false;
 		cardsToDestroy_.push_back(targetIndex);
-		isDestroyAnimating_ = true;
-		destroyAnimTime_ = 0.0f;
+		
+		// 只有在没有正在播放死亡动画时才设置新的死亡动画
+		if (!isDestroyAnimating_) {
+			isDestroyAnimating_ = true;
+			destroyAnimTime_ = 0.0f;
+		}
 
 		// 嗜血狂热印记：攻击者每杀死一个造物，攻击力+1
 		if (attackerIndex >= 0 && attackerIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[attackerIndex].isAlive) {
@@ -3201,6 +3355,37 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 				handCards_.push_back(bee);
 				layoutHandCards();
 				statusMessage_ = std::string("内心之蜂：获得手牌 ") + bee.name;
+			}
+		}
+
+		// 铁兽夹印记：死亡时杀死对位卡牌，若对位因此死亡则获得狼皮
+		if (hasMark(battlefield_[targetIndex].card, std::string(u8"铁兽夹"))) {
+			// 计算对位索引
+			int row = targetIndex / BATTLEFIELD_COLS;
+			int col = targetIndex % BATTLEFIELD_COLS;
+			int opposeIndex = -1;
+			if (row == 2) opposeIndex = 1 * BATTLEFIELD_COLS + col; // 我方对位敌方
+			else if (row == 1) opposeIndex = 2 * BATTLEFIELD_COLS + col; // 敌方对位我方
+			else if (row == 0) opposeIndex = 1 * BATTLEFIELD_COLS + col; // 顶行对位第二行
+			
+			if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[opposeIndex].isAlive) {
+				// 检查对位卡牌是否因此死亡
+				bool opposeWillDie = battlefield_[opposeIndex].health <= 1;
+				
+				// 杀死对位卡牌
+				battlefield_[opposeIndex].isAlive = false;
+				battlefield_[opposeIndex].health = 0;
+				cardsToDestroy_.push_back(opposeIndex);
+				
+				// 如果对位因此死亡，玩家获得狼皮
+				if (opposeWillDie) {
+					Card wolfSkin = CardDB::instance().make("langpi");
+					if (!wolfSkin.id.empty()) {
+						handCards_.push_back(wolfSkin);
+						layoutHandCards();
+						statusMessage_ = std::string("铁兽夹：获得狼皮！");
+					}
+				}
 			}
 		}
 
@@ -4286,6 +4471,8 @@ void BattleState::onMovementComplete() {
             // 敌方回合结束时：结算掘墓人（统计敌方单位）
             grantGravediggerBones(true);
 			currentPhase_ = GamePhase::PlayerTurn;
+			// 重置本回合献祭次数
+			sacrificeCountThisTurn_ = 0;
 			if (mustDrawThisTurn_) {
 				statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";
 			}
@@ -4495,20 +4682,49 @@ void BattleState::renderDeckSelection(App& app) {
 	SDL_Rect overlayRect = { 0, 0, screenW_, screenH_ };
 	SDL_RenderFillRect(renderer, &overlayRect);
 	
-	// 计算牌堆卡牌的显示区域
-	int deckStartX = 50;
-	int deckStartY = 200;
-	int cardWidth = 80;
-	int cardHeight = 120;
-	int cardSpacing = 10;
-	int cardsPerRow = 4;
+	// 计算牌堆卡牌的显示区域 - 居中动态排布
+	int cardWidth = 120;  // 增大卡牌宽度
+	int cardHeight = 180; // 增大卡牌高度
+	int cardSpacing = 15; // 增大卡牌间距
+	int rowSpacing = 20;  // 增大行间距
+	
+	// 动态计算每行卡牌数和布局
+	int totalCards = static_cast<int>(playerDeck_.size());
+	if (totalCards == 0) return;
+	
+	// 根据屏幕宽度和卡牌数量动态计算每行卡牌数
+	int maxCardsPerRow = (screenW_ - 100) / (cardWidth + cardSpacing);
+	int cardsPerRow = std::min(maxCardsPerRow, totalCards);
+	if (cardsPerRow < 1) cardsPerRow = 1;
+	
+	// 计算总行数
+	int totalRows = (totalCards + cardsPerRow - 1) / cardsPerRow;
+	
+	// 计算每行实际卡牌数（最后一行可能不满）
+	int cardsInLastRow = totalCards % cardsPerRow;
+	if (cardsInLastRow == 0) cardsInLastRow = cardsPerRow;
+	
+	// 计算整体布局的起始位置（水平和垂直居中）
+	int totalLayoutWidth = cardsPerRow * cardWidth + (cardsPerRow - 1) * cardSpacing;
+	int totalLayoutHeight = totalRows * cardHeight + (totalRows - 1) * rowSpacing;
+	
+	int startX = (screenW_ - totalLayoutWidth) / 2;
+	int startY = (screenH_ - totalLayoutHeight) / 2;
 	
 	// 渲染牌堆中的所有卡牌
 	for (size_t i = 0; i < playerDeck_.size(); ++i) {
-		int row = i / cardsPerRow;
-		int col = i % cardsPerRow;
-		int cardX = deckStartX + col * (cardWidth + cardSpacing);
-		int cardY = deckStartY + row * (cardHeight + cardSpacing);
+		int row = static_cast<int>(i) / cardsPerRow;
+		int col = static_cast<int>(i) % cardsPerRow;
+		
+		// 计算当前行的卡牌数
+		int cardsInCurrentRow = (row == totalRows - 1) ? cardsInLastRow : cardsPerRow;
+		
+		// 计算当前行的起始位置（居中）
+		int currentRowWidth = cardsInCurrentRow * cardWidth + (cardsInCurrentRow - 1) * cardSpacing;
+		int currentRowStartX = (screenW_ - currentRowWidth) / 2;
+		
+		int cardX = currentRowStartX + col * (cardWidth + cardSpacing);
+		int cardY = startY + row * (cardHeight + rowSpacing);
 		
 		// 使用和战斗界面一样的卡牌渲染方式
 		Card card = CardDB::instance().make(playerDeck_[i]);
