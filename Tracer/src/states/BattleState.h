@@ -76,6 +76,52 @@ private:
 	// 固定玩家牌堆
 	std::vector<std::string> playerDeck_;  // 玩家牌堆内容（卡牌ID列表）
 
+	// 道具系统
+	struct Item {
+		std::string id;           // 道具ID
+		std::string name;         // 道具名称
+		std::string description;  // 道具描述
+		int count;               // 道具数量
+		
+		Item() : count(0) {}
+		Item(const std::string& id, const std::string& name, const std::string& description, int count = 1)
+			: id(id), name(name), description(description), count(count) {}
+	};
+	
+	std::vector<Item> playerItems_;  // 玩家拥有的道具（最多14个）
+	static constexpr int MAX_ITEMS = 3;  // 最大道具数量
+	
+	// 道具UI相关
+	SDL_Rect itemSlots_[MAX_ITEMS];  // 道具槽位矩形
+	bool isItemHovered_[MAX_ITEMS] = {false};  // 道具悬停状态
+	
+	// 风雅扇效果跟踪
+	std::vector<int> fengyaShanAirstrikeSlots_;  // 记录获得风雅扇空袭效果的卡牌位置
+	
+	// 日晷效果跟踪
+	bool riguiEffectActive_ = false;  // 日晷效果是否激活
+	
+	// 断因剑目标选择状态
+	bool isSelectingTarget_ = false;  // 是否正在选择目标
+	int selectedTargetIndex_ = -1;    // 选中的目标索引
+	
+	// 吞墨毫目标选择状态
+	bool isSelectingTunmohaoTarget_ = false;  // 是否正在选择吞墨毫目标
+	int selectedTunmohaoTargetIndex_ = -1;    // 选中的吞墨毫目标索引
+	
+	// 缚魂锁目标选择状态
+	bool isSelectingFuhunsuoTarget_ = false;  // 是否正在选择缚魂锁目标
+	int selectedFuhunsuoTargetIndex_ = -1;    // 选中的缚魂锁目标索引
+	
+	// 缚魂锁移动动画状态
+	bool isFuhunsuoAnimating_ = false;  // 是否正在播放缚魂锁移动动画
+	float fuhunsuoAnimTime_ = 0.0f;     // 缚魂锁动画时间
+	float fuhunsuoAnimDuration_ = 1.0f; // 缚魂锁动画持续时间
+	int fuhunsuoFromIndex_ = -1;        // 缚魂锁移动起始位置
+	int fuhunsuoToIndex_ = -1;          // 缚魂锁移动目标位置
+	SDL_Rect fuhunsuoFromRect_;         // 缚魂锁移动起始矩形
+	SDL_Rect fuhunsuoToRect_;           // 缚魂锁移动目标矩形
+
 	// 印记系统 - 特殊攻击方式
 	enum class AttackType {
 		Normal,         // 普通攻击（对位）
@@ -92,6 +138,12 @@ private:
 
 	// 检查卡牌是否有特定印记
 	bool hasMark(const Card& card, const std::string& mark) const;
+	
+	// 检查多向攻击是否至少有一个方向可以攻击
+	bool canMultiDirectionAttack(int attackerIndex, int targetCol, bool isPlayerAttacking);
+	
+	// 缚魂锁移动动画更新
+	void updateFuhunsuoAnimation(float dt);
 	
 	// 随机印记效果：删去随机印记并添加任意一个印记
 	void applyRandomMarkEffect(Card& card);
@@ -153,6 +205,14 @@ private:
 	void updateRushing(float dt);
 	void executeRushing();
 	bool checkRushingCanMove(int currentRow, int currentCol, int direction);
+
+	// 道具系统相关方法
+	void addItem(const std::string& itemId, int count = 1);
+	bool removeItem(const std::string& itemId, int count = 1);
+	bool hasItem(const std::string& itemId) const;
+	int getItemCount(const std::string& itemId) const;
+	void useItem(const std::string& itemId);
+	void initializeItems();  // 初始化所有道具定义
 
 	// 蛮力冲撞相关方法
 	void startBruteForce(int cardIndex);

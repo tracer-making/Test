@@ -92,7 +92,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			// T键切换上帝模式
 			godMode_ = !godMode_;
 			if (godMode_) {
-                statusMessage_ = "上帝模式开启：A=巴蛇，S=雪尾鼬生，D=巴蛇，F=青羽翠使，H=锁血，J=+1魂骨";
+                statusMessage_ = "上帝模式开启：A=巴蛇，S=雪尾鼬生，D=巴蛇，F=青羽翠使，H=锁血，J=+1魂骨，B=获得道具";
 			}
 			else {
 				statusMessage_ = "上帝模式已关闭";
@@ -232,6 +232,27 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				statusMessage_ = "请悬停在敌方区域再按F键";
 			}
 		}
+        else if (e.key.keysym.sym == SDLK_b && godMode_) {
+            // B键：获得一个随机道具（前提是道具没满）
+            if (playerItems_.size() < MAX_ITEMS) {
+                // 定义所有可获得的道具
+                std::vector<std::string> availableItems = {
+                    "yinyang_pei", "mobao_ping", "wangchuan_shi", "fengya_shan", "rigui",
+                    "duanyinjian", "tunmohao", "fuhunsuo", "wuzitianshu", "xuanmuping",
+                    "tianjiluopan", "sanguiping"
+                };
+                
+                // 随机选择一个道具
+                int randomIndex = rand() % availableItems.size();
+                std::string selectedItem = availableItems[randomIndex];
+                
+                // 添加道具
+                addItem(selectedItem, 1);
+                statusMessage_ = "上帝模式：获得道具 " + selectedItem;
+            } else {
+                statusMessage_ = "道具已满，无法获得新道具！";
+            }
+        }
 	}
 
 	// 处理鼠标移动事件（悬停检测）
@@ -242,6 +263,11 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 		// 重置悬停状态
 		hoveredBattlefieldIndex_ = -1;
 		hoveredHandCardIndex_ = -1;
+		
+		// 重置道具悬停状态
+		for (int i = 0; i < MAX_ITEMS; ++i) {
+			isItemHovered_[i] = false;
+		}
 
 		// 检查战场悬停
 		for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
@@ -259,6 +285,15 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			if (mouseX >= rect.x && mouseX <= rect.x + rect.w &&
 				mouseY >= rect.y && mouseY <= rect.y + rect.h) {
 				hoveredHandCardIndex_ = static_cast<int>(i);
+				break;
+			}
+		}
+		
+		// 检查道具悬停
+		for (int i = 0; i < MAX_ITEMS; ++i) {
+			if (mouseX >= itemSlots_[i].x && mouseX <= itemSlots_[i].x + itemSlots_[i].w &&
+				mouseY >= itemSlots_[i].y && mouseY <= itemSlots_[i].y + itemSlots_[i].h) {
+				isItemHovered_[i] = true;
 				break;
 			}
 		}
@@ -527,6 +562,98 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 					// 计算行号（0=第一行，1=第二行，2=第三行）
 					int row = i / BATTLEFIELD_COLS;
 
+					// 断因剑目标选择模式
+					if (isSelectingTarget_) {
+						// 只能选择敌人第二行（第一行，row=1）的卡牌
+						if (row == 1 && battlefield_[i].isAlive && !battlefield_[i].isPlayer) {
+							// 选中目标，直接摧毁
+							selectedTargetIndex_ = i;
+							// 摧毁卡牌
+							battlefield_[i].isAlive = false;
+							battlefield_[i].health = 0;
+							// 退出选择模式
+							isSelectingTarget_ = false;
+							statusMessage_ = u8"断因剑摧毁了 " + battlefield_[i].card.name + "！";
+						} else {
+							statusMessage_ = u8"断因剑只能选择敌人第二行的卡牌！";
+						}
+						return;
+					}
+
+					// 吞墨毫目标选择模式
+					if (isSelectingTunmohaoTarget_) {
+						// 只能选择敌人第二行（第一行，row=1）的卡牌
+						if (row == 1 && battlefield_[i].isAlive && !battlefield_[i].isPlayer) {
+							// 选中目标，直接摧毁
+							selectedTunmohaoTargetIndex_ = i;
+							// 摧毁卡牌
+							battlefield_[i].isAlive = false;
+							battlefield_[i].health = 0;
+							// 退出选择模式
+							isSelectingTunmohaoTarget_ = false;
+							// 手牌获得一张狼皮
+							Card langpiCard = CardDB::instance().make("langpi");
+							if (langpiCard.id != "unknown") {
+								handCards_.push_back(langpiCard);
+								layoutHandCards();
+								statusMessage_ = u8"吞墨毫摧毁了 " + battlefield_[i].card.name + "！获得狼皮！";
+							} else {
+								statusMessage_ = u8"吞墨毫摧毁了 " + battlefield_[i].card.name + "！但无法获得狼皮！";
+							}
+						} else {
+							statusMessage_ = u8"吞墨毫只能选择敌人第二行的卡牌！";
+						}
+						return;
+					}
+
+					// 缚魂锁目标选择模式
+					if (isSelectingFuhunsuoTarget_) {
+						// 只能选择敌人第二行（第一行，row=1）的卡牌
+						if (row == 1 && battlefield_[i].isAlive && !battlefield_[i].isPlayer) {
+							// 检查对应的我方第三行位置是否为空
+							int targetCol = i % BATTLEFIELD_COLS;
+							int playerTargetIndex = 2 * BATTLEFIELD_COLS + targetCol; // 我方第三行对应位置
+							
+							if (playerTargetIndex >= 0 && playerTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
+								!battlefield_[playerTargetIndex].isAlive) {
+								// 目标位置为空，可以移动
+								selectedFuhunsuoTargetIndex_ = i;
+								
+								// 保存原卡牌信息
+								Card originalCard = battlefield_[i].card;
+								
+								// 设置动画参数
+								fuhunsuoFromIndex_ = i;
+								fuhunsuoToIndex_ = playerTargetIndex;
+								fuhunsuoFromRect_ = battlefield_[i].rect;
+								fuhunsuoToRect_ = battlefield_[playerTargetIndex].rect;
+								
+								// 从敌人位置移除
+								battlefield_[i].isAlive = false;
+								battlefield_[i].health = 0;
+								
+								// 设置目标位置（临时设置为存活，用于动画显示）
+								battlefield_[playerTargetIndex].card = originalCard;
+								battlefield_[playerTargetIndex].isAlive = true; // 临时设置为存活，用于动画显示
+								battlefield_[playerTargetIndex].isPlayer = true; // 变为玩家控制
+								battlefield_[playerTargetIndex].health = originalCard.health;
+								
+								// 开始动画
+								isFuhunsuoAnimating_ = true;
+								fuhunsuoAnimTime_ = 0.0f;
+								
+								// 退出选择模式
+								isSelectingFuhunsuoTarget_ = false;
+								statusMessage_ = u8"缚魂锁将 " + originalCard.name + " 移动到我方！";
+							} else {
+								statusMessage_ = u8"缚魂锁：对应的我方第三行位置不是空位！";
+							}
+						} else {
+							statusMessage_ = u8"缚魂锁只能选择敌人第二行的卡牌！";
+						}
+						return;
+					}
+
 					if (isSacrificing_) {
 						// Sacrifice mode: click battlefield cards to sacrifice
 
@@ -678,6 +805,39 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		}
 
+		// 检查道具点击
+		for (int i = 0; i < MAX_ITEMS; ++i) {
+			if (mouseX >= itemSlots_[i].x && mouseX <= itemSlots_[i].x + itemSlots_[i].w &&
+				mouseY >= itemSlots_[i].y && mouseY <= itemSlots_[i].y + itemSlots_[i].h) {
+				// 检查是否有道具
+				if (i < playerItems_.size()) {
+					const Item& item = playerItems_[i];
+					
+					// 检查是否必须抽牌
+					if (mustDrawThisTurn_) {
+						statusMessage_ = "必须先抽牌才能使用道具！";
+						return;
+					}
+					
+					// 检查是否在献祭模式
+					if (isSacrificing_) {
+						statusMessage_ = "献祭模式中，请点击场上卡牌献祭或右键取消！";
+						return;
+					}
+					
+					// 检查是否在打出阶段
+					if (showSacrificeInk_) {
+						statusMessage_ = "请先打出选中的卡牌！";
+						return;
+					}
+					
+					// 使用道具
+					useItem(item.id);
+					break;
+				}
+			}
+		}
+
 	}
 
 	// 右键点击检测（墨锭献祭和取消献祭）
@@ -688,6 +848,36 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 		// 检查是否必须抽牌
 		if (mustDrawThisTurn_) {
 			statusMessage_ = "必须先抽牌才能进行其他操作！";
+			return;
+		}
+
+		// 检查是否在断因剑目标选择模式，右键取消选择
+		if (isSelectingTarget_) {
+			// 取消断因剑目标选择模式，返还道具
+			isSelectingTarget_ = false;
+			selectedTargetIndex_ = -1;
+			addItem("duanyinjian", 1);  // 返还断因剑道具
+			statusMessage_ = "已取消断因剑目标选择，道具已返还";
+			return;
+		}
+
+		// 检查是否在吞墨毫目标选择模式，右键取消选择
+		if (isSelectingTunmohaoTarget_) {
+			// 取消吞墨毫目标选择模式，返还道具
+			isSelectingTunmohaoTarget_ = false;
+			selectedTunmohaoTargetIndex_ = -1;
+			addItem("tunmohao", 1);  // 返还吞墨毫道具
+			statusMessage_ = "已取消吞墨毫目标选择，道具已返还";
+			return;
+		}
+
+		// 检查是否在缚魂锁目标选择模式，右键取消选择
+		if (isSelectingFuhunsuoTarget_) {
+			// 取消缚魂锁目标选择模式，返还道具
+			isSelectingFuhunsuoTarget_ = false;
+			selectedFuhunsuoTargetIndex_ = -1;
+			addItem("fuhunsuo", 1);  // 返还缚魂锁道具
+			statusMessage_ = "已取消缚魂锁目标选择，道具已返还";
 			return;
 		}
 
@@ -750,7 +940,8 @@ void BattleState::update(App& app, float dt) {
 	// 水袭印记状态更新
 	updateWaterAttackMarks();
 	
-	
+	// 缚魂锁移动动画更新
+	updateFuhunsuoAnimation(dt);
 
 	// 成长动画推进
 	if (isGrowthAnimating_) {
@@ -818,10 +1009,41 @@ void BattleState::update(App& app, float dt) {
 				else {
 					// 无可攻击则如常切回玩家回合并在回合开始处再尝试玩家成长
 					std::cout << "3" << std::endl;
+					// 清理风雅扇的空袭效果（一回合后失效）
+					for (int slot : fengyaShanAirstrikeSlots_) {
+						if (slot >= 0 && slot < TOTAL_BATTLEFIELD_SLOTS) {
+							auto& bf = battlefield_[slot];
+							if (bf.isAlive && bf.isPlayer) {
+								// 移除空袭印记
+								auto it = std::find(bf.card.marks.begin(), bf.card.marks.end(), std::string(u8"空袭"));
+								if (it != bf.card.marks.end()) {
+									bf.card.marks.erase(it);
+								}
+							}
+						}
+					}
+					fengyaShanAirstrikeSlots_.clear();
+					
 					currentPhase_ = GamePhase::PlayerTurn;
 					// 重置本回合献祭次数
 					sacrificeCountThisTurn_ = 0;
 					if (scheduleTurnStartGrowth()) return;
+					
+					// 清理风雅扇的空袭效果（回合开始时清理）
+					for (int slot : fengyaShanAirstrikeSlots_) {
+						if (slot >= 0 && slot < TOTAL_BATTLEFIELD_SLOTS) {
+							auto& bf = battlefield_[slot];
+							if (bf.isAlive && bf.isPlayer) {
+								// 移除空袭印记
+								auto it = std::find(bf.card.marks.begin(), bf.card.marks.end(), std::string(u8"空袭"));
+								if (it != bf.card.marks.end()) {
+									bf.card.marks.erase(it);
+								}
+							}
+						}
+					}
+					fengyaShanAirstrikeSlots_.clear();
+					
 					if (mustDrawThisTurn_) statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！"; else statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
 				}
 			}
@@ -864,14 +1086,28 @@ void BattleState::update(App& app, float dt) {
 					processNextMovement();
 				}
 				else {
-					// 如果没有移动卡牌，直接进入敌方回合
-					currentPhase_ = GamePhase::EnemyTurn;
-					currentTurn_++; // 增加回合数
-					hasDrawnThisTurn_ = false; // 重置抽牌状态
-					mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-					std::cout << "2" << std::endl;
-					// 延迟执行敌人回合
-					enemyTurn();
+					// 如果没有移动卡牌，检查日晷效果
+					if (riguiEffectActive_) {
+						// 日晷效果：跳过敌方回合，直接回到玩家回合
+						riguiEffectActive_ = false; // 使用后失效
+						currentPhase_ = GamePhase::PlayerTurn;
+						currentTurn_++; // 增加回合数
+						hasDrawnThisTurn_ = false; // 重置抽牌状态
+						mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+						// 重置本回合献祭次数
+						sacrificeCountThisTurn_ = 0;
+						if (scheduleTurnStartGrowth()) return;
+						if (mustDrawThisTurn_) statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！"; else statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
+					} else {
+						// 正常进入敌方回合
+						currentPhase_ = GamePhase::EnemyTurn;
+						currentTurn_++; // 增加回合数
+						hasDrawnThisTurn_ = false; // 重置抽牌状态
+						mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+						std::cout << "2" << std::endl;
+						// 延迟执行敌人回合
+						enemyTurn();
+					}
 				}
 			}
 		}
@@ -1044,6 +1280,22 @@ void BattleState::update(App& app, float dt) {
                 // 没有移动卡牌，直接回到玩家回合
                 // 掘墓人：敌方回合结束时统计敌方单位
                 grantGravediggerBones(true);
+                
+                // 清理风雅扇的空袭效果（一回合后失效）
+                for (int slot : fengyaShanAirstrikeSlots_) {
+                    if (slot >= 0 && slot < TOTAL_BATTLEFIELD_SLOTS) {
+                        auto& bf = battlefield_[slot];
+                        if (bf.isAlive && bf.isPlayer) {
+                            // 移除空袭印记
+                            auto it = std::find(bf.card.marks.begin(), bf.card.marks.end(), std::string(u8"空袭"));
+                            if (it != bf.card.marks.end()) {
+                                bf.card.marks.erase(it);
+                            }
+                        }
+                    }
+                }
+                fengyaShanAirstrikeSlots_.clear();
+                
                 currentPhase_ = GamePhase::PlayerTurn;
                 // 重置本回合献祭次数
                 sacrificeCountThisTurn_ = 0;
@@ -1362,9 +1614,9 @@ void BattleState::initializeBattle() {
 	}
 
 	playerDeck_.clear();
-    // 初始牌堆：三张守宫 + 一张刀笔吏 + 一张蛇自环
-    playerDeck_.push_back("shougong");
-    playerDeck_.push_back("shougong");
+    // 初始牌堆：两张书林署丞 + 一张守宫 + 一张刀笔吏 + 一张蛇自环
+    playerDeck_.push_back("shulin_shucheng");
+    playerDeck_.push_back("shulin_shucheng");
     playerDeck_.push_back("shougong");
     playerDeck_.push_back("daobi_li");
     playerDeck_.push_back("tengshe_zihuan");
@@ -1421,6 +1673,12 @@ void BattleState::initializeBattle() {
 	currentAttackingIndex_ = 0;
 	isPlayerAttacking_ = true;
 	hasAttacked_ = false;
+	
+	// 初始化道具系统
+	playerItems_.clear();
+	addItem("fuhunsuo", 1);  // 缚魂锁
+	addItem("yinyang_pei", 1);  // 阴阳佩
+	addItem("mobao_ping", 1);  // 墨宝瓶
 }
 
 void BattleState::layoutUI() {
@@ -1685,6 +1943,27 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 		statusMessage_ = std::string("检索：请从牌堆中选择一张卡牌");
 	}
 
+	// 道具商印记：打出时获得一个道具（前提是道具没满）
+	if (hasMark(card, std::string(u8"道具商"))) {
+		if (playerItems_.size() < MAX_ITEMS) {
+			// 定义所有可获得的道具
+			std::vector<std::string> availableItems = {
+				"yinyang_pei", "mobao_ping", "wangchuan_shi", "fengya_shan", "rigui",
+				"duanyinjian", "tunmohao", "fuhunsuo", "wuzitianshu", "xuanmuping",
+				"tianjiluopan", "sanguiping"
+			};
+			
+			// 随机选择一个道具
+			int randomIndex = rand() % availableItems.size();
+			std::string selectedItem = availableItems[randomIndex];
+			
+			// 添加道具
+			addItem(selectedItem, 1);
+			statusMessage_ = std::string("道具商：获得道具 ") + selectedItem;
+		} else {
+			statusMessage_ = "道具商：道具栏已满，无法获得新道具！";
+		}
+	}
 
 	// 筑坝师印记：打出后将相邻两格空位变为堤坝
 	if (hasMark(card, std::string(u8"筑坝师"))) {
@@ -1769,27 +2048,37 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 void BattleState::endTurn() {
 	if (currentPhase_ != GamePhase::PlayerTurn) return;
 
-	// 收集所有可以攻击的我方卡牌（从左到右）
-	attackingCards_.clear();
-	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
-		int playerIndex = 2 * BATTLEFIELD_COLS + col; // 第三行
-		if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer) {
-			// 使用临时攻击力判断资格（受对位"臭臭/令人生厌"影响）
-			int displayAtk = getDisplayAttackForIndex(playerIndex);
-			
-			// 检查是否会被"厌恶情绪"影响
-			int opposeIndex = 1 * BATTLEFIELD_COLS + col; // 敌方对位
-			if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[opposeIndex].isAlive) {
-				if (hasMark(battlefield_[opposeIndex].card, std::string(u8"厌恶情绪"))) {
-					displayAtk = 0; // 厌恶情绪使攻击力变为0
+		// 收集所有可以攻击的我方卡牌（从左到右）
+		attackingCards_.clear();
+		for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+			int playerIndex = 2 * BATTLEFIELD_COLS + col; // 第三行
+			if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer) {
+				// 使用临时攻击力判断资格（受对位"臭臭/令人生厌"影响）
+				int displayAtk = getDisplayAttackForIndex(playerIndex);
+				
+				// 对于多向攻击，检查是否至少有一个方向可以攻击
+				BattleState::AttackType attackType = getCardAttackType(battlefield_[playerIndex].card);
+				bool canAttack = false;
+				
+				if (attackType == BattleState::AttackType::Normal) {
+					// 普通攻击：检查对位是否有厌恶情绪
+					int opposeIndex = 1 * BATTLEFIELD_COLS + col; // 敌方对位
+					if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[opposeIndex].isAlive) {
+						if (hasMark(battlefield_[opposeIndex].card, std::string(u8"厌恶情绪"))) {
+							displayAtk = 0; // 厌恶情绪使攻击力变为0
+						}
+					}
+					canAttack = (displayAtk > 0);
+				} else {
+					// 多向攻击：检查是否至少有一个方向可以攻击
+					canAttack = canMultiDirectionAttack(playerIndex, col, true);
+				}
+				
+				if (canAttack) {
+					attackingCards_.push_back(playerIndex);
 				}
 			}
-			
-			if (displayAtk > 0) {
-				attackingCards_.push_back(playerIndex);
-			}
 		}
-	}
 
 	if (!attackingCards_.empty()) {
 		// 记录敌方血量基准，用于计算本段我方造成伤害
@@ -1804,16 +2093,37 @@ void BattleState::endTurn() {
 		statusMessage_ = "我方开始攻击！";
 	}
     else {
-		// 没有可攻击的卡牌，直接进入敌方回合
+		// 没有可攻击的卡牌，检查日晷效果
         // 掘墓人：我方回合结束时统计我方单位
         grantGravediggerBones(false);
-		currentPhase_ = GamePhase::EnemyTurn;
-		currentTurn_++; // 增加回合数
-		hasDrawnThisTurn_ = false; // 重置抽牌状态
-		mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-		std::cout << "1" << std::endl;
-		// 延迟执行敌人回合
-		enemyTurn();
+        
+        if (riguiEffectActive_) {
+			// 日晷效果：跳过敌方回合，直接回到玩家回合
+			riguiEffectActive_ = false; // 使用后失效
+			currentPhase_ = GamePhase::PlayerTurn;
+			currentTurn_++; // 增加回合数
+			hasDrawnThisTurn_ = false; // 重置抽牌状态
+			mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+			// 重置本回合献祭次数
+			sacrificeCountThisTurn_ = 0;
+			// 回合开始：抽牌提示前先成长。若有成长，先return，update中落位后再显示提示。
+			if (scheduleTurnStartGrowth()) return;
+			if (mustDrawThisTurn_) {
+				statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！";
+			}
+			else {
+				statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
+			}
+		} else {
+			// 正常进入敌方回合
+			currentPhase_ = GamePhase::EnemyTurn;
+			currentTurn_++; // 增加回合数
+			hasDrawnThisTurn_ = false; // 重置抽牌状态
+			mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+			std::cout << "1" << std::endl;
+			// 延迟执行敌人回合
+			enemyTurn();
+		}
 	}
 }
 
@@ -1836,15 +2146,25 @@ void BattleState::enemyTurn() {
 		if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer) {
 			int displayAtk = getDisplayAttackForIndex(enemyIndex);
 			
-			// 检查是否会被"厌恶情绪"影响
-			int opposeIndex = 2 * BATTLEFIELD_COLS + col; // 我方对位
-			if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[opposeIndex].isAlive) {
-				if (hasMark(battlefield_[opposeIndex].card, std::string(u8"厌恶情绪"))) {
-					displayAtk = 0; // 厌恶情绪使攻击力变为0
+			// 对于多向攻击，检查是否至少有一个方向可以攻击
+			BattleState::AttackType attackType = getCardAttackType(battlefield_[enemyIndex].card);
+			bool canAttack = false;
+			
+			if (attackType == BattleState::AttackType::Normal) {
+				// 普通攻击：检查对位是否有厌恶情绪
+				int opposeIndex = 2 * BATTLEFIELD_COLS + col; // 我方对位
+				if (opposeIndex >= 0 && opposeIndex < TOTAL_BATTLEFIELD_SLOTS && battlefield_[opposeIndex].isAlive) {
+					if (hasMark(battlefield_[opposeIndex].card, std::string(u8"厌恶情绪"))) {
+						displayAtk = 0; // 厌恶情绪使攻击力变为0
+					}
 				}
+				canAttack = (displayAtk > 0);
+			} else {
+				// 多向攻击：检查是否至少有一个方向可以攻击
+				canAttack = canMultiDirectionAttack(enemyIndex, col, false);
 			}
 			
-			if (displayAtk > 0) {
+			if (canAttack) {
 				attackingCards_.push_back(enemyIndex);
 			}
 		}
@@ -1862,10 +2182,26 @@ void BattleState::enemyTurn() {
 		statusMessage_ = "敌方开始攻击！";
 	}
 	else {
-		// 没有可攻击的敌方卡牌，直接回到玩家回合
-		currentPhase_ = GamePhase::PlayerTurn;
-		// 重置本回合献祭次数
-		sacrificeCountThisTurn_ = 0;
+	// 没有可攻击的敌方卡牌，直接回到玩家回合
+	
+	// 清理风雅扇的空袭效果（一回合后失效）
+	for (int slot : fengyaShanAirstrikeSlots_) {
+		if (slot >= 0 && slot < TOTAL_BATTLEFIELD_SLOTS) {
+			auto& bf = battlefield_[slot];
+			if (bf.isAlive && bf.isPlayer) {
+				// 移除空袭印记
+				auto it = std::find(bf.card.marks.begin(), bf.card.marks.end(), std::string(u8"空袭"));
+				if (it != bf.card.marks.end()) {
+					bf.card.marks.erase(it);
+				}
+			}
+		}
+	}
+	fengyaShanAirstrikeSlots_.clear();
+	
+	currentPhase_ = GamePhase::PlayerTurn;
+	// 重置本回合献祭次数
+	sacrificeCountThisTurn_ = 0;
 		// 回合开始：抽牌提示前先成长。若有成长，先return，update中落位后再显示提示。
 		if (scheduleTurnStartGrowth()) return;
 		if (mustDrawThisTurn_) {
@@ -2054,6 +2390,7 @@ void BattleState::renderBattlefield(App& app) {
 
 	// 移除战场背景框
 
+
 	// 第一遍：绘制所有非攻击中的卡牌
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
 		const auto& bfCard = battlefield_[i];
@@ -2066,6 +2403,7 @@ void BattleState::renderBattlefield(App& app) {
 		}
 		if (isAttacking) continue;
 
+
 		bool isAnimating = false;
 		float animProgress = 0.0f;
 		if (isDestroyAnimating_) {
@@ -2075,6 +2413,61 @@ void BattleState::renderBattlefield(App& app) {
 					animProgress = destroyAnimTime_ / destroyAnimDuration_;
 					break;
 				}
+			}
+		}
+
+		// 断因剑目标选择高亮效果
+		if (isSelectingTarget_) {
+			int row = i / BATTLEFIELD_COLS;
+			if (row == 1 && bfCard.isAlive && !bfCard.isPlayer) {
+				// 高亮敌人第二行的卡牌
+				SDL_SetRenderDrawColor(r, 255, 100, 100, 100);
+				SDL_Rect highlightRect = bfCard.rect;
+				highlightRect.x -= 2;
+				highlightRect.y -= 2;
+				highlightRect.w += 4;
+				highlightRect.h += 4;
+				SDL_RenderDrawRect(r, &highlightRect);
+			}
+		}
+
+		// 吞墨毫目标选择高亮效果
+		if (isSelectingTunmohaoTarget_) {
+			int row = i / BATTLEFIELD_COLS;
+			if (row == 1 && bfCard.isAlive && !bfCard.isPlayer) {
+				// 高亮敌人第二行的卡牌（使用不同的颜色）
+				SDL_SetRenderDrawColor(r, 100, 255, 100, 100);
+				SDL_Rect highlightRect = bfCard.rect;
+				highlightRect.x -= 2;
+				highlightRect.y -= 2;
+				highlightRect.w += 4;
+				highlightRect.h += 4;
+				SDL_RenderDrawRect(r, &highlightRect);
+			}
+		}
+
+		// 缚魂锁目标选择高亮效果
+		if (isSelectingFuhunsuoTarget_) {
+			int row = i / BATTLEFIELD_COLS;
+			if (row == 1 && bfCard.isAlive && !bfCard.isPlayer) {
+				// 检查对应的我方第三行位置是否为空
+				int targetCol = i % BATTLEFIELD_COLS;
+				int playerTargetIndex = 2 * BATTLEFIELD_COLS + targetCol;
+				bool canMove = (playerTargetIndex >= 0 && playerTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
+							   !battlefield_[playerTargetIndex].isAlive);
+				
+				// 高亮敌人第二行的卡牌（使用蓝色表示可移动，红色表示不可移动）
+				if (canMove) {
+					SDL_SetRenderDrawColor(r, 100, 100, 255, 100); // 蓝色：可以移动
+				} else {
+					SDL_SetRenderDrawColor(r, 255, 100, 100, 100); // 红色：不可移动
+				}
+				SDL_Rect highlightRect = bfCard.rect;
+				highlightRect.x -= 2;
+				highlightRect.y -= 2;
+				highlightRect.w += 4;
+				highlightRect.h += 4;
+				SDL_RenderDrawRect(r, &highlightRect);
 			}
 		}
 
@@ -2104,6 +2497,23 @@ void BattleState::renderBattlefield(App& app) {
 			}
 		}
 
+		// 缚魂锁移动插值渲染
+		bool isFuhunsuoMovingThis = false;
+		SDL_Rect fuhunsuoRect{};
+		if (isFuhunsuoAnimating_) {
+			float t = std::min(1.0f, fuhunsuoAnimTime_ / fuhunsuoAnimDuration_);
+			float t_ease = (1.0f - std::cos(3.1415926f * t)) * 0.5f; // 缓动函数
+			if (i == fuhunsuoToIndex_) {
+				isFuhunsuoMovingThis = true;
+				float baseX = fuhunsuoFromRect_.x + (fuhunsuoToRect_.x - fuhunsuoFromRect_.x) * t_ease;
+				float baseY = fuhunsuoFromRect_.y + (fuhunsuoToRect_.y - fuhunsuoFromRect_.y) * t_ease;
+				fuhunsuoRect.x = static_cast<int>(baseX);
+				fuhunsuoRect.y = static_cast<int>(baseY);
+				fuhunsuoRect.w = fuhunsuoFromRect_.w;
+				fuhunsuoRect.h = fuhunsuoFromRect_.h;
+			}
+		}
+
 		bool isMovingAnimating = false;
 		if (isRushing_ && rushingCardIndex_ == i) isMovingAnimating = true;
 		if (isBruteForcing_ && bruteForceCardIndex_ == i) isMovingAnimating = true;
@@ -2115,8 +2525,15 @@ void BattleState::renderBattlefield(App& app) {
 			}
 		}
 
-		if ((bfCard.isAlive || isAnimating) && !isMovingAnimating && !isPushedAnimating) {
-			SDL_Rect renderRect = isAdvancingThis ? advancingRect : bfCard.rect;
+		if ((bfCard.isAlive || isAnimating || isFuhunsuoMovingThis) && !isMovingAnimating && !isPushedAnimating) {
+			SDL_Rect renderRect;
+			if (isAdvancingThis) {
+				renderRect = advancingRect;
+			} else if (isFuhunsuoMovingThis) {
+				renderRect = fuhunsuoRect;
+			} else {
+				renderRect = bfCard.rect;
+			}
 
 			// 成长轻量动画：对待成长卡片做轻微放大与发光
 			if (isGrowthAnimating_) {
@@ -2178,7 +2595,12 @@ void BattleState::renderBattlefield(App& app) {
 				// 正常渲染卡牌
 				Card tempCard = bfCard.card;
 				tempCard.health = bfCard.health;
-				tempCard.attack = getDisplayAttackForIndex(i);
+				if (isFuhunsuoMovingThis) {
+					// 缚魂锁动画期间，使用目标卡牌的攻击力（已经是玩家控制）
+					tempCard.attack = getDisplayAttackForIndex(i);
+				} else {
+					tempCard.attack = getDisplayAttackForIndex(i);
+				}
 				CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
 			}
 
@@ -2695,6 +3117,141 @@ bool BattleState::hasMark(const Card& card, const std::string& mark) const {
 	return false;
 }
 
+// 检查多向攻击是否至少有一个方向可以攻击
+bool BattleState::canMultiDirectionAttack(int attackerIndex, int targetCol, bool isPlayerAttacking) {
+	const auto& attacker = battlefield_[attackerIndex];
+	BattleState::AttackType attackType = getCardAttackType(attacker.card);
+	
+	// 检查各个攻击方向是否至少有一个可以攻击
+	switch (attackType) {
+	case BattleState::AttackType::Double: {
+		// 双向攻击：检查左右斜对位
+		bool canAttackLeft = false, canAttackRight = false;
+		
+		// 左斜对位
+		if (targetCol > 0) {
+			int leftTargetIndex = isPlayerAttacking ?
+				(1 * BATTLEFIELD_COLS + (targetCol - 1)) :
+				(2 * BATTLEFIELD_COLS + (targetCol - 1));
+			
+			if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
+				battlefield_[leftTargetIndex].isAlive) {
+				// 检查是否有厌恶情绪
+				if (!hasMark(battlefield_[leftTargetIndex].card, std::string(u8"厌恶情绪"))) {
+					canAttackLeft = true;
+				}
+			}
+		}
+		
+		// 右斜对位
+		if (targetCol < BATTLEFIELD_COLS - 1) {
+			int rightTargetIndex = isPlayerAttacking ?
+				(1 * BATTLEFIELD_COLS + (targetCol + 1)) :
+				(2 * BATTLEFIELD_COLS + (targetCol + 1));
+			
+			if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
+				battlefield_[rightTargetIndex].isAlive) {
+				// 检查是否有厌恶情绪
+				if (!hasMark(battlefield_[rightTargetIndex].card, std::string(u8"厌恶情绪"))) {
+					canAttackRight = true;
+				}
+			}
+		}
+		
+		return canAttackLeft || canAttackRight;
+	}
+	case BattleState::AttackType::Triple: {
+		// 三向攻击：检查对位+左右斜对位
+		bool canAttackLeft = false, canAttackFront = false, canAttackRight = false;
+		
+		// 左斜对位
+		if (targetCol > 0) {
+			int leftTargetIndex = isPlayerAttacking ?
+				(1 * BATTLEFIELD_COLS + (targetCol - 1)) :
+				(2 * BATTLEFIELD_COLS + (targetCol - 1));
+			
+			if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
+				battlefield_[leftTargetIndex].isAlive) {
+				if (!hasMark(battlefield_[leftTargetIndex].card, std::string(u8"厌恶情绪"))) {
+					canAttackLeft = true;
+				}
+			}
+		}
+		
+		// 对位
+		int frontTargetIndex = isPlayerAttacking ?
+			(1 * BATTLEFIELD_COLS + targetCol) :
+			(2 * BATTLEFIELD_COLS + targetCol);
+		
+		if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
+			battlefield_[frontTargetIndex].isAlive) {
+			if (!hasMark(battlefield_[frontTargetIndex].card, std::string(u8"厌恶情绪"))) {
+				canAttackFront = true;
+			}
+		}
+		
+		// 右斜对位
+		if (targetCol < BATTLEFIELD_COLS - 1) {
+			int rightTargetIndex = isPlayerAttacking ?
+				(1 * BATTLEFIELD_COLS + (targetCol + 1)) :
+				(2 * BATTLEFIELD_COLS + (targetCol + 1));
+			
+			if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
+				battlefield_[rightTargetIndex].isAlive) {
+				if (!hasMark(battlefield_[rightTargetIndex].card, std::string(u8"厌恶情绪"))) {
+					canAttackRight = true;
+				}
+			}
+		}
+		
+		return canAttackLeft || canAttackFront || canAttackRight;
+	}
+	case BattleState::AttackType::AllDirection: {
+		// 全向打击：检查对面所有位置
+		if (isPlayerAttacking) {
+			// 玩家攻击：检查敌方前排的四个位置
+			for (int col = 0; col < 4; ++col) {
+				int enemyFrontIndex = 1 * BATTLEFIELD_COLS + col;
+				if (enemyFrontIndex >= 0 && enemyFrontIndex < TOTAL_BATTLEFIELD_SLOTS && 
+					battlefield_[enemyFrontIndex].isAlive) {
+					if (!hasMark(battlefield_[enemyFrontIndex].card, std::string(u8"厌恶情绪"))) {
+						return true; // 至少有一个方向可以攻击
+					}
+				}
+			}
+		} else {
+			// 敌方攻击：检查玩家前排的四个位置
+			for (int col = 0; col < 4; ++col) {
+				int playerIndex = 2 * BATTLEFIELD_COLS + col;
+				if (playerIndex >= 0 && playerIndex < TOTAL_BATTLEFIELD_SLOTS && 
+					battlefield_[playerIndex].isAlive) {
+					if (!hasMark(battlefield_[playerIndex].card, std::string(u8"厌恶情绪"))) {
+						return true; // 至少有一个方向可以攻击
+					}
+				}
+			}
+		}
+		return false;
+	}
+	case BattleState::AttackType::Twice:
+	case BattleState::AttackType::DoubleTwice:
+	case BattleState::AttackType::TripleTwice: {
+		// 双重攻击类：检查对位即可（双重攻击只攻击对位）
+		int frontTargetIndex = isPlayerAttacking ?
+			(1 * BATTLEFIELD_COLS + targetCol) :
+			(2 * BATTLEFIELD_COLS + targetCol);
+		
+		if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
+			battlefield_[frontTargetIndex].isAlive) {
+			return !hasMark(battlefield_[frontTargetIndex].card, std::string(u8"厌恶情绪"));
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
+}
+
 // 随机印记效果：删去随机印记并添加任意一个印记
 void BattleState::applyRandomMarkEffect(Card& card) {
 	// 检查是否有随机印记
@@ -2715,7 +3272,7 @@ void BattleState::applyRandomMarkEffect(Card& card) {
 		u8"生生不息", u8"形态转换", u8"不死印记", u8"消耗骨头", u8"优质祭品",
 		u8"内心之蜂", u8"滋生寄生虫", u8"断尾求生", u8"反伤", u8"死神之触",
 		u8"令人生厌", u8"臭臭", u8"蚂蚁", u8"蚁后", u8"一口之量", u8"坚硬之躯",
-		u8"兔窝", u8"筑坝师", u8"堤坝附带印记", u8"继承印记", u8"检索", u8"磐石之身", u8"半根骨头", u8"献祭之血", u8"厌恶情绪", u8"铁兽夹", u8"全向打击"
+		u8"兔窝", u8"筑坝师", u8"堤坝附带印记", u8"继承印记", u8"检索", u8"磐石之身", u8"半根骨头", u8"献祭之血", u8"厌恶情绪", u8"铁兽夹", u8"全向打击", u8"道具商"
 	};
 	
 	// 随机选择一个印记
@@ -3667,6 +4224,94 @@ void BattleState::renderUI(App& app) {
 		}
 	}
 
+	// 绘制道具槽位和道具
+	int itemSlotSize = 60;  // 道具槽尺寸
+	int itemSpacing = 15;   // 道具间距
+	int itemsPerRow = 3;    // 每行3个道具
+	int itemStartX = itemAreaRect_.x + 20;
+	int itemStartY = itemAreaRect_.y + 40;
+	
+	for (int i = 0; i < MAX_ITEMS; ++i) {
+		// 计算道具槽位置（分两行显示）
+		int row = i / itemsPerRow;
+		int col = i % itemsPerRow;
+		
+		itemSlots_[i] = {
+			itemStartX + col * (itemSlotSize + itemSpacing),
+			itemStartY + row * (itemSlotSize + itemSpacing),
+			itemSlotSize,
+			itemSlotSize
+		};
+		
+		// 绘制道具槽背景
+		if (isItemHovered_[i]) {
+			SDL_SetRenderDrawColor(r, 80, 80, 80, 255);
+		} else {
+			SDL_SetRenderDrawColor(r, 50, 50, 50, 200);
+		}
+		SDL_RenderFillRect(r, &itemSlots_[i]);
+		SDL_SetRenderDrawColor(r, 100, 100, 100, 255);
+		SDL_RenderDrawRect(r, &itemSlots_[i]);
+		
+		// 如果有道具，绘制道具
+		if (i < playerItems_.size()) {
+			const Item& item = playerItems_[i];
+			
+			// 绘制道具图标（简单的圆形）
+			SDL_SetRenderDrawColor(r, 200, 150, 50, 255);
+			int centerX = itemSlots_[i].x + itemSlots_[i].w / 2;
+			int centerY = itemSlots_[i].y + itemSlots_[i].h / 2;
+			int radius = itemSlotSize / 3;
+			
+			// 绘制圆形（简单版本）
+			for (int w = 0; w < radius * 2; w++) {
+				for (int h = 0; h < radius * 2; h++) {
+					int dx = radius - w;
+					int dy = radius - h;
+					if ((dx * dx + dy * dy) <= (radius * radius)) {
+						SDL_RenderDrawPoint(r, centerX + dx, centerY + dy);
+					}
+				}
+			}
+			
+			// 绘制道具数量（如果大于1）
+			if (item.count > 1 && infoFont_) {
+				SDL_Color countColor{ 255, 255, 255, 255 };
+				std::string countText = std::to_string(item.count);
+				SDL_Surface* countSurface = TTF_RenderUTF8_Blended(infoFont_, countText.c_str(), countColor);
+				if (countSurface) {
+					SDL_Texture* countTexture = SDL_CreateTextureFromSurface(r, countSurface);
+					if (countTexture) {
+						SDL_Rect countRect{ itemSlots_[i].x + itemSlots_[i].w - 15, itemSlots_[i].y + 2, countSurface->w, countSurface->h };
+						SDL_RenderCopy(r, countTexture, nullptr, &countRect);
+						SDL_DestroyTexture(countTexture);
+					}
+					SDL_FreeSurface(countSurface);
+				}
+			}
+			
+			// 绘制道具名称（在道具下方）
+			if (infoFont_) {
+				SDL_Color nameColor{ 180, 180, 180, 255 };
+				SDL_Surface* nameSurface = TTF_RenderUTF8_Blended(infoFont_, item.name.c_str(), nameColor);
+				if (nameSurface) {
+					SDL_Texture* nameTexture = SDL_CreateTextureFromSurface(r, nameSurface);
+					if (nameTexture) {
+						SDL_Rect nameRect{ 
+							itemSlots_[i].x + (itemSlots_[i].w - nameSurface->w) / 2, 
+							itemSlots_[i].y + itemSlots_[i].h + 5, 
+							nameSurface->w, 
+							nameSurface->h 
+						};
+						SDL_RenderCopy(r, nameTexture, nullptr, &nameRect);
+						SDL_DestroyTexture(nameTexture);
+					}
+					SDL_FreeSurface(nameSurface);
+				}
+			}
+		}
+	}
+
 	// 绘制墨锭牌堆（右下角）
 	SDL_SetRenderDrawColor(r, 35, 35, 35, 200);
 	SDL_RenderFillRect(r, &inkPileRect_);
@@ -4470,6 +5115,22 @@ void BattleState::onMovementComplete() {
         if (currentPhase_ == GamePhase::EnemyTurn) {
             // 敌方回合结束时：结算掘墓人（统计敌方单位）
             grantGravediggerBones(true);
+            
+            // 清理风雅扇的空袭效果（一回合后失效）
+            for (int slot : fengyaShanAirstrikeSlots_) {
+                if (slot >= 0 && slot < TOTAL_BATTLEFIELD_SLOTS) {
+                    auto& bf = battlefield_[slot];
+                    if (bf.isAlive && bf.isPlayer) {
+                        // 移除空袭印记
+                        auto it = std::find(bf.card.marks.begin(), bf.card.marks.end(), std::string(u8"空袭"));
+                        if (it != bf.card.marks.end()) {
+                            bf.card.marks.erase(it);
+                        }
+                    }
+                }
+            }
+            fengyaShanAirstrikeSlots_.clear();
+            
 			currentPhase_ = GamePhase::PlayerTurn;
 			// 重置本回合献祭次数
 			sacrificeCountThisTurn_ = 0;
@@ -4746,6 +5407,323 @@ void BattleState::renderDeckSelection(App& app) {
 			SDL_DestroyTexture(textTexture);
 			SDL_FreeSurface(textSurface);
 		}
+	}
+}
+
+// 道具系统实现
+void BattleState::addItem(const std::string& itemId, int count) {
+	// 道具系统不支持叠加，每个道具占用独立槽位
+	// 检查道具栏是否已满
+	if (playerItems_.size() < MAX_ITEMS) {
+		// 根据itemId创建对应的道具
+		Item newItem;
+		if (itemId == "yinyang_pei") {
+			newItem = Item("yinyang_pei", u8"阴阳佩", u8"对敌人本体造成1点伤害", count);
+		} else if (itemId == "mobao_ping") {
+			newItem = Item("mobao_ping", u8"墨宝瓶", u8"使用后手牌出现一张墨锭", count);
+		} else if (itemId == "wangchuan_shi") {
+			newItem = Item("wangchuan_shi", u8"忘川石", u8"使用后手牌获得一张磐石", count);
+		} else if (itemId == "fengya_shan") {
+			newItem = Item("fengya_shan", u8"风雅扇", u8"使用后我方场上的牌获得一回合的空袭效果", count);
+		} else if (itemId == "rigui") {
+			newItem = Item("rigui", u8"日晷", u8"敌方跳过一回合，玩家结束回合后再次到玩家回合", count);
+		} else if (itemId == "duanyinjian") {
+			newItem = Item("duanyinjian", u8"断因剑", u8"使用后可以选择敌人第二行的任意一张牌直接摧毁", count);
+		} else if (itemId == "tunmohao") {
+			newItem = Item("tunmohao", u8"吞墨毫", u8"使用后摧毁敌人第二行任意一张牌，摧毁后手牌获得一张狼皮", count);
+		} else if (itemId == "fuhunsuo") {
+			newItem = Item("fuhunsuo", u8"缚魂锁", u8"使用后可以将敌人第二行的某一张卡牌移动到我方第三行空位", count);
+		} else if (itemId == "wuzitianshu") {
+			newItem = Item("wuzitianshu", u8"无字天书", u8"使用后删除对面场上所有卡牌的印记效果", count);
+		} else if (itemId == "xuanmuping") {
+			newItem = Item("xuanmuping", u8"玄牧瓶", u8"使用后手牌获得一张玄牧", count);
+		} else if (itemId == "tianjiluopan") {
+			newItem = Item("tianjiluopan", u8"天机罗盘", u8"使用后可以从牌组中检索一张牌加入手牌", count);
+		} else if (itemId == "sanguiping") {
+			newItem = Item("sanguiping", u8"散骨瓶", u8"使用后获得4个魂骨", count);
+		} else {
+			newItem = Item(itemId, "未知道具", "道具描述", count);
+		}
+		playerItems_.push_back(newItem);
+		statusMessage_ = "获得新道具：" + newItem.name + " x" + std::to_string(count);
+	} else {
+		statusMessage_ = "道具栏已满，无法获得新道具";
+	}
+}
+
+bool BattleState::removeItem(const std::string& itemId, int count) {
+	for (auto it = playerItems_.begin(); it != playerItems_.end(); ++it) {
+		if (it->id == itemId) {
+			it->count -= count;
+			if (it->count <= 0) {
+				playerItems_.erase(it);
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+bool BattleState::hasItem(const std::string& itemId) const {
+	for (const auto& item : playerItems_) {
+		if (item.id == itemId) {
+			return true;
+		}
+	}
+	return false;
+}
+
+int BattleState::getItemCount(const std::string& itemId) const {
+	for (const auto& item : playerItems_) {
+		if (item.id == itemId) {
+			return item.count;
+		}
+	}
+	return 0;
+}
+
+void BattleState::useItem(const std::string& itemId) {
+	// 根据不同的道具ID实现不同的效果
+	if (itemId == "yinyang_pei") {
+		// 阴阳佩：对敌人本体造成1点伤害
+		if (removeItem(itemId, 1)) {
+			enemyHealth_ -= 1;
+			if (enemyHealth_ < 0) enemyHealth_ = 0;
+			
+			// 在墨尺上显示伤害
+			meterTargetPos_ += 1;
+			if (meterTargetPos_ > 5) meterTargetPos_ = 5;
+			
+			// 启动墨尺指针动画
+			isMeterAnimating_ = true;
+			meterAnimTime_ = 0.0f;
+			
+			statusMessage_ = u8"使用阴阳佩，对敌人造成1点伤害！";
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "mobao_ping") {
+		// 墨宝瓶：手牌出现一张墨锭
+		if (removeItem(itemId, 1)) {
+			// 添加墨锭到手牌
+			Card inkCard = CardDB::instance().make("moding");
+			if (!inkCard.id.empty()) {
+				handCards_.push_back(inkCard);
+				layoutHandCards();  // 重新布局手牌
+				statusMessage_ = u8"使用墨宝瓶，获得一张墨锭！";
+			} else {
+				statusMessage_ = "无法创建墨锭卡牌";
+			}
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "wangchuan_shi") {
+		// 忘川石：手牌获得一张磐石
+		if (removeItem(itemId, 1)) {
+			// 添加磐石到手牌
+			Card rockCard = CardDB::instance().make("panshi");
+			if (!rockCard.id.empty()) {
+				handCards_.push_back(rockCard);
+				layoutHandCards();  // 重新布局手牌
+				statusMessage_ = u8"使用忘川石，获得一张磐石！";
+			} else {
+				statusMessage_ = "无法创建磐石卡牌";
+			}
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "fengya_shan") {
+		// 风雅扇：我方场上的牌获得一回合的空袭效果
+		if (removeItem(itemId, 1)) {
+			// 清理之前的风雅扇效果
+			fengyaShanAirstrikeSlots_.clear();
+			
+			// 给我方场上的所有卡牌添加空袭效果
+			int airstrikeCount = 0;
+			for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+				auto& bf = battlefield_[i];
+				if (bf.isAlive && bf.isPlayer) {
+					// 给卡牌添加空袭印记
+					bf.card.marks.push_back(u8"空袭");
+					// 记录这个位置，用于回合结束时清理
+					fengyaShanAirstrikeSlots_.push_back(i);
+					airstrikeCount++;
+				}
+			}
+			
+			if (airstrikeCount > 0) {
+				statusMessage_ = u8"使用风雅扇，我方" + std::to_string(airstrikeCount) + u8"张卡牌获得空袭效果！";
+			} else {
+				statusMessage_ = u8"使用风雅扇，但我方场上没有卡牌！";
+			}
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "rigui") {
+		// 日晷：敌方跳过一回合
+		if (removeItem(itemId, 1)) {
+			// 激活日晷效果
+			riguiEffectActive_ = true;
+			statusMessage_ = u8"使用日晷，敌方将跳过下一回合！";
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "duanyinjian") {
+		// 断因剑：选择敌人第二行任意一张牌直接摧毁
+		// 检查敌人第二行是否有卡牌
+		bool hasEnemyInSecondRow = false;
+		for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+			int index = 1 * BATTLEFIELD_COLS + col; // 第二行索引4-7
+			if (battlefield_[index].isAlive && !battlefield_[index].isPlayer) {
+				hasEnemyInSecondRow = true;
+				break;
+			}
+		}
+		
+		if (!hasEnemyInSecondRow) {
+			statusMessage_ = u8"断因剑：敌人第二行没有卡牌，无法使用！";
+			return;
+		}
+		
+		if (removeItem(itemId, 1)) {
+			// 进入目标选择模式
+			isSelectingTarget_ = true;
+			selectedTargetIndex_ = -1;
+			statusMessage_ = u8"断因剑激活！请点击敌人第二行的卡牌进行摧毁！";
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "tunmohao") {
+		// 吞墨毫：选择敌人第二行任意一张牌直接摧毁，摧毁后手牌获得一张狼皮
+		// 检查敌人第二行是否有卡牌
+		bool hasEnemyInSecondRow = false;
+		for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+			int index = 1 * BATTLEFIELD_COLS + col; // 第二行索引4-7
+			if (battlefield_[index].isAlive && !battlefield_[index].isPlayer) {
+				hasEnemyInSecondRow = true;
+				break;
+			}
+		}
+		
+		if (!hasEnemyInSecondRow) {
+			statusMessage_ = u8"吞墨毫：敌人第二行没有卡牌，无法使用！";
+			return;
+		}
+		
+		if (removeItem(itemId, 1)) {
+			// 进入目标选择模式
+			isSelectingTunmohaoTarget_ = true;
+			selectedTunmohaoTargetIndex_ = -1;
+			statusMessage_ = u8"吞墨毫激活！请点击敌人第二行的卡牌进行摧毁！";
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "fuhunsuo") {
+		// 缚魂锁：选择敌人第二行任意一张牌移动到我方第三行空位
+		// 检查敌人第二行是否有卡牌
+		bool hasEnemyInSecondRow = false;
+		for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+			int index = 1 * BATTLEFIELD_COLS + col; // 第二行索引4-7
+			if (battlefield_[index].isAlive && !battlefield_[index].isPlayer) {
+				hasEnemyInSecondRow = true;
+				break;
+			}
+		}
+		
+		if (!hasEnemyInSecondRow) {
+			statusMessage_ = u8"缚魂锁：敌人第二行没有卡牌，无法使用！";
+			return;
+		}
+		
+		if (removeItem(itemId, 1)) {
+			// 进入目标选择模式
+			isSelectingFuhunsuoTarget_ = true;
+			selectedFuhunsuoTargetIndex_ = -1;
+			statusMessage_ = u8"缚魂锁激活！请点击敌人第二行的卡牌进行移动！";
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "wuzitianshu") {
+		// 无字天书：删除对面场上所有卡牌的印记效果
+		if (removeItem(itemId, 1)) {
+			int removedMarksCount = 0;
+			// 遍历敌方场上所有卡牌（第一行和第二行）
+			for (int row = 0; row < 2; ++row) {
+				for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+					int index = row * BATTLEFIELD_COLS + col;
+					if (battlefield_[index].isAlive && !battlefield_[index].isPlayer) {
+						// 清空敌方卡牌的所有印记
+						if (!battlefield_[index].card.marks.empty()) {
+							removedMarksCount += battlefield_[index].card.marks.size();
+							battlefield_[index].card.marks.clear();
+						}
+					}
+				}
+			}
+			statusMessage_ = u8"无字天书生效！删除了敌方 " + std::to_string(removedMarksCount) + " 个印记效果！";
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "xuanmuping") {
+		// 玄牧瓶：手牌获得一张玄牧
+		if (removeItem(itemId, 1)) {
+			Card xuanmuCard = CardDB::instance().make("xuanmu");
+			if (xuanmuCard.id != "unknown") {
+				handCards_.push_back(xuanmuCard);
+				layoutHandCards();
+				statusMessage_ = u8"玄牧瓶生效！获得玄牧！";
+			} else {
+				statusMessage_ = u8"玄牧瓶生效，但无法获得玄牧卡牌！";
+			}
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "tianjiluopan") {
+		// 天机罗盘：从牌组中检索一张牌加入手牌
+		if (removeItem(itemId, 1)) {
+			// 启动检索状态（使用检索印记的函数）
+			isSearchingDeck_ = true;
+			selectedDeckCardIndex_ = -1;
+			statusMessage_ = u8"天机罗盘激活！请从牌组中选择一张卡牌！";
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else if (itemId == "sanguiping") {
+		// 散骨瓶：获得4个魂骨
+		if (removeItem(itemId, 1)) {
+			boneCount_ += 4;
+			statusMessage_ = u8"散骨瓶生效！获得4个魂骨！当前魂骨数量: " + std::to_string(boneCount_);
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	} else {
+		// 其他道具暂时只是移除
+		if (removeItem(itemId, 1)) {
+			statusMessage_ = "使用了道具：" + itemId;
+		} else {
+			statusMessage_ = "没有该道具";
+		}
+	}
+}
+
+void BattleState::initializeItems() {
+	// 初始化所有14种道具的定义
+	// 暂时为空，道具会在获得时动态创建
+}
+
+// 缚魂锁移动动画更新
+void BattleState::updateFuhunsuoAnimation(float dt) {
+	if (!isFuhunsuoAnimating_) return;
+
+	fuhunsuoAnimTime_ += dt;
+
+	// 动画完成
+	if (fuhunsuoAnimTime_ >= fuhunsuoAnimDuration_) {
+		// 目标卡牌已经在动画开始时设置为存活状态，这里只需要重置动画状态
+		isFuhunsuoAnimating_ = false;
+		fuhunsuoAnimTime_ = 0.0f;
+		fuhunsuoFromIndex_ = -1;
+		fuhunsuoToIndex_ = -1;
 	}
 }
 
