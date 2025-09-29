@@ -91,9 +91,13 @@ private:
 	std::vector<Item> playerItems_;  // 玩家拥有的道具（最多14个）
 	static constexpr int MAX_ITEMS = 3;  // 最大道具数量
 	
+	// 可获得的道具列表
+	static const std::vector<std::string> AVAILABLE_ITEMS;
+	
 	// 道具UI相关
 	SDL_Rect itemSlots_[MAX_ITEMS];  // 道具槽位矩形
 	bool isItemHovered_[MAX_ITEMS] = {false};  // 道具悬停状态
+	int hoveredItemIndex_ = -1; // 当前悬停的道具索引
 	
 	// 风雅扇效果跟踪
 	std::vector<int> fengyaShanAirstrikeSlots_;  // 记录获得风雅扇空袭效果的卡牌位置
@@ -213,6 +217,7 @@ private:
 	int getItemCount(const std::string& itemId) const;
 	void useItem(const std::string& itemId);
 	void initializeItems();  // 初始化所有道具定义
+	std::string getRandomItem();  // 获取随机道具ID
 
 	// 蛮力冲撞相关方法
 	void startBruteForce(int cardIndex);
@@ -320,6 +325,7 @@ private:
 	float meterAnimDuration_ = 0.35f;    // 动画时长（秒）
 	float meterStartPos_ = 0.0f;         // 动画起始刻度
 	bool isMeterAnimating_ = false;      // 是否正在播放指针动画
+	int meterOvershoot_ = 0;             // 墨尺超出阈值的多余点数（失败时记录）
 
 	// 战斗系统
 	int totalDamageDealt_ = 0;          // 本回合造成的总伤害
@@ -338,6 +344,15 @@ private:
 	// 检索印记系统
 	bool isSearchingDeck_ = false;      // 是否正在检索牌堆
 	int selectedDeckCardIndex_ = -1;    // 选中的牌堆卡牌索引
+	bool searchAllCardsMode_ = false;   // 是否检索全卡库（上帝模式N）
+	std::vector<std::string> searchCandidates_; // 检索候选ID列表（全卡库模式下使用）
+
+	// 上帝模式生成：按G在敌方区(前两行)指定格生成选中卡
+	bool godSpawnMode_ = false;
+	int godSpawnIndex_ = -1;
+
+	// 本帧抑制因死亡获得魂骨（用于移动导致的清位等情况）
+	bool suppressBoneGainThisFrame_ = false;
 
 
 	// 上帝模式系统

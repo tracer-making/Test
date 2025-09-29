@@ -9,6 +9,13 @@
 #include <SDL_ttf.h>
 #include <cmath>
 
+// 可获得的道具列表定义
+const std::vector<std::string> BattleState::AVAILABLE_ITEMS = {
+	"yinyang_pei", "mobao_ping", "wangchuan_shi", "fengya_shan", "rigui",
+	"duanyinjian", "tunmohao", "fuhunsuo", "wuzitianshu", "xuanmuping",
+	"tianjiluopan", "sanguiping"
+};
+
 #include <algorithm>
 #include <sstream>
 #include <string>
@@ -91,32 +98,27 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
         if (e.key.keysym.sym == SDLK_t) {
 			// T键切换上帝模式
 			godMode_ = !godMode_;
-			if (godMode_) {
-                statusMessage_ = "上帝模式开启：A=巴蛇，S=雪尾鼬生，D=巴蛇，F=青羽翠使，H=锁血，J=+1魂骨，B=获得道具";
-			}
-			else {
-				statusMessage_ = "上帝模式已关闭";
-			}
+				// 进入/退出上帝模式时不再输出到状态消息，由渲染侧显示帮助
 		}
-        else if (e.key.keysym.sym == SDLK_h && godMode_) {
+		else if (e.key.keysym.sym == SDLK_h && godMode_) {
             // H键：锁定玩家本体血量与墨尺计数
             lockPlayerHealth_ = !lockPlayerHealth_;
-            if (lockPlayerHealth_) {
+			if (lockPlayerHealth_) {
                 lockedPlayerHealthValue_ = playerHealth_;
                 lockedMeterNetValue_ = meterNet_;
                 lockedMeterDisplayPos_ = meterDisplayPos_;
                 lockedMeterTarget_ = meterTargetPos_;
-                statusMessage_ = "上帝模式：玩家血量与墨尺已锁定";
-            } else {
-                statusMessage_ = "上帝模式：玩家血量与墨尺解锁";
-            }
+				// 不输出状态消息
+			} else {
+				// 不输出状态消息
+			}
         }
-        else if (e.key.keysym.sym == SDLK_j && godMode_) {
+		else if (e.key.keysym.sym == SDLK_j && godMode_) {
             // J键：魂骨+1
             boneCount_ += 1;
-            statusMessage_ = "上帝模式：魂骨+1 (" + std::to_string(boneCount_) + ")";
+			// 不输出状态消息
         }
-        else if (e.key.keysym.sym == SDLK_a && godMode_) {
+		else if (e.key.keysym.sym == SDLK_a && godMode_) {
             // A键在悬停位置生成狼戎酋首
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
@@ -131,52 +133,52 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
 							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
 							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
-                            statusMessage_ = "在敌方区域生成巴蛇(A)";
+							// 不输出状态消息
 						}
 					}
 					else {
-						statusMessage_ = "该位置已有卡牌";
+						// 不输出状态消息
 					}
 				}
 				else {
-					statusMessage_ = "只能在敌方区域（前两行）生成卡牌";
+					// 不输出状态消息
 				}
 			}
 			else {
-				statusMessage_ = "请悬停在敌方区域再按A键";
+				// 不输出状态消息
 			}
 		}
         else if (e.key.keysym.sym == SDLK_s && godMode_) {
-            // S键在悬停位置生成山龙子
+            // S键在悬停位置生成刀笔吏
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
 				if (row < 2) { // 只能在敌方区域（前两行）生成
 					if (!battlefield_[hoveredBattlefieldIndex_].isAlive) {
-                        // 生成厌恶情绪卡牌
-                        Card yanwu = CardDB::instance().make("yanwu_qingxu");
-                        if (!yanwu.id.empty()) {
-                            battlefield_[hoveredBattlefieldIndex_].card = yanwu;
+                        // 生成刀笔吏卡牌（三向攻击）
+                        Card daobi = CardDB::instance().make("daobi_li");
+                        if (!daobi.id.empty()) {
+                            battlefield_[hoveredBattlefieldIndex_].card = daobi;
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
-                            battlefield_[hoveredBattlefieldIndex_].health = yanwu.health;
+                            battlefield_[hoveredBattlefieldIndex_].health = daobi.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
 							battlefield_[hoveredBattlefieldIndex_].placedTurn = currentTurn_;
 							battlefield_[hoveredBattlefieldIndex_].oneTurnGrowthApplied = false;
-                            statusMessage_ = "在敌方区域生成厌恶情绪(S)";
+                            // 不输出状态消息
 						}
 					}
 					else {
-						statusMessage_ = "该位置已有卡牌";
+						// 不输出状态消息
 					}
 				}
 				else {
-					statusMessage_ = "只能在敌方区域（前两行）生成卡牌";
+					// 不输出状态消息
 				}
 			}
 			else {
-				statusMessage_ = "请悬停在敌方区域再按S键";
+				// 不输出状态消息
 			}
 		}
-        else if (e.key.keysym.sym == SDLK_d && godMode_) {
+		else if (e.key.keysym.sym == SDLK_d && godMode_) {
             // D键在悬停位置生成铁兽夹
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
@@ -189,22 +191,22 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
                             battlefield_[hoveredBattlefieldIndex_].health = tieshou.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
-                            statusMessage_ = "在敌方区域生成铁兽夹(D)";
+							// 不输出状态消息
 						}
 					}
 					else {
-						statusMessage_ = "该位置已有卡牌";
+						// 不输出状态消息
 					}
 				}
 				else {
-					statusMessage_ = "只能在敌方区域（前两行）生成卡牌";
+					// 不输出状态消息
 				}
 			}
 			else {
-				statusMessage_ = "请悬停在敌方区域再按D键";
+				// 不输出状态消息
 			}
 		}
-        else if (e.key.keysym.sym == SDLK_f && godMode_) {
+		else if (e.key.keysym.sym == SDLK_f && godMode_) {
             // F键在悬停位置生成全向打击
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
@@ -217,42 +219,65 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 							battlefield_[hoveredBattlefieldIndex_].isAlive = true;
                             battlefield_[hoveredBattlefieldIndex_].health = quanxiang.health;
 							battlefield_[hoveredBattlefieldIndex_].isPlayer = false; // 敌方卡牌
-                            statusMessage_ = "在敌方区域生成全向打击(F)";
+							// 不输出状态消息
 						}
 					}
 					else {
-						statusMessage_ = "该位置已有卡牌";
+						// 不输出状态消息
 					}
 				}
 				else {
-					statusMessage_ = "只能在敌方区域（前两行）生成卡牌";
+					// 不输出状态消息
 				}
 			}
 			else {
-				statusMessage_ = "请悬停在敌方区域再按F键";
+				// 不输出状态消息
 			}
 		}
-        else if (e.key.keysym.sym == SDLK_b && godMode_) {
+		else if (e.key.keysym.sym == SDLK_b && godMode_) {
             // B键：获得一个随机道具（前提是道具没满）
             if (playerItems_.size() < MAX_ITEMS) {
-                // 定义所有可获得的道具
-                std::vector<std::string> availableItems = {
-                    "yinyang_pei", "mobao_ping", "wangchuan_shi", "fengya_shan", "rigui",
-                    "duanyinjian", "tunmohao", "fuhunsuo", "wuzitianshu", "xuanmuping",
-                    "tianjiluopan", "sanguiping"
-                };
-                
-                // 随机选择一个道具
-                int randomIndex = rand() % availableItems.size();
-                std::string selectedItem = availableItems[randomIndex];
-                
-                // 添加道具
-                addItem(selectedItem, 1);
-                statusMessage_ = "上帝模式：获得道具 " + selectedItem;
+                // 获取随机道具
+                std::string selectedItem = getRandomItem();
+                if (!selectedItem.empty()) {
+                    addItem(selectedItem, 1);
+					// 不输出状态消息
+                } else {
+					// 不输出状态消息
+                }
             } else {
-                statusMessage_ = "道具已满，无法获得新道具！";
+				// 不输出状态消息
             }
         }
+		else if (e.key.keysym.sym == SDLK_v && godMode_) {
+			// V键：打开检索牌界面
+			isSearchingDeck_ = true;
+			selectedDeckCardIndex_ = -1;
+			searchAllCardsMode_ = false;
+			// 不输出状态消息
+		}
+		else if (e.key.keysym.sym == SDLK_n && godMode_) {
+			// N键：打开全卡库检索
+			isSearchingDeck_ = true;
+			selectedDeckCardIndex_ = -1;
+			searchAllCardsMode_ = true;
+			searchCandidates_ = CardDB::instance().allIds();
+			// 不输出状态消息
+		}
+		else if (e.key.keysym.sym == SDLK_g && godMode_) {
+			// G键：与ASDF生成一致，要求敌方区域(前两行)且悬停格为空，随后全卡库选择生成到该悬停格
+			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
+				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
+				if (row < 2 && !battlefield_[hoveredBattlefieldIndex_].isAlive) {
+					godSpawnMode_ = true;
+					godSpawnIndex_ = hoveredBattlefieldIndex_;
+					isSearchingDeck_ = true;
+					selectedDeckCardIndex_ = -1;
+					searchAllCardsMode_ = true;
+					searchCandidates_ = CardDB::instance().allIds();
+				}
+			}
+		}
 	}
 
 	// 处理鼠标移动事件（悬停检测）
@@ -268,6 +293,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 		for (int i = 0; i < MAX_ITEMS; ++i) {
 			isItemHovered_[i] = false;
 		}
+		hoveredItemIndex_ = -1;
 
 		// 检查战场悬停
 		for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
@@ -294,6 +320,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			if (mouseX >= itemSlots_[i].x && mouseX <= itemSlots_[i].x + itemSlots_[i].w &&
 				mouseY >= itemSlots_[i].y && mouseY <= itemSlots_[i].y + itemSlots_[i].h) {
 				isItemHovered_[i] = true;
+				hoveredItemIndex_ = i;
 				break;
 			}
 		}
@@ -303,15 +330,15 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 		int mouseX = e.button.x;
 		int mouseY = e.button.y;
 
-		// 检索状态：处理牌堆卡牌选择
+		// 检索状态：处理牌堆/全卡库卡牌选择
 		if (isSearchingDeck_) {
 			// 计算牌堆卡牌的显示区域 - 与渲染逻辑保持一致
-			int cardWidth = 120;  // 增大卡牌宽度
-			int cardHeight = 180; // 增大卡牌高度
-			int cardSpacing = 15; // 增大卡牌间距
-			int rowSpacing = 20;  // 增大行间距
+			int cardWidth = searchAllCardsMode_ ? 90 : 120;   // 全卡库更小
+			int cardHeight = searchAllCardsMode_ ? 135 : 180; // 全卡库更小
+			int cardSpacing = searchAllCardsMode_ ? 10 : 15;  // 全卡库更紧凑
+			int rowSpacing = searchAllCardsMode_ ? 14 : 20;   // 全卡库更紧凑
 			
-			int totalCards = static_cast<int>(playerDeck_.size());
+			int totalCards = static_cast<int>(searchAllCardsMode_ ? searchCandidates_.size() : playerDeck_.size());
 			if (totalCards == 0) return;
 			
 			// 根据屏幕宽度和卡牌数量动态计算每行卡牌数
@@ -330,7 +357,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			int totalLayoutHeight = totalRows * cardHeight + (totalRows - 1) * rowSpacing;
 			int startY = (screenH_ - totalLayoutHeight) / 2;
 			
-			for (size_t i = 0; i < playerDeck_.size(); ++i) {
+			for (size_t i = 0; i < (searchAllCardsMode_ ? searchCandidates_.size() : playerDeck_.size()); ++i) {
 				int row = static_cast<int>(i) / cardsPerRow;
 				int col = static_cast<int>(i) % cardsPerRow;
 				
@@ -349,22 +376,44 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 					// 选中这张卡牌
 					selectedDeckCardIndex_ = static_cast<int>(i);
 					
-					// 从牌堆中移除选中的卡牌
-					std::string selectedCardId = playerDeck_[i];
-					playerDeck_.erase(playerDeck_.begin() + i);
-					playerPileCount_ = static_cast<int>(playerDeck_.size());
-					
-					// 将选中的卡牌加入手牌
-					Card selectedCard = CardDB::instance().make(selectedCardId);
-					if (!selectedCard.id.empty()) {
-						handCards_.push_back(selectedCard);
-						layoutHandCards();
-						statusMessage_ = std::string("检索：获得手牌 ") + selectedCard.name;
+					// 确定选中的卡ID
+					std::string selectedCardId = searchAllCardsMode_ ? searchCandidates_[i] : playerDeck_[i];
+					// 仅当非全卡库模式时，从玩家牌堆移除该卡
+					if (!searchAllCardsMode_) {
+						playerDeck_.erase(playerDeck_.begin() + i);
+						playerPileCount_ = static_cast<int>(playerDeck_.size());
 					}
 					
-					// 退出检索状态
+					// 生成卡对象
+					Card selectedCard = CardDB::instance().make(selectedCardId);
+					if (!selectedCard.id.empty()) {
+						if (godSpawnMode_ && godSpawnIndex_ >= 0 && godSpawnIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
+							// 上帝模式生成到指定格（前两行视为敌方）
+							SDL_Rect keepRect = battlefield_[godSpawnIndex_].rect;
+							int rowIdx = godSpawnIndex_ / BATTLEFIELD_COLS;
+							bool enemySide = (rowIdx < 2);
+							battlefield_[godSpawnIndex_].card = selectedCard;
+							battlefield_[godSpawnIndex_].isAlive = true;
+							battlefield_[godSpawnIndex_].health = selectedCard.health;
+							battlefield_[godSpawnIndex_].isPlayer = !enemySide ? true : false;
+							battlefield_[godSpawnIndex_].rect = keepRect;
+							battlefield_[godSpawnIndex_].placedTurn = currentTurn_;
+							battlefield_[godSpawnIndex_].oneTurnGrowthApplied = false;
+							statusMessage_ = std::string("上帝生成：") + selectedCard.name;
+						} else {
+							// 默认行为：加入手牌
+							handCards_.push_back(selectedCard);
+							layoutHandCards();
+							statusMessage_ = std::string("检索：获得手牌 ") + selectedCard.name;
+						}
+					}
+					
+					// 退出检索/上帝生成状态
 					isSearchingDeck_ = false;
 					selectedDeckCardIndex_ = -1;
+					searchAllCardsMode_ = false;
+					godSpawnMode_ = false;
+					godSpawnIndex_ = -1;
 					return;
 				}
 			}
@@ -628,8 +677,9 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 								fuhunsuoFromRect_ = battlefield_[i].rect;
 								fuhunsuoToRect_ = battlefield_[playerTargetIndex].rect;
 								
-								// 从敌人位置移除
-								battlefield_[i].isAlive = false;
+                                // 从敌人位置移除（因移动而死亡，不获得魂骨）
+                                battlefield_[i].isAlive = false;
+                                battlefield_[i].isMovedToDeath = true;
 								battlefield_[i].health = 0;
 								
 								// 设置目标位置（临时设置为存活，用于动画显示）
@@ -1170,7 +1220,7 @@ void BattleState::update(App& app, float dt) {
 				if (deltaTicks > 5) deltaTicks = 5;
 				if (deltaTicks < -5) deltaTicks = -5;
 				meterNet_ += deltaTicks;
-				if (meterNet_ > 5) meterNet_ = 5;
+				// 上限不再截断，以便记录超出；仍保留下限-5
 				if (meterNet_ < -5) meterNet_ = -5;
 				meterStartPos_ = meterDisplayPos_;
 				meterTargetPos_ = meterNet_;
@@ -1208,7 +1258,7 @@ void BattleState::update(App& app, float dt) {
 				if (deltaTicks > 5) deltaTicks = 5;
 				if (deltaTicks < -5) deltaTicks = -5;
 				meterNet_ += deltaTicks;
-				if (meterNet_ > 5) meterNet_ = 5;
+				// 上限不再截断，以便记录超出；仍保留下限-5
 				if (meterNet_ < -5) meterNet_ = -5;
 				meterStartPos_ = meterDisplayPos_;
 				meterTargetPos_ = meterNet_;
@@ -1400,6 +1450,9 @@ void BattleState::update(App& app, float dt) {
 				battlefield_[i].isMovedToDeath = false;
 				continue;
 			}
+			// 全局抑制：若本帧发生位移清位，则不加骨
+			if (suppressBoneGainThisFrame_) { continue; }
+
 			// 不死印记：我方单位死亡时，立刻回到手牌（即时渲染）
 			if (battlefield_[i].isPlayer) {
 				const Card& deadCard = battlefield_[i].card;
@@ -1453,12 +1506,14 @@ void BattleState::update(App& app, float dt) {
 
             // 如果不是生生不息卡牌在献祭时死亡，且不是因移动死亡，则获得魂骨
             if (!(wasSacrificed && hasImmortal) && !isMovedToDeath) {
-                boneCount_++;
+				boneCount_++;
                 // 骨王：死亡时额外获得3根骨头（总计4根）
                 if (hasMark(battlefield_[i].card, std::string(u8"骨王"))) {
                     boneCount_ += 3;
                 }
                 statusMessage_ = "获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
+				// 清理一次性标志
+				battlefield_[i].isMovedToDeath = false;
             }
 		}
 
@@ -1575,7 +1630,7 @@ void BattleState::render(App& app) {
 	renderHandCards(app);
 	renderUI(app);
 	
-	// 检索状态：渲染牌堆卡牌选择界面
+	// 检索状态：渲染牌堆/全卡库卡牌选择界面
 	if (isSearchingDeck_) {
 		renderDeckSelection(app);
 	}
@@ -1946,20 +2001,14 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 	// 道具商印记：打出时获得一个道具（前提是道具没满）
 	if (hasMark(card, std::string(u8"道具商"))) {
 		if (playerItems_.size() < MAX_ITEMS) {
-			// 定义所有可获得的道具
-			std::vector<std::string> availableItems = {
-				"yinyang_pei", "mobao_ping", "wangchuan_shi", "fengya_shan", "rigui",
-				"duanyinjian", "tunmohao", "fuhunsuo", "wuzitianshu", "xuanmuping",
-				"tianjiluopan", "sanguiping"
-			};
-			
-			// 随机选择一个道具
-			int randomIndex = rand() % availableItems.size();
-			std::string selectedItem = availableItems[randomIndex];
-			
-			// 添加道具
-			addItem(selectedItem, 1);
-			statusMessage_ = std::string("道具商：获得道具 ") + selectedItem;
+			// 获取随机道具
+			std::string selectedItem = getRandomItem();
+			if (!selectedItem.empty()) {
+				addItem(selectedItem, 1);
+				statusMessage_ = std::string("道具商：获得道具 ") + selectedItem;
+			} else {
+				statusMessage_ = "道具商：无法获取随机道具！";
+			}
 		} else {
 			statusMessage_ = "道具商：道具栏已满，无法获得新道具！";
 		}
@@ -2365,9 +2414,10 @@ void BattleState::executeEnemyAdvance() {
 					}
 				}
 
-				battlefield_[step.fromIndex].isAlive = false;
-				battlefield_[step.fromIndex].health = 0;
-				battlefield_[step.fromIndex].isMovedToDeath = false;
+                // 敌人推进：原位置被清空（是“移动离开”，非死亡，不加骨），但也不应该触发死亡逻辑
+                battlefield_[step.fromIndex].isAlive = false;
+                battlefield_[step.fromIndex].health = 0;
+                battlefield_[step.fromIndex].isMovedToDeath = true;
 			}
 		}
 	}
@@ -2375,6 +2425,16 @@ void BattleState::executeEnemyAdvance() {
 }
 
 void BattleState::checkGameOver() {
+	// 新失败条件：墨尺点数 >= 5 立即失败，并记录超出点数
+	if (meterTargetPos_ >= 5 || meterNet_ >= 5) {
+		// 以更精确的累计值作为基准
+		int current = std::max(meterTargetPos_, meterNet_);
+		meterOvershoot_ = current - 5; // 记录多余点数
+		currentPhase_ = GamePhase::GameOver;
+		statusMessage_ = "游戏失败！（墨尺达上限" + std::to_string(current) + ", 超出" + std::to_string(meterOvershoot_) + ")";
+		return;
+	}
+
 	if (playerHealth_ <= 0) {
 		currentPhase_ = GamePhase::GameOver;
 		statusMessage_ = "游戏失败！";
@@ -2390,6 +2450,8 @@ void BattleState::renderBattlefield(App& app) {
 
 	// 移除战场背景框
 
+
+    // 移除整行高亮，仅保留单格高亮
 
 	// 第一遍：绘制所有非攻击中的卡牌
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
@@ -2622,6 +2684,24 @@ void BattleState::renderBattlefield(App& app) {
 			SDL_RenderFillRect(r, &bfCard.rect);
 			SDL_SetRenderDrawColor(r, 100, 110, 120, 150);
 			SDL_RenderDrawRect(r, &bfCard.rect);
+		}
+
+		// 战场牌位悬停高亮（无论该格是否有牌）
+		if (i == hoveredBattlefieldIndex_) {
+			// 固定透明度的背景与描边（无脉动）
+			const Uint8 bgAlpha = 25;
+			const Uint8 innerAlpha = 70;
+			const Uint8 outerAlpha = 35;
+			// 背景半透明填充
+			SDL_SetRenderDrawColor(r, 255, 240, 180, bgAlpha);
+			SDL_RenderFillRect(r, &bfCard.rect);
+			// 内描边
+			SDL_SetRenderDrawColor(r, 255, 240, 180, innerAlpha);
+			SDL_RenderDrawRect(r, &bfCard.rect);
+			// 外描边
+			SDL_Rect outerSlot = bfCard.rect; outerSlot.x -= 3; outerSlot.y -= 3; outerSlot.w += 6; outerSlot.h += 6;
+			SDL_SetRenderDrawColor(r, 255, 220, 120, outerAlpha);
+			SDL_RenderDrawRect(r, &outerSlot);
 		}
 	}
 
@@ -3133,11 +3213,9 @@ bool BattleState::canMultiDirectionAttack(int attackerIndex, int targetCol, bool
 			int leftTargetIndex = isPlayerAttacking ?
 				(1 * BATTLEFIELD_COLS + (targetCol - 1)) :
 				(2 * BATTLEFIELD_COLS + (targetCol - 1));
-			
-			if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
-				battlefield_[leftTargetIndex].isAlive) {
-				// 检查是否有厌恶情绪
-				if (!hasMark(battlefield_[leftTargetIndex].card, std::string(u8"厌恶情绪"))) {
+			if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+				// 空位也视为可攻击（攻击本体），仅当有存活且带厌恶情绪时视为该方向不可攻
+				if (!battlefield_[leftTargetIndex].isAlive || !hasMark(battlefield_[leftTargetIndex].card, std::string(u8"厌恶情绪"))) {
 					canAttackLeft = true;
 				}
 			}
@@ -3148,11 +3226,9 @@ bool BattleState::canMultiDirectionAttack(int attackerIndex, int targetCol, bool
 			int rightTargetIndex = isPlayerAttacking ?
 				(1 * BATTLEFIELD_COLS + (targetCol + 1)) :
 				(2 * BATTLEFIELD_COLS + (targetCol + 1));
-			
-			if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
-				battlefield_[rightTargetIndex].isAlive) {
-				// 检查是否有厌恶情绪
-				if (!hasMark(battlefield_[rightTargetIndex].card, std::string(u8"厌恶情绪"))) {
+			if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+				// 空位也视为可攻击（攻击本体），仅当有存活且带厌恶情绪时视为该方向不可攻
+				if (!battlefield_[rightTargetIndex].isAlive || !hasMark(battlefield_[rightTargetIndex].card, std::string(u8"厌恶情绪"))) {
 					canAttackRight = true;
 				}
 			}
@@ -3169,10 +3245,8 @@ bool BattleState::canMultiDirectionAttack(int attackerIndex, int targetCol, bool
 			int leftTargetIndex = isPlayerAttacking ?
 				(1 * BATTLEFIELD_COLS + (targetCol - 1)) :
 				(2 * BATTLEFIELD_COLS + (targetCol - 1));
-			
-			if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
-				battlefield_[leftTargetIndex].isAlive) {
-				if (!hasMark(battlefield_[leftTargetIndex].card, std::string(u8"厌恶情绪"))) {
+			if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+				if (!battlefield_[leftTargetIndex].isAlive || !hasMark(battlefield_[leftTargetIndex].card, std::string(u8"厌恶情绪"))) {
 					canAttackLeft = true;
 				}
 			}
@@ -3182,10 +3256,8 @@ bool BattleState::canMultiDirectionAttack(int attackerIndex, int targetCol, bool
 		int frontTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + targetCol) :
 			(2 * BATTLEFIELD_COLS + targetCol);
-		
-		if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
-			battlefield_[frontTargetIndex].isAlive) {
-			if (!hasMark(battlefield_[frontTargetIndex].card, std::string(u8"厌恶情绪"))) {
+		if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			if (!battlefield_[frontTargetIndex].isAlive || !hasMark(battlefield_[frontTargetIndex].card, std::string(u8"厌恶情绪"))) {
 				canAttackFront = true;
 			}
 		}
@@ -3195,10 +3267,8 @@ bool BattleState::canMultiDirectionAttack(int attackerIndex, int targetCol, bool
 			int rightTargetIndex = isPlayerAttacking ?
 				(1 * BATTLEFIELD_COLS + (targetCol + 1)) :
 				(2 * BATTLEFIELD_COLS + (targetCol + 1));
-			
-			if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
-				battlefield_[rightTargetIndex].isAlive) {
-				if (!hasMark(battlefield_[rightTargetIndex].card, std::string(u8"厌恶情绪"))) {
+			if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+				if (!battlefield_[rightTargetIndex].isAlive || !hasMark(battlefield_[rightTargetIndex].card, std::string(u8"厌恶情绪"))) {
 					canAttackRight = true;
 				}
 			}
@@ -3212,10 +3282,9 @@ bool BattleState::canMultiDirectionAttack(int attackerIndex, int targetCol, bool
 			// 玩家攻击：检查敌方前排的四个位置
 			for (int col = 0; col < 4; ++col) {
 				int enemyFrontIndex = 1 * BATTLEFIELD_COLS + col;
-				if (enemyFrontIndex >= 0 && enemyFrontIndex < TOTAL_BATTLEFIELD_SLOTS && 
-					battlefield_[enemyFrontIndex].isAlive) {
-					if (!hasMark(battlefield_[enemyFrontIndex].card, std::string(u8"厌恶情绪"))) {
-						return true; // 至少有一个方向可以攻击
+				if (enemyFrontIndex >= 0 && enemyFrontIndex < TOTAL_BATTLEFIELD_SLOTS) {
+					if (!battlefield_[enemyFrontIndex].isAlive || !hasMark(battlefield_[enemyFrontIndex].card, std::string(u8"厌恶情绪"))) {
+						return true; // 至少有一个方向可以攻击（空位也允许，视为打本体）
 					}
 				}
 			}
@@ -3223,10 +3292,9 @@ bool BattleState::canMultiDirectionAttack(int attackerIndex, int targetCol, bool
 			// 敌方攻击：检查玩家前排的四个位置
 			for (int col = 0; col < 4; ++col) {
 				int playerIndex = 2 * BATTLEFIELD_COLS + col;
-				if (playerIndex >= 0 && playerIndex < TOTAL_BATTLEFIELD_SLOTS && 
-					battlefield_[playerIndex].isAlive) {
-					if (!hasMark(battlefield_[playerIndex].card, std::string(u8"厌恶情绪"))) {
-						return true; // 至少有一个方向可以攻击
+				if (playerIndex >= 0 && playerIndex < TOTAL_BATTLEFIELD_SLOTS) {
+					if (!battlefield_[playerIndex].isAlive || !hasMark(battlefield_[playerIndex].card, std::string(u8"厌恶情绪"))) {
+						return true; // 至少有一个方向可以攻击（空位也允许，视为打本体）
 					}
 				}
 			}
@@ -3240,9 +3308,9 @@ bool BattleState::canMultiDirectionAttack(int attackerIndex, int targetCol, bool
 		int frontTargetIndex = isPlayerAttacking ?
 			(1 * BATTLEFIELD_COLS + targetCol) :
 			(2 * BATTLEFIELD_COLS + targetCol);
-		
-		if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS && 
-			battlefield_[frontTargetIndex].isAlive) {
+		if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
+			// 空位也允许（攻击本体），仅当有存活且带厌恶情绪时禁止
+			if (!battlefield_[frontTargetIndex].isAlive) return true;
 			return !hasMark(battlefield_[frontTargetIndex].card, std::string(u8"厌恶情绪"));
 		}
 		return false;
@@ -3341,6 +3409,18 @@ int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
 	// 献祭之血印记：攻击力加上本回合献祭次数
 	if (hasMark(self.card, std::string(u8"献祭之血"))) {
 		display += sacrificeCountThisTurn_;
+	}
+
+	// 蚂蚁印记：攻击力等于同侧场上所有带“蚂蚁”印记的存活单位数量
+	if (hasMark(self.card, std::string(u8"蚂蚁"))) {
+		int antCount = 0;
+		for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+			const auto& bf = battlefield_[i];
+			if (!bf.isAlive) continue;
+			if (bf.isPlayer != self.isPlayer) continue;
+			if (hasMark(bf.card, std::string(u8"蚂蚁"))) antCount++;
+		}
+		display = antCount;
 	}
 
 	// 镜像印记：攻击力等于对位卡牌的攻击力
@@ -4142,6 +4222,20 @@ void BattleState::renderUI(App& app) {
 	SDL_SetRenderDrawColor(r, 70, 70, 70, 255);
 	SDL_RenderDrawRect(r, &inkStoneRect_);
 
+    // 砚台悬停高亮
+    if (hoveredBattlefieldIndex_ == -1 && hoveredItemIndex_ == -1) {
+        int mx, my; SDL_GetMouseState(&mx, &my);
+        if (mx >= inkStoneRect_.x && mx <= inkStoneRect_.x + inkStoneRect_.w && my >= inkStoneRect_.y && my <= inkStoneRect_.y + inkStoneRect_.h) {
+            SDL_SetRenderDrawColor(r, 255, 240, 180, 25);
+            SDL_RenderFillRect(r, &inkStoneRect_);
+            SDL_SetRenderDrawColor(r, 255, 240, 180, 70);
+            SDL_RenderDrawRect(r, &inkStoneRect_);
+            SDL_Rect outer = inkStoneRect_; outer.x -= 3; outer.y -= 3; outer.w += 6; outer.h += 6;
+            SDL_SetRenderDrawColor(r, 255, 220, 120, 35);
+            SDL_RenderDrawRect(r, &outer);
+        }
+    }
+
 	// 绘制砚台内部墨池（横着，更大）
 	SDL_SetRenderDrawColor(r, 5, 5, 5, 200);
 	SDL_Rect inkPool{ inkStoneRect_.x + 20, inkStoneRect_.y + 20, inkStoneRect_.w - 40, inkStoneRect_.h - 40 };
@@ -4318,11 +4412,39 @@ void BattleState::renderUI(App& app) {
 	SDL_SetRenderDrawColor(r, 70, 70, 70, 255);
 	SDL_RenderDrawRect(r, &inkPileRect_);
 
-	// 绘制玩家牌堆（右下角）
+    // 敌方牌堆悬停高亮
+    if (hoveredBattlefieldIndex_ == -1 && hoveredItemIndex_ == -1) {
+        int mx, my; SDL_GetMouseState(&mx, &my);
+        if (mx >= inkPileRect_.x && mx <= inkPileRect_.x + inkPileRect_.w && my >= inkPileRect_.y && my <= inkPileRect_.y + inkPileRect_.h) {
+            SDL_SetRenderDrawColor(r, 255, 240, 180, 25);
+            SDL_RenderFillRect(r, &inkPileRect_);
+            SDL_SetRenderDrawColor(r, 255, 240, 180, 70);
+            SDL_RenderDrawRect(r, &inkPileRect_);
+            SDL_Rect outer = inkPileRect_; outer.x -= 3; outer.y -= 3; outer.w += 6; outer.h += 6;
+            SDL_SetRenderDrawColor(r, 255, 220, 120, 35);
+            SDL_RenderDrawRect(r, &outer);
+        }
+    }
+
+    // 绘制玩家牌堆（右下角）
 	SDL_SetRenderDrawColor(r, 40, 40, 40, 200);
 	SDL_RenderFillRect(r, &playerPileRect_);
 	SDL_SetRenderDrawColor(r, 75, 75, 75, 255);
 	SDL_RenderDrawRect(r, &playerPileRect_);
+
+    // 玩家牌堆悬停高亮
+    if (hoveredBattlefieldIndex_ == -1 && hoveredItemIndex_ == -1) {
+        int mx, my; SDL_GetMouseState(&mx, &my);
+        if (mx >= playerPileRect_.x && mx <= playerPileRect_.x + playerPileRect_.w && my >= playerPileRect_.y && my <= playerPileRect_.y + playerPileRect_.h) {
+            SDL_SetRenderDrawColor(r, 255, 240, 180, 25);
+            SDL_RenderFillRect(r, &playerPileRect_);
+            SDL_SetRenderDrawColor(r, 255, 240, 180, 70);
+            SDL_RenderDrawRect(r, &playerPileRect_);
+            SDL_Rect outer = playerPileRect_; outer.x -= 3; outer.y -= 3; outer.w += 6; outer.h += 6;
+            SDL_SetRenderDrawColor(r, 255, 220, 120, 35);
+            SDL_RenderDrawRect(r, &outer);
+        }
+    }
 
 	// 绘制牌堆文字
 	if (infoFont_) {
@@ -4498,35 +4620,7 @@ void BattleState::renderUI(App& app) {
 	}
 
 
-	// 显示敌人生命值
-	if (enemyFont_) {
-		SDL_Color healthColor{ 255, 100, 100, 255 }; // 红色
-		std::string healthText = "敌人生命值: " + std::to_string(enemyHealth_);
-		SDL_Surface* healthSurface = TTF_RenderUTF8_Blended(enemyFont_, healthText.c_str(), healthColor);
-		if (healthSurface) {
-			SDL_Texture* healthTexture = SDL_CreateTextureFromSurface(r, healthSurface);
-			if (healthTexture) {
-				SDL_Rect healthRect{ enemyAreaRect_.x + 10, enemyAreaRect_.y + 50, healthSurface->w, healthSurface->h };
-				SDL_RenderCopy(r, healthTexture, nullptr, &healthRect);
-				SDL_DestroyTexture(healthTexture);
-			}
-			SDL_FreeSurface(healthSurface);
-		}
-
-		// 显示玩家生命值
-		SDL_Color playerHealthColor{ 100, 255, 100, 255 }; // 绿色
-		std::string playerHealthText = "玩家生命值: " + std::to_string(playerHealth_);
-		SDL_Surface* playerHealthSurface = TTF_RenderUTF8_Blended(enemyFont_, playerHealthText.c_str(), playerHealthColor);
-		if (playerHealthSurface) {
-			SDL_Texture* playerHealthTexture = SDL_CreateTextureFromSurface(r, playerHealthSurface);
-			if (playerHealthTexture) {
-				SDL_Rect playerHealthRect{ enemyAreaRect_.x + 10, enemyAreaRect_.y + 80, playerHealthSurface->w, playerHealthSurface->h };
-				SDL_RenderCopy(r, playerHealthTexture, nullptr, &playerHealthRect);
-				SDL_DestroyTexture(playerHealthTexture);
-			}
-			SDL_FreeSurface(playerHealthSurface);
-		}
-	}
+	// 左上角玩家/敌人血量UI已移除
 
 	// 显示伤害数值（在敌人区域中央）
 	if (showDamage_ && totalDamageDealt_ > 0 && enemyFont_) {
@@ -4554,19 +4648,39 @@ void BattleState::renderUI(App& app) {
 		}
 	}
 
-	// 显示上帝模式状态
-	if (godMode_ && enemyFont_) {
-		SDL_Color godModeColor{ 255, 255, 0, 255 }; // 黄色
-		std::string godModeText = "上帝模式 - 悬停敌方区域按A键生成守宫，按S键生成雪尾鼬生";
-		SDL_Surface* godModeSurface = TTF_RenderUTF8_Blended(enemyFont_, godModeText.c_str(), godModeColor);
-		if (godModeSurface) {
-			SDL_Texture* godModeTexture = SDL_CreateTextureFromSurface(r, godModeSurface);
-			if (godModeTexture) {
-				SDL_Rect godModeRect{ enemyAreaRect_.x + 10, enemyAreaRect_.y + 110, godModeSurface->w, godModeSurface->h };
-				SDL_RenderCopy(r, godModeTexture, nullptr, &godModeRect);
-				SDL_DestroyTexture(godModeTexture);
+	// 上帝模式帮助：绘制到手牌区左侧（使用更小字体）
+	if (godMode_) {
+		TTF_Font* helpFont = cardStatFont_ ? cardStatFont_ : (infoFont_ ? infoFont_ : enemyFont_);
+		if (helpFont) {
+			SDL_Color godModeColor{ 255, 255, 0, 255 }; // 黄色
+			const char* lines[] = {
+				u8"上帝模式：",
+				u8"H：锁血/锁墨尺",
+				u8"J：魂骨+1",
+				u8"A：在敌方悬停格生成 巴蛇",
+				u8"S：在敌方悬停格生成 厌恶情绪",
+				u8"D：在敌方悬停格生成 铁兽夹",
+				u8"F：在敌方悬停格生成 全向打击",
+				u8"B：获得随机道具（道具未满）",
+				u8"V：检索玩家牌堆",
+				u8"N：检索全卡库",
+				u8"G：在第一/二行空格生成(全卡库选择)"
+			};
+			int lineCount = sizeof(lines) / sizeof(lines[0]);
+			int x = handAreaRect_.x + 10;
+			int y = handAreaRect_.y + 10;
+			for (int i = 0; i < lineCount; ++i) {
+				SDL_Surface* s = TTF_RenderUTF8_Blended(helpFont, lines[i], godModeColor);
+				if (!s) continue;
+				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+				if (t) {
+					SDL_Rect dst{ x, y, s->w, s->h };
+					SDL_RenderCopy(r, t, nullptr, &dst);
+					SDL_DestroyTexture(t);
+				}
+				int h = s->h; SDL_FreeSurface(s);
+				y += 4 + h; // 行距
 			}
-			SDL_FreeSurface(godModeSurface);
 		}
 	}
 
@@ -4593,6 +4707,69 @@ void BattleState::renderUI(App& app) {
 			}
 			SDL_FreeSurface(statusSurface);
 		}
+	}
+
+	// 道具悬停提示：在道具栏下方显示名称与描述（18字换行，限制不超出屏幕）
+	if (hoveredItemIndex_ >= 0 && hoveredItemIndex_ < static_cast<int>(playerItems_.size()) && enemyFont_) {
+		const Item& it = playerItems_[hoveredItemIndex_];
+		std::string tip = it.name + "：" + it.description;
+		// 将UTF-8字符串每18个“字符”分行（按UTF-8首字节计数）
+		auto wrapUtf8 = [](const std::string& s, int maxChars) {
+			std::vector<std::string> lines; lines.reserve((int)s.size() / (maxChars*2) + 1);
+			int count = 0; size_t start = 0; size_t i = 0; 
+			while (i < s.size()) {
+				unsigned char c = (unsigned char)s[i];
+				bool isLead = (c & 0xC0) != 0x80; // 非续字节视为一个字符（近似）
+				if (isLead) {
+					if (count == maxChars) {
+						lines.push_back(s.substr(start, i - start));
+						start = i; count = 0;
+					}
+					count++;
+				}
+				i++;
+			}
+			if (start < s.size()) lines.push_back(s.substr(start));
+			return lines;
+		};
+
+		std::vector<std::string> lines = wrapUtf8(tip, 16);
+		TTF_Font* tipFont = cardNameFont_ ? cardNameFont_ : enemyFont_;
+		SDL_Color tipColor{ 255, 255, 0, 255 };
+
+		// 计算最大宽与总高
+		int maxW = 0; int totalH = 0; int lineH = 0; std::vector<SDL_Surface*> surfaces; surfaces.reserve(lines.size());
+		for (const auto& ln : lines) {
+			SDL_Surface* s = TTF_RenderUTF8_Blended(tipFont, ln.c_str(), tipColor);
+			surfaces.push_back(s);
+			if (s) { if (s->w > maxW) maxW = s->w; totalH += s->h; lineH = s->h; }
+		}
+		int lineSpacing = 4; totalH += (int(lines.size()) - 1) * lineSpacing;
+
+		// 放置位置：以第一个道具槽为基准，限制在屏幕内
+		int baseX = itemSlots_[0].x;
+		int baseY = itemSlots_[0].y + itemSlots_[0].h + 28;
+		if (baseX + maxW + 16 > screenW_) baseX = std::max(10, screenW_ - (maxW + 16));
+		if (baseY + totalH + 8 > screenH_) baseY = std::max(10, screenH_ - (totalH + 8));
+
+		// 背景
+		SDL_SetRenderDrawColor(r, 0, 0, 0, 160);
+		SDL_Rect bg{ baseX - 8, baseY - 4, maxW + 16, totalH + 8 };
+		SDL_RenderFillRect(r, &bg);
+
+		// 绘制各行
+		int y = baseY;
+		for (SDL_Surface* s : surfaces) {
+			if (!s) continue;
+			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+			if (t) {
+				SDL_Rect dst{ baseX, y, s->w, s->h };
+				SDL_RenderCopy(r, t, nullptr, &dst);
+				SDL_DestroyTexture(t);
+			}
+			y += s->h + lineSpacing;
+		}
+		for (SDL_Surface* s : surfaces) if (s) SDL_FreeSurface(s);
 	}
 }
 
@@ -4734,6 +4911,7 @@ void BattleState::executeRushing() {
 				battlefield_[rushingCardIndex_].isAlive = false;
 				battlefield_[rushingCardIndex_].health = 0;
 				battlefield_[rushingCardIndex_].isMovedToDeath = true;
+				suppressBoneGainThisFrame_ = true;
 			}
 		}
 	}
@@ -4933,6 +5111,7 @@ void BattleState::executeBruteForce() {
 						battlefield_[currentIndex].isAlive = false;
 						battlefield_[currentIndex].health = 0;
 						battlefield_[currentIndex].isMovedToDeath = true;
+						suppressBoneGainThisFrame_ = true;
 					}
 				}
 			}
@@ -4951,6 +5130,7 @@ void BattleState::executeBruteForce() {
 					battlefield_[bruteForceCardIndex_].isAlive = false;
 					battlefield_[bruteForceCardIndex_].health = 0;
 					battlefield_[bruteForceCardIndex_].isMovedToDeath = true;
+					suppressBoneGainThisFrame_ = true;
 
 					// 更新bruteForceCardIndex_为新位置
 					bruteForceCardIndex_ = targetIndex;
@@ -5060,6 +5240,7 @@ void BattleState::executePushedAnimation() {
 				battlefield_[cardIndex].isAlive = false;
 				battlefield_[cardIndex].health = 0;
 				battlefield_[cardIndex].isMovedToDeath = true;
+				suppressBoneGainThisFrame_ = true;
 			}
 		}
 	}
@@ -5090,6 +5271,8 @@ void BattleState::processNextMovement() {
 		else if (hasMark(battlefield_[cardIndex].card, u8"蛮力冲撞")) {
 			startBruteForce(cardIndex);
 		}
+
+	// 已移除：误插入到移动流程中的UI高亮代码（统一在 renderUI 中绘制）
 
 	}
 	else {
@@ -5344,13 +5527,13 @@ void BattleState::renderDeckSelection(App& app) {
 	SDL_RenderFillRect(renderer, &overlayRect);
 	
 	// 计算牌堆卡牌的显示区域 - 居中动态排布
-	int cardWidth = 120;  // 增大卡牌宽度
-	int cardHeight = 180; // 增大卡牌高度
-	int cardSpacing = 15; // 增大卡牌间距
-	int rowSpacing = 20;  // 增大行间距
+	int cardWidth = searchAllCardsMode_ ? 90 : 120;   // 全卡库更小
+	int cardHeight = searchAllCardsMode_ ? 135 : 180; // 全卡库更小
+	int cardSpacing = searchAllCardsMode_ ? 10 : 15;  // 全卡库更紧凑
+	int rowSpacing = searchAllCardsMode_ ? 14 : 20;   // 全卡库更紧凑
 	
 	// 动态计算每行卡牌数和布局
-	int totalCards = static_cast<int>(playerDeck_.size());
+	int totalCards = static_cast<int>(searchAllCardsMode_ ? searchCandidates_.size() : playerDeck_.size());
 	if (totalCards == 0) return;
 	
 	// 根据屏幕宽度和卡牌数量动态计算每行卡牌数
@@ -5373,7 +5556,7 @@ void BattleState::renderDeckSelection(App& app) {
 	int startY = (screenH_ - totalLayoutHeight) / 2;
 	
 	// 渲染牌堆中的所有卡牌
-	for (size_t i = 0; i < playerDeck_.size(); ++i) {
+	for (size_t i = 0; i < (searchAllCardsMode_ ? searchCandidates_.size() : playerDeck_.size()); ++i) {
 		int row = static_cast<int>(i) / cardsPerRow;
 		int col = static_cast<int>(i) % cardsPerRow;
 		
@@ -5388,7 +5571,8 @@ void BattleState::renderDeckSelection(App& app) {
 		int cardY = startY + row * (cardHeight + rowSpacing);
 		
 		// 使用和战斗界面一样的卡牌渲染方式
-		Card card = CardDB::instance().make(playerDeck_[i]);
+		const std::string& cid = searchAllCardsMode_ ? searchCandidates_[i] : playerDeck_[i];
+		Card card = CardDB::instance().make(cid);
 		if (!card.id.empty()) {
 			SDL_Rect cardRect = { cardX, cardY, cardWidth, cardHeight };
 			// 使用CardRenderer渲染卡牌，和战斗界面保持一致
@@ -5411,6 +5595,14 @@ void BattleState::renderDeckSelection(App& app) {
 }
 
 // 道具系统实现
+std::string BattleState::getRandomItem() {
+	if (AVAILABLE_ITEMS.empty()) {
+		return "";
+	}
+	int randomIndex = rand() % AVAILABLE_ITEMS.size();
+	return AVAILABLE_ITEMS[randomIndex];
+}
+
 void BattleState::addItem(const std::string& itemId, int count) {
 	// 道具系统不支持叠加，每个道具占用独立槽位
 	// 检查道具栏是否已满
@@ -5490,9 +5682,8 @@ void BattleState::useItem(const std::string& itemId) {
 			enemyHealth_ -= 1;
 			if (enemyHealth_ < 0) enemyHealth_ = 0;
 			
-			// 在墨尺上显示伤害
-			meterTargetPos_ += 1;
-			if (meterTargetPos_ > 5) meterTargetPos_ = 5;
+				// 在墨尺上显示伤害（不截断，以便记录超出）
+				meterTargetPos_ += 1;
 			
 			// 启动墨尺指针动画
 			isMeterAnimating_ = true;
