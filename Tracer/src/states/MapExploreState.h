@@ -5,6 +5,8 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <vector>
+#include <random>
+#include <string>
 
 class MapExploreState : public State {
 public:
@@ -45,7 +47,8 @@ private:
         bool visited = false;        // 是否已访问
         bool accessible = false;     // 是否可达
         std::vector<int> connections; // 连接的节点索引
-        int size = 30;               // 渲染大小
+        int size = 44;               // 渲染大小（放大）
+        std::string label;           // 显示用文字标签（按行随机分配）
     };
     
     // 分层地图结构
@@ -58,10 +61,16 @@ private:
     int playerCurrentNode_ = -1;     // 玩家当前所在节点的全局索引
     std::vector<int> accessibleNodes_; // 玩家可移动到的节点列表
     
+    // 地图选择
+    int currentMapLayer_ = 1;        // 当前选择的地图层（1-4）
+    
     // 地图生成
     int maxNodesPerLayer_ = 3;       // 复杂度：每层最多节点数（1-4）
     void generateLayeredMap();
-    void generatePathNodes();
+    void generateMapForLayer(int layer);
+    void generateFirstLayerPattern(std::mt19937& gen);
+    void generateSecondThirdLayerPattern(std::mt19937& gen);
+    void generateLastLayerPattern(std::mt19937& gen);
     void connectPaths();
     void createEndNode();
     void validatePaths();
@@ -84,13 +93,14 @@ private:
     // 辅助方法
     int getGlobalNodeIndex(int layer, int localIndex) const;
     MapNode* getNodeByGlobalIndex(int globalIndex);
+    const MapNode* getNodeByGlobalIndex(int globalIndex) const;
     int getTotalNodeCount() const;
     
     // 渲染方法
     void renderTitle(SDL_Renderer* renderer);
     void renderMap(SDL_Renderer* renderer);
     void renderNode(SDL_Renderer* renderer, const MapNode& node, int index);
-    void renderConnection(SDL_Renderer* renderer, const MapNode& from, const MapNode& to);
+    void renderConnection(SDL_Renderer* renderer, int fromGlobalIndex, int toGlobalIndex);
     
     // 玩家移动相关
     void initializePlayer();
@@ -101,4 +111,29 @@ private:
     // 坐标转换
     SDL_Point gridToScreen(int gridX, int gridY) const;
     int screenToGrid(int screenX, int screenY) const;
+
+    // 视图偏移与滚动
+    int mapOffsetX_ = 80;
+    int mapOffsetY_ = 960;
+    int scrollY_ = 0;               // 垂直滚动（像素）
+    int maxScrollY_ = 100;            // 向下滚动的最大值（像素）
+    int maxScrollYCap_ = 2000;        // 向下滚动的上限（可配置，单位像素）
+    int minWorldY_ = 0;             // 地图最小Y（世界坐标）
+    int maxWorldY_ = 0;             // 地图最大Y（世界坐标）
+    int visibleRowCount_ = 5;       // 屏幕最多显示的行数（用于滚动步长）
+    int scrollStep_ = 80;           // 滚动步长（像素）
+
+    // 工具：将节点世界坐标转换为屏幕坐标（应用偏移与滚动）
+    inline void nodeToScreenXY(const MapNode& node, int& sx, int& sy) const {
+        sx = mapOffsetX_ + node.x;
+        sy = mapOffsetY_ + (node.y + scrollY_);
+    }
+    void getScreenXYForGlobalIndex(int globalIndex, int& sx, int& sy) const;
+    void updateScrollBounds();
+    void assignRowEventLabels();
+    void updateHorizontalCenter();
+
+    // 仅影响显示的偏移（不改变逻辑坐标）
+    std::vector<SDL_Point> nodeDisplayOffset_; // 按全局索引存储额外偏移
+    void buildDisplayOffsets();
 };

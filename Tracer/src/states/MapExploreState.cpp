@@ -9,6 +9,8 @@
 #include <random>
 #include <algorithm>
 #include <queue>
+#include <map>
+#include <set>
 
 MapExploreState::MapExploreState() = default;
 MapExploreState::~MapExploreState() {
@@ -62,24 +64,31 @@ void MapExploreState::onEnter(App& app) {
         });
     }
 
-    // 创建复杂度按钮（1-4）- 左上角排布
+    // 创建地图选择按钮（1-4）- 左上角排布
     difficultyButtons_.clear();
     const int btnW = 90;
     const int btnH = 34;
     const int btnGap = 10;
     const int startX = 20;
     const int startY = 20;
+    
+    std::vector<std::string> mapNames = {
+        u8"第一层",
+        u8"第二层", 
+        u8"第三层",
+        u8"第四层"
+    };
+    
     for (int i = 1; i <= 4; ++i) {
         Button* b = new Button();
         SDL_Rect r{ startX + (i-1)*(btnW + btnGap), startY, btnW, btnH };
         b->setRect(r);
-        std::string label = std::string("复杂度") + std::to_string(i);
-        b->setText(label);
+        b->setText(mapNames[i-1]);
         if (smallFont_) b->setFont(smallFont_, app.getRenderer());
         b->setOnClick([this, i]() {
-            maxNodesPerLayer_ = i; // 1..4
-            generateLayeredMap();
-            SDL_Log("Difficulty set to %d (maxNodesPerLayer)", i);
+            currentMapLayer_ = i; // 1..4
+            generateMapForLayer(i);
+            SDL_Log("Selected map layer %d", i);
         });
         difficultyButtons_.push_back(b);
     }
@@ -95,6 +104,8 @@ void MapExploreState::onEnter(App& app) {
             pendingGoTest_ = true;
         });
     }
+    // 进入时更新滚动边界
+    updateScrollBounds();
 }
 
 void MapExploreState::onExit(App& app) {
@@ -136,6 +147,16 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
     }
     if (backToTestButton_) backToTestButton_->handleEvent(e);
 
+    // 滚轮滚动地图
+    if (e.type == SDL_MOUSEWHEEL) {
+        // 定义：scrollY_ = 0 表示顶部对齐；scrollY_ 增大表示向下滚动
+        // 期望行为：鼠标向上滚，地图向上移动 ⇒ scrollY_ 减小；
+        // SDL 中 e.wheel.y>0 表示向上滚，因此使用相反方向：scrollY_ -= e.wheel.y * scrollStep_
+        scrollY_ += e.wheel.y * scrollStep_;
+        if (scrollY_ < 0) scrollY_ = 0;              // 向上极限
+        if (scrollY_ > maxScrollY_) scrollY_ = maxScrollY_; // 向下极限
+    }
+
     // 处理鼠标点击到节点
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         int mx = e.button.x, my = e.button.y;
@@ -143,8 +164,9 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         for (int layer = 0; layer <= numLayers_; ++layer) {
             for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
                 const MapNode& node = layerNodes_[layer][i];
-                int dx = mx - node.x;
-                int dy = my - node.y;
+                int sx, sy; nodeToScreenXY(node, sx, sy);
+                int dx = mx - sx;
+                int dy = my - sy;
                 if (dx * dx + dy * dy <= node.size * node.size) {
                     int globalIndex = getGlobalNodeIndex(layer, static_cast<int>(i));
                     SDL_Log("Clicked node %d (layer %d, local %zu)", globalIndex, layer, i);
@@ -221,208 +243,418 @@ void MapExploreState::renderTitle(SDL_Renderer* renderer) {
 }
 
 void MapExploreState::generateLayeredMap() {
-    SDL_Log("Generating simple path-based map");
+    SDL_Log("Generating map for layer %d", currentMapLayer_);
+    generateMapForLayer(currentMapLayer_);
+}
+
+void MapExploreState::generateMapForLayer(int layer) {
+    SDL_Log("Generating map for layer %d", layer);
     
-    // 1. 初始化参数
-    numLayers_ = 8; // 减少层数，让路径更清晰
+    // 1. 初始化参数 - 单层地图结构
+    numLayers_ = 2; // 终点在第2层
     layerNodes_.clear();
-    layerNodes_.resize(numLayers_ + 1); // +1 for boss layer
+    layerNodes_.resize(3); // 第0层(起点) + 第1层(中间节点) + 第2层(终点)
     
-    // 创建起点（第0层，在最下面）
+    // 创建起点（第0层，世界坐标原点）
     MapNode startNode;
     startNode.layer = 0;
-    startNode.x = screenW_ / 2; // 简化，暂时不添加偏移
-    startNode.y = screenH_ - 100; // 起点在最下面
+    startNode.x = this->screenW_ / 2; // 水平居中
+    startNode.y = 0; // 世界坐标：y=0
     startNode.type = MapNode::NodeType::START;
     startNode.accessible = true;
     layerNodes_[0].push_back(startNode);
     startNodeIdx_ = 0;
     
-    // 2. 生成2-4条不同的路径
-    generatePathNodes();
-    
-    // 3. 连接路径
-    connectPaths();
-    
-    // 4. 创建终点
-    createEndNode();
-    
-    // 5. 验证路径
-    validatePaths();
-    
-    // 6. 初始化玩家位置
-    initializePlayer();
-    
-    SDL_Log("Simple path-based map generated successfully");
-}
-
-void MapExploreState::generatePathNodes() {
+    // 2. 根据层数生成对应的节点模式
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> typeDist(0, 3); // 节点类型权重
-    int maxPerLayer = std::max(1, std::min(4, maxNodesPerLayer_));
-    std::uniform_int_distribution<> nodeCount(1, maxPerLayer); // 每层1-maxNodesPerLayer_个节点
     
-    // 为每一层生成不同数量的节点
-    for (int layer = 1; layer < numLayers_; ++layer) {
-        // 每层随机决定节点数量
-        int numNodesInThisLayer = nodeCount(gen);
-        SDL_Log("Layer %d: generating %d nodes", layer, numNodesInThisLayer);
+    switch (layer) {
+        case 1:
+            generateFirstLayerPattern(gen);
+            break;
+        case 2:
+        case 3:
+            generateSecondThirdLayerPattern(gen);
+            break;
+        case 4:
+            generateLastLayerPattern(gen);
+            break;
+        default:
+            generateFirstLayerPattern(gen);
+            break;
+    }
+    
+    // 3. 构建仅用于显示的偏移（不改变逻辑坐标/连接）
+    buildDisplayOffsets();
+
+    // 4. 为每一行节点分配不重复的事件标签（仅显示用）
+    assignRowEventLabels();
+
+    // 5. 连接路径
+    connectPaths();
+    
+    // 6. 创建终点
+    createEndNode();
+    
+    // 7. 验证路径
+    validatePaths();
+    
+    // 8. 初始化玩家位置
+    initializePlayer();
+    // 7. 更新滚动边界
+    updateScrollBounds();
+    // 动态水平居中
+    // 计算第1层内容的左右边界，使其在当前屏幕宽度内视觉居中
+    if (layerNodes_.size() > 1 && !layerNodes_[1].empty()) {
+        int minX = layerNodes_[1][0].x;
+        int maxX = layerNodes_[1][0].x;
+        for (const auto& n : layerNodes_[1]) {
+            if (n.x < minX) minX = n.x;
+            if (n.x > maxX) maxX = n.x;
+        }
+        int contentWidth = (maxX - minX) + 400; // 左右各留200像素
+        if (contentWidth < 1) contentWidth = 1;
+        int desiredOffsetX = (screenW_ - contentWidth) / 2 - minX + 200; // 加回左边距
+        if (desiredOffsetX < 0) desiredOffsetX = 0;
+        mapOffsetX_ = desiredOffsetX;
+    }
+    
+    SDL_Log("Map for layer %d generated successfully", layer);
+}
+
+void MapExploreState::generateFirstLayerPattern(std::mt19937& gen) {
+    // 第一层：第一步必定是以物易物(1)，然后按23123123122模式
+    std::vector<int> pattern = {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 2}; // 12个节点类型
+    
+    // 使用世界坐标：起点y=0，向上为负，每行固定间距（进一步加大垂直间距）
+    const int rowSpacing = 220;
+    
+    // 为每个节点类型生成1-3个节点（概率3:4:3）
+    std::uniform_int_distribution<> nodeCountDist(1, 10); // 1..10 → 1:3, 2:4, 3:3
+    
+    int currentY = -rowSpacing; // 第一行在y=-rowSpacing
+    
+    for (size_t i = 0; i < pattern.size(); ++i) {
+        int roll = nodeCountDist(gen);
+        int nodeCount;
+        if (roll <= 3) {
+            nodeCount = 1; // 概率 3/10
+        } else if (roll <= 7) {
+            nodeCount = 2; // 概率 4/10
+        } else {
+            nodeCount = 3; // 概率 3/10
+        }
         
-        // 计算节点在屏幕上的位置
-        int layerWidth = 600; // 每层的宽度
-        int nodeSpacing = layerWidth / (numNodesInThisLayer + 1);
-        
-        for (int i = 0; i < numNodesInThisLayer; ++i) {
+        // 为这个类型生成1-3个节点
+        for (int j = 0; j < nodeCount; ++j) {
             MapNode newNode;
-            newNode.layer = layer;
+            newNode.layer = 1;
             
-            // 节点位置：水平分布 + 轻微随机偏移，增加美感
-            std::uniform_int_distribution<> xOffset(-20, 20);  // 减少水平偏移范围
-            std::uniform_int_distribution<> yOffset(-10, 10);  // 减少垂直偏移范围
-            newNode.x = (screenW_ - layerWidth) / 2 + (i + 1) * nodeSpacing + xOffset(gen);
-            newNode.y = screenH_ - 150 - layer * 60 + yOffset(gen); // 从底部开始，向上排列，添加垂直偏移
+            // 水平位置：根据节点数量分布（进一步加大水平间距）
+            if (nodeCount == 1) {
+                newNode.x = this->screenW_ / 2; // 居中
+            } else if (nodeCount == 2) {
+                newNode.x = this->screenW_ / 2 + (j == 0 ? -140 : 140); // 左右分布
+            } else { // nodeCount == 3
+                newNode.x = this->screenW_ / 2 + (j - 1) * 180; // 左中右分布（更大间距）
+            }
             
-            // 安全检查：确保节点位置在屏幕范围内
-            if (newNode.x < 50) newNode.x = 50;
-            if (newNode.x > screenW_ - 50) newNode.x = screenW_ - 50;
-            if (newNode.y < 50) newNode.y = 50;
-            if (newNode.y > screenH_ - 50) newNode.y = screenH_ - 50;
+            newNode.y = currentY;
             
-            // 根据权重随机选择类型不是
-            int typeWeight = typeDist(gen);
-            switch (typeWeight) {
-                case 0: newNode.type = MapNode::NodeType::NORMAL; break;
-                case 1: newNode.type = MapNode::NodeType::ELITE; break;
-                case 2: newNode.type = MapNode::NodeType::SHOP; break;
-                case 3: newNode.type = MapNode::NodeType::EVENT; break;
-                default: newNode.type = MapNode::NodeType::NORMAL; break;
+            // 根据模式设置节点类型
+            switch (pattern[i]) {
+                case 1: newNode.type = MapNode::NodeType::SHOP; break; // 卡牌获取
+                case 2: newNode.type = MapNode::NodeType::EVENT; break; // 增益事件
+                case 3: newNode.type = MapNode::NodeType::ELITE; break; // 战斗
             }
             
             newNode.accessible = true;
-            layerNodes_[layer].push_back(newNode);
+            this->layerNodes_[1].push_back(newNode);
         }
+        
+        // 移动到下一行
+        currentY -= rowSpacing;
     }
     
-    // 输出每层的节点数量
-    for (int layer = 1; layer < numLayers_; ++layer) {
-        SDL_Log("Layer %d: %zu nodes", layer, layerNodes_[layer].size());
+    SDL_Log("First layer pattern generated: %zu nodes", this->layerNodes_[1].size());
+}
+
+void MapExploreState::generateSecondThirdLayerPattern(std::mt19937& gen) {
+    // 第二、三层：按123123123122模式
+    std::vector<int> pattern = {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 2}; // 12个节点类型
+    
+    // 使用世界坐标：起点y=0，向上为负，每行固定间距（进一步加大垂直间距）
+    const int rowSpacing = 220;
+    
+    // 为每个节点类型生成1-3个节点（概率3:4:3）
+    std::uniform_int_distribution<> nodeCountDist(1, 10); // 1..10 → 1:3, 2:4, 3:3
+    
+    int currentY = -rowSpacing;
+    
+    for (size_t i = 0; i < pattern.size(); ++i) {
+        int roll = nodeCountDist(gen);
+        int nodeCount;
+        if (roll <= 3) {
+            nodeCount = 1; // 概率 3/10
+        } else if (roll <= 7) {
+            nodeCount = 2; // 概率 4/10
+        } else {
+            nodeCount = 3; // 概率 3/10
+        }
+        
+        // 为这个类型生成1-3个节点
+        for (int j = 0; j < nodeCount; ++j) {
+            MapNode newNode;
+            newNode.layer = 1;
+            
+            // 水平位置：根据节点数量分布（进一步加大水平间距）
+            if (nodeCount == 1) {
+                newNode.x = this->screenW_ / 2; // 居中
+            } else if (nodeCount == 2) {
+                newNode.x = this->screenW_ / 2 + (j == 0 ? -140 : 140); // 左右分布
+            } else { // nodeCount == 3
+                newNode.x = this->screenW_ / 2 + (j - 1) * 180; // 左中右分布（更大间距）
+            }
+            
+            newNode.y = currentY;
+            
+            // 根据模式设置节点类型
+            switch (pattern[i]) {
+                case 1: newNode.type = MapNode::NodeType::SHOP; break; // 卡牌获取
+                case 2: newNode.type = MapNode::NodeType::EVENT; break; // 增益事件
+                case 3: newNode.type = MapNode::NodeType::ELITE; break; // 战斗
+            }
+            
+            newNode.accessible = true;
+            this->layerNodes_[1].push_back(newNode);
+        }
+        
+        // 移动到下一行
+        currentY -= rowSpacing;
     }
+    
+    SDL_Log("Second/Third layer pattern generated: %zu nodes", this->layerNodes_[1].size());
+}
+
+void MapExploreState::generateLastLayerPattern(std::mt19937& gen) {
+    // 第四层：固定中间一行四个节点 + boss
+    // 节点类型固定为：以物易物 + 三个事件（与旧设计语义保持）
+    std::vector<MapNode::NodeType> rowTypes = {
+        MapNode::NodeType::SHOP,   // 以物易物
+        MapNode::NodeType::EVENT,  // 文脉传承/事件
+        MapNode::NodeType::EVENT,  // 墨宝拾遗/事件
+        MapNode::NodeType::EVENT   // 意境刻画/事件
+    };
+
+    // 计算垂直位置：使用世界坐标的中间一行
+    const int rowSpacing = 120;
+    int middleY = -rowSpacing;
+
+    // 水平位置：等间距分布四个节点（使用1/5,2/5,3/5,4/5处）
+    std::vector<int> xs = {
+        (this->screenW_ / 5) * 1,
+        (this->screenW_ / 5) * 2,
+        (this->screenW_ / 5) * 3,
+        (this->screenW_ / 5) * 4
+    };
+
+    this->layerNodes_[1].reserve(this->layerNodes_[1].size() + 4);
+    for (int i = 0; i < 4; ++i) {
+        MapNode node;
+        node.layer = 1;
+        node.x = xs[i];
+        node.y = middleY;
+        node.type = rowTypes[i];
+        node.accessible = true;
+        this->layerNodes_[1].push_back(node);
+    }
+
+    // 注意：boss节点在 createEndNode() 中创建
+    SDL_Log("Last layer pattern generated (fixed 4 middle nodes): %zu nodes", this->layerNodes_[1].size());
 }
 
 void MapExploreState::connectPaths() {
-    // 连接路径：创建多条从起点到终点的路径，覆盖所有节点
+    // 连接路径：起点 → 第一行所有节点 → 第二行所有节点 → ... → 终点
+    SDL_Log("Starting multi-node path connections...");
+    
+    // 初始化随机数生成器
     std::random_device rd;
     std::mt19937 gen(rd());
     
-    SDL_Log("Starting multiple path connections...");
-    
-    // 起点连接到第1层的所有节点
+    // 起点连接到第一行的所有节点
     if (!layerNodes_[0].empty() && !layerNodes_[1].empty()) {
-        SDL_Log("Connecting start to layer 1 (%zu nodes)", layerNodes_[1].size());
         int startGlobalIdx = getGlobalNodeIndex(0, 0);
         if (startGlobalIdx != -1) {
+            MapNode* startNode = getNodeByGlobalIndex(startGlobalIdx);
+            if (startNode) {
+                // 找到第一行的所有节点（Y坐标相同的节点）
+                int firstRowY = layerNodes_[1][0].y;
             for (size_t i = 0; i < layerNodes_[1].size(); ++i) {
+                    if (layerNodes_[1][i].y == firstRowY) {
                 int targetGlobalIdx = getGlobalNodeIndex(1, static_cast<int>(i));
                 if (targetGlobalIdx != -1) {
-                    MapNode* startNode = getNodeByGlobalIndex(startGlobalIdx);
-                    if (startNode) {
                         startNode->connections.push_back(targetGlobalIdx);
+                            SDL_Log("Connected start (idx %d) to first row node (idx %d)", 
+                                    startGlobalIdx, targetGlobalIdx);
+                        }
                     }
                 }
             }
         }
     }
     
-    // 连接中间层，确保所有节点都被覆盖且无交叉
-    for (int layer = 1; layer < numLayers_ - 1; ++layer) {
-        auto& currentLayer = layerNodes_[layer];
-        auto& nextLayer = layerNodes_[layer + 1];
-        
-        SDL_Log("Layer %d: %zu nodes, Layer %d: %zu nodes", 
-                layer, currentLayer.size(), layer + 1, nextLayer.size());
-        
-        if (currentLayer.empty() || nextLayer.empty()) {
-            SDL_Log("Skipping layer %d due to empty layer", layer);
-            continue;
+    // 连接每一行到下一行：使用单调匹配，保证无交叉且所有节点可达
+    if (!layerNodes_[1].empty()) {
+        // 按Y坐标分组节点
+        std::map<int, std::vector<int>> rows; // Y坐标 -> 节点索引列表
+        for (size_t i = 0; i < layerNodes_[1].size(); ++i) {
+            int y = layerNodes_[1][i].y;
+            rows[y].push_back(static_cast<int>(i));
         }
         
-        // 确保每个父节点都连接到下一层，避免孤儿节点
-        std::vector<bool> parentConnected(currentLayer.size(), false);
+        // 按Y坐标排序（从下到上）
+        std::vector<std::pair<int, std::vector<int>>> sortedRows(rows.begin(), rows.end());
+        std::sort(sortedRows.begin(), sortedRows.end(), 
+                  [](const auto& a, const auto& b) { return a.first > b.first; });
         
-        // 为下一层的每个节点连接多个父节点，但避免交叉
-        for (size_t nextIdx = 0; nextIdx < nextLayer.size(); ++nextIdx) {
-            // 计算这个节点应该连接的父节点范围（避免交叉）
-            int startParent, endParent;
+        // 连接相邻行 - 单向、非交叉、全可达
+        for (size_t rowIdx = 0; rowIdx < sortedRows.size() - 1; ++rowIdx) {
+            const auto& currentRow = sortedRows[rowIdx].second;
+            const auto& nextRow = sortedRows[rowIdx + 1].second;
             
-            if (nextLayer.size() == 1) {
-                // 如果下一层只有一个节点，连接当前层的所有节点
-                startParent = 0;
-                endParent = static_cast<int>(currentLayer.size()) - 1;
-            } else {
-                // 根据节点在下一层中的位置，计算应该连接的父节点范围
-                double ratio = static_cast<double>(nextIdx) / (nextLayer.size() - 1);
-                int totalParents = static_cast<int>(currentLayer.size());
-                
-                // 计算连接范围，确保不交叉
-                int rangeSize = std::max(1, totalParents / static_cast<int>(nextLayer.size()));
-                startParent = static_cast<int>(ratio * (totalParents - rangeSize));
-                endParent = std::min(startParent + rangeSize - 1, totalParents - 1);
+            // 1) 按X坐标排序，建立单调匹配的索引序列
+            std::vector<std::pair<int, int>> orderedCurrent; // (x, idxInLayer1)
+            std::vector<std::pair<int, int>> orderedNext;    // (x, idxInLayer1)
+            orderedCurrent.reserve(currentRow.size());
+            orderedNext.reserve(nextRow.size());
+
+            for (int idx : currentRow) {
+                orderedCurrent.push_back({ layerNodes_[1][idx].x, idx });
             }
-            
-            // 连接范围内的所有父节点
-            for (int parentIdx = startParent; parentIdx <= endParent; ++parentIdx) {
-                connectNodes(layer, parentIdx, layer + 1, static_cast<int>(nextIdx));
-                parentConnected[parentIdx] = true;
-                SDL_Log("Connected layer %d node %d to layer %d node %zu (range: %d-%d)", 
-                        layer, parentIdx, layer + 1, nextIdx, startParent, endParent);
+            for (int idx : nextRow) {
+                orderedNext.push_back({ layerNodes_[1][idx].x, idx });
             }
-        }
-        
-        // 检查并修复孤儿节点
-        for (size_t parentIdx = 0; parentIdx < currentLayer.size(); ++parentIdx) {
-            if (!parentConnected[parentIdx]) {
-                // 找到最接近的下一层节点进行连接
-                int bestChild = selectBestParentNode(layer, static_cast<int>(parentIdx), static_cast<int>(nextLayer.size()));
-                if (bestChild >= 0 && bestChild < static_cast<int>(nextLayer.size())) {
-                    connectNodes(layer, static_cast<int>(parentIdx), layer + 1, bestChild);
-                    SDL_Log("Fixed orphan node: connected layer %d node %zu to layer %d node %d", 
-                            layer, parentIdx, layer + 1, bestChild);
+            std::sort(orderedCurrent.begin(), orderedCurrent.end(), [](const auto& a, const auto& b){ return a.first < b.first; });
+            std::sort(orderedNext.begin(), orderedNext.end(), [](const auto& a, const auto& b){ return a.first < b.first; });
+
+            const int m = static_cast<int>(orderedCurrent.size());
+            const int n = static_cast<int>(orderedNext.size());
+
+            // 2) 第一轮：为每个当前行节点分配一个下一行节点（比例映射，避免交叉）
+            std::vector<int> indegree(n, 0);
+            for (int i = 0; i < m; ++i) {
+                int mappedJ = 0;
+                if (m > 1 && n > 1) {
+                    mappedJ = static_cast<int>(std::round((i * 1.0) * (n - 1) / (m - 1)));
+                } else {
+                    mappedJ = 0; // 退化情形
+                }
+                mappedJ = std::max(0, std::min(n - 1, mappedJ));
+
+                int currentIdxInLayer = orderedCurrent[i].second;
+                int nextIdxInLayer = orderedNext[mappedJ].second;
+
+                int currentGlobalIdx = getGlobalNodeIndex(1, currentIdxInLayer);
+                int nextGlobalIdx = getGlobalNodeIndex(1, nextIdxInLayer);
+                if (currentGlobalIdx != -1 && nextGlobalIdx != -1) {
+                    MapNode* currentNode = getNodeByGlobalIndex(currentGlobalIdx);
+                    if (currentNode) {
+                        currentNode->connections.push_back(nextGlobalIdx);
+                        indegree[mappedJ] += 1;
+                        SDL_Log("Monotone connect: row node %d (idx %d) -> next row node %d (idx %d)",
+                                currentIdxInLayer, currentGlobalIdx, nextIdxInLayer, nextGlobalIdx);
+                    }
+                }
+            }
+
+            // 3) 第二轮：确保每个下一行节点至少有一个入边
+            for (int j = 0; j < n; ++j) {
+                if (indegree[j] == 0) {
+                    int mappedI = 0;
+                    if (m > 1 && n > 1) {
+                        mappedI = static_cast<int>(std::round((j * 1.0) * (m - 1) / (n - 1)));
+                    } else {
+                        mappedI = 0;
+                    }
+                    mappedI = std::max(0, std::min(m - 1, mappedI));
+
+                    int currentIdxInLayer = orderedCurrent[mappedI].second;
+                    int nextIdxInLayer = orderedNext[j].second;
+
+                    int currentGlobalIdx = getGlobalNodeIndex(1, currentIdxInLayer);
+                    int nextGlobalIdx = getGlobalNodeIndex(1, nextIdxInLayer);
+                    if (currentGlobalIdx != -1 && nextGlobalIdx != -1) {
+                        MapNode* currentNode = getNodeByGlobalIndex(currentGlobalIdx);
+                        if (currentNode) {
+                            // 避免重复连接
+                            bool alreadyConnected = false;
+                            for (int existing : currentNode->connections) {
+                                if (existing == nextGlobalIdx) { alreadyConnected = true; break; }
+                            }
+                            if (!alreadyConnected) {
+                                currentNode->connections.push_back(nextGlobalIdx);
+                                SDL_Log("Ensure indegree: row node %d (idx %d) -> next row node %d (idx %d)",
+                                        currentIdxInLayer, currentGlobalIdx, nextIdxInLayer, nextGlobalIdx);
+                            }
+                        }
+                    }
                 }
             }
         }
     }
     
-    SDL_Log("Path connections completed");
+    SDL_Log("Multi-node path connections completed");
 }
 
 void MapExploreState::createEndNode() {
-    // 创建终点节点（BOSS，在最上面，单独一层）
+    // 创建终点节点（BOSS）
     MapNode endNode;
     endNode.layer = numLayers_;
-    endNode.x = screenW_ / 2; // 简化，暂时不添加偏移
+    endNode.x = this->screenW_ / 2; // 水平居中
     
-    // 计算最后一层中间节点的Y坐标
-    int lastLayerY = screenH_ - 150 - (numLayers_ - 1) * 60;
-    // 终点节点在最后一层上方，确保单独一层
-    endNode.y = lastLayerY - 80; // 在最后一层上方80像素，确保分离
+    // 终点位置：位于最后一行之上一个行距（世界坐标，向上为负）
+    int lastRowY = 0;
+    if (!layerNodes_[1].empty()) {
+        lastRowY = layerNodes_[1][0].y;
+        for (size_t i = 1; i < layerNodes_[1].size(); ++i) {
+            if (layerNodes_[1][i].y < lastRowY) lastRowY = layerNodes_[1][i].y;
+        }
+    }
+    const int rowSpacing = 120;
+    endNode.y = lastRowY - 2 * rowSpacing;
     
     endNode.type = MapNode::NodeType::BOSS;
     endNode.accessible = true;
     layerNodes_[numLayers_].push_back(endNode);
     bossNodeIdx_ = 0;
     
-    SDL_Log("Created end node at layer %d, x=%d, y=%d (last layer y=%d)", 
-            numLayers_, endNode.x, endNode.y, lastLayerY);
+    SDL_Log("Created end node at layer %d, x=%d, y=%d (map layer %d)", 
+            numLayers_, endNode.x, endNode.y, currentMapLayer_);
     
-    // 连接最后一层的所有节点到终点
-    if (!layerNodes_[numLayers_ - 1].empty()) {
+    // 连接最后一行（第12行）的所有节点到终点
+    if (!layerNodes_[1].empty()) {
         int endGlobalIdx = getGlobalNodeIndex(numLayers_, 0);
-        if (endGlobalIdx != -1) {
-            for (size_t i = 0; i < layerNodes_[numLayers_ - 1].size(); ++i) {
-                int sourceGlobalIdx = getGlobalNodeIndex(numLayers_ - 1, static_cast<int>(i));
-                if (sourceGlobalIdx != -1) {
-                    getNodeByGlobalIndex(sourceGlobalIdx)->connections.push_back(endGlobalIdx);
+        
+        // 找到最后一行（Y坐标最小的行）的所有节点
+        int lastRowY = layerNodes_[1][0].y;
+        for (size_t i = 0; i < layerNodes_[1].size(); ++i) {
+            if (layerNodes_[1][i].y < lastRowY) {
+                lastRowY = layerNodes_[1][i].y;
+            }
+        }
+        
+        // 连接最后一行所有节点到终点
+        for (size_t i = 0; i < layerNodes_[1].size(); ++i) {
+            if (layerNodes_[1][i].y == lastRowY) {
+                int lastRowGlobalIdx = getGlobalNodeIndex(1, static_cast<int>(i));
+                if (endGlobalIdx != -1 && lastRowGlobalIdx != -1) {
+                    MapNode* lastRowNode = getNodeByGlobalIndex(lastRowGlobalIdx);
+                    if (lastRowNode) {
+                        lastRowNode->connections.push_back(endGlobalIdx);
+                        SDL_Log("Connected last row node (idx %d) to end node (idx %d)", 
+                                lastRowGlobalIdx, endGlobalIdx);
+                    }
                 }
             }
         }
@@ -753,6 +985,18 @@ MapExploreState::MapNode* MapExploreState::getNodeByGlobalIndex(int globalIndex)
     return nullptr;
 }
 
+const MapExploreState::MapNode* MapExploreState::getNodeByGlobalIndex(int globalIndex) const {
+    int currentIndex = 0;
+    for (const auto& layer : layerNodes_) {
+        if (globalIndex < currentIndex + static_cast<int>(layer.size())) {
+            int localIndex = globalIndex - currentIndex;
+            return &layer[localIndex];
+        }
+        currentIndex += static_cast<int>(layer.size());
+    }
+    return nullptr;
+}
+
 int MapExploreState::getTotalNodeCount() const {
     int total = 0;
     for (const auto& layer : layerNodes_) {
@@ -770,7 +1014,7 @@ void MapExploreState::connectStartAndBoss() {
         int startGlobalIdx = getGlobalNodeIndex(0, 0);
         
         // 优先连接到第1层的中心节点（主要路径）
-        int centerIndex = layerNodes_[1].size() / 2;
+        int centerIndex = static_cast<int>(layerNodes_[1].size()) / 2;
         int targetGlobalIdx = getGlobalNodeIndex(1, centerIndex);
         if (startGlobalIdx != -1 && targetGlobalIdx != -1) {
             getNodeByGlobalIndex(startGlobalIdx)->connections.push_back(targetGlobalIdx);
@@ -943,10 +1187,7 @@ void MapExploreState::renderMap(SDL_Renderer* renderer) {
         for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
             const MapNode& node = layerNodes_[layer][i];
             for (int connection : node.connections) {
-                MapExploreState::MapNode* connectedNode = getNodeByGlobalIndex(connection);
-                if (connectedNode) {
-                    renderConnection(renderer, node, *connectedNode);
-                }
+                renderConnection(renderer, getGlobalNodeIndex(layer, static_cast<int>(i)), connection);
             }
         }
     }
@@ -961,9 +1202,8 @@ void MapExploreState::renderMap(SDL_Renderer* renderer) {
 }
 
 void MapExploreState::renderNode(SDL_Renderer* renderer, const MapNode& node, int index) {
-    // 节点已经包含屏幕坐标，直接使用
-    int x = node.x;
-    int y = node.y;
+    // 应用视图偏移与滚动
+    int x, y; getScreenXYForGlobalIndex(index, x, y);
     
     // 检查节点状态（添加安全检查）
     bool isCurrentNode = (playerCurrentNode_ != -1 && index == playerCurrentNode_);
@@ -1031,16 +1271,27 @@ void MapExploreState::renderNode(SDL_Renderer* renderer, const MapNode& node, in
         SDL_RenderDrawRect(renderer, &nodeRect);
     }
     
-    // 绘制节点编号（调试用）
+    // 绘制节点类型文字标识（代替数字）
     if (smallFont_) {
-        char nodeText[16];
-        snprintf(nodeText, sizeof(nodeText), "%d", index);
+        const char* label = nullptr;
+        if (!node.label.empty()) {
+            label = node.label.c_str();
+        } else {
+            switch (node.type) {
+                case MapNode::NodeType::START: label = u8"起点"; break;
+                case MapNode::NodeType::BOSS:  label = u8"BOSS"; break;
+                case MapNode::NodeType::ELITE: label = u8"战斗"; break;
+                case MapNode::NodeType::SHOP:  label = u8"以物易物"; break;
+                case MapNode::NodeType::EVENT: label = u8"事件"; break;
+                default: label = u8"节点"; break;
+            }
+        }
         SDL_Color textColor{ 255, 255, 255, 255 };
-        SDL_Surface* textSurface = TTF_RenderUTF8_Blended(smallFont_, nodeText, textColor);
+        SDL_Surface* textSurface = TTF_RenderUTF8_Blended(smallFont_, label, textColor);
         if (textSurface) {
             SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
             if (textTexture) {
-                SDL_Rect textRect = { x - 5, y - 5, textSurface->w, textSurface->h };
+                SDL_Rect textRect = { x - textSurface->w / 2, y - textSurface->h / 2, textSurface->w, textSurface->h };
                 SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
                 SDL_DestroyTexture(textTexture);
             }
@@ -1049,20 +1300,131 @@ void MapExploreState::renderNode(SDL_Renderer* renderer, const MapNode& node, in
     }
 }
 
-void MapExploreState::renderConnection(SDL_Renderer* renderer, const MapNode& from, const MapNode& to) {
-    // 直接使用节点的屏幕坐标
+void MapExploreState::assignRowEventLabels() {
+    // 为每一行的节点分配不重复的事件名称
+    if (layerNodes_.size() <= 1) return;
+    auto& nodes = layerNodes_[1];
+    if (nodes.empty()) return;
+
+    // 事件池（带权重）
+    struct EventWithWeight {
+        std::string name;
+        int weight;
+        bool allowedInFirstLayer;
+    };
+    
+    static const std::vector<EventWithWeight> shopEvents = {
+        {u8"以物易物", 1, true}, // 每层最多1个
+        {u8"记忆修复", 1, true},
+        {u8"寻物人", 1, true},
+        {u8"文心试炼", 1, false}, // 不在第一层出现
+        {u8"墨坊", 1, true} // 每层最多1个
+    };
+    
+    static const std::vector<EventWithWeight> eventEvents = {
+        {u8"文脉传承", 1, true},
+        {u8"意境刻画", 1, true},
+        {u8"淬炼", 1, true},
+        {u8"墨宝拾遗", 1, true},
+        {u8"墨鬼", 1, false}, // 不在第一层出现
+        {u8"焚书", 1, false}, // 不在第一层出现
+        {u8"合卷", 1, false}  // 不在第一层出现
+    };
+    
+    static const std::vector<EventWithWeight> battleEvents = {
+        {u8"诗剑之争", 1, true},
+        {u8"意境之斗", 1, true}
+    };
+
+    // 按y分组
+    std::map<int, std::vector<int>> rows;
+    for (size_t i = 0; i < nodes.size(); ++i) rows[nodes[i].y].push_back(static_cast<int>(i));
+
+    std::random_device rd; std::mt19937 gen(rd());
+    
+    // 跟踪已使用的事件（用于限制"以物易物"和"墨坊"每层最多1个）
+    std::set<std::string> usedEvents;
+    
+    for (auto& kv : rows) {
+        auto& idxs = kv.second;
+        if (idxs.empty()) continue;
+        MapNode::NodeType rowType = nodes[idxs[0]].type;
+
+        // 根据当前地图层和节点类型构建可用事件池
+        std::vector<std::string> availableEvents;
+        const std::vector<EventWithWeight>* eventList = nullptr;
+        
+        switch (rowType) {
+            case MapNode::NodeType::SHOP: eventList = &shopEvents; break;
+            case MapNode::NodeType::EVENT: eventList = &eventEvents; break;
+            case MapNode::NodeType::ELITE: eventList = &battleEvents; break;
+            default: break;
+        }
+        
+        if (eventList) {
+            for (const auto& event : *eventList) {
+                // 如果是第一层，只允许 allowedInFirstLayer 为 true 的事件
+                if (currentMapLayer_ == 1 && !event.allowedInFirstLayer) {
+                    continue;
+                }
+                
+                // 检查是否已经使用过（限制"以物易物"和"墨坊"每层最多1个）
+                if (usedEvents.find(event.name) != usedEvents.end()) {
+                    continue;
+                }
+                
+                // 根据权重添加事件到池中
+                for (int i = 0; i < event.weight; ++i) {
+                    availableEvents.push_back(event.name);
+                }
+            }
+        }
+        
+        if (availableEvents.empty()) {
+            for (int idx : idxs) nodes[idx].label.clear();
+            continue;
+        }
+        
+        // 从可用事件中随机选择不重复的标签
+        std::shuffle(availableEvents.begin(), availableEvents.end(), gen);
+        
+        // 去重并保持顺序
+        std::vector<std::string> uniqueEvents;
+        for (const auto& event : availableEvents) {
+            if (std::find(uniqueEvents.begin(), uniqueEvents.end(), event) == uniqueEvents.end()) {
+                uniqueEvents.push_back(event);
+            }
+        }
+        
+        size_t take = std::min(uniqueEvents.size(), idxs.size());
+        for (size_t k = 0; k < take; ++k) {
+            nodes[idxs[k]].label = uniqueEvents[k];
+            // 将使用的事件添加到已使用集合中
+            usedEvents.insert(uniqueEvents[k]);
+        }
+        
+        // 多余的节点复用已有事件
+        for (size_t k = take; k < idxs.size(); ++k) {
+            nodes[idxs[k]].label = uniqueEvents[(k - take) % uniqueEvents.size()];
+        }
+    }
+}
+
+void MapExploreState::renderConnection(SDL_Renderer* renderer, int fromGlobalIndex, int toGlobalIndex) {
+    // 使用全局索引获取显示坐标（含随机美化位移）
+    int fx, fy; getScreenXYForGlobalIndex(fromGlobalIndex, fx, fy);
+    int tx, ty; getScreenXYForGlobalIndex(toGlobalIndex, tx, ty);
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDrawLine(renderer, from.x, from.y, to.x, to.y);
+    SDL_RenderDrawLine(renderer, fx, fy, tx, ty);
 }
 
 SDL_Point MapExploreState::gridToScreen(int gridX, int gridY) const {
     int nodeSpacing = 80;
-    int mapOffsetX = (screenW_ - 600) / 2; // 假设地图宽度约600像素
-    int mapOffsetY = 200; // 向下偏移为标题留空间
-    
+    int mapOffsetX = mapOffsetX_;
+    int mapOffsetY = mapOffsetY_;
     return { 
         mapOffsetX + gridX * nodeSpacing, 
-        mapOffsetY + gridY * nodeSpacing 
+        mapOffsetY + gridY * nodeSpacing + scrollY_
     };
 }
 
@@ -1071,14 +1433,108 @@ int MapExploreState::screenToGrid(int screenX, int screenY) const {
     for (int layer = 0; layer <= numLayers_; ++layer) {
         for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
             const MapNode& node = layerNodes_[layer][i];
-            int dx = screenX - node.x;
-            int dy = screenY - node.y;
+            int sx, sy; getScreenXYForGlobalIndex(getGlobalNodeIndex(layer, static_cast<int>(i)), sx, sy);
+            int dx = screenX - sx;
+            int dy = screenY - sy;
             if (dx * dx + dy * dy <= node.size * node.size) {
                 return getGlobalNodeIndex(layer, static_cast<int>(i));
             }
         }
     }
     return -1;
+}
+
+void MapExploreState::getScreenXYForGlobalIndex(int globalIndex, int& sx, int& sy) const {
+    const MapNode* node = getNodeByGlobalIndex(globalIndex);
+    if (!node) { sx = sy = 0; return; }
+    int baseX, baseY; nodeToScreenXY(*node, baseX, baseY);
+    SDL_Point extra{0,0};
+    if (globalIndex >= 0 && globalIndex < static_cast<int>(nodeDisplayOffset_.size())) {
+        extra = nodeDisplayOffset_[globalIndex];
+    }
+    sx = baseX + extra.x;
+    sy = baseY + extra.y;
+}
+
+void MapExploreState::buildDisplayOffsets() {
+    // 分配与全局节点数量相同的偏移数组
+    nodeDisplayOffset_.clear();
+    nodeDisplayOffset_.resize(getTotalNodeCount(), SDL_Point{0,0});
+
+    // 按行（相同y的节点）生成轻微随机位移，仅影响显示
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> jx(-40, 40);
+    std::uniform_int_distribution<int> jy(-20, 20);
+
+    // 处理中间层（layer 1）
+    if (layerNodes_.size() > 1) {
+        std::map<int, std::vector<int>> rows; // y -> local idx list
+        for (size_t i = 0; i < layerNodes_[1].size(); ++i) {
+            rows[layerNodes_[1][i].y].push_back(static_cast<int>(i));
+        }
+        for (auto& kv : rows) {
+            auto& idxs = kv.second;
+            // 基于排序的等分布局参考x
+            std::vector<int> xs; xs.reserve(idxs.size());
+            for (int idx : idxs) xs.push_back(layerNodes_[1][idx].x);
+            std::sort(xs.begin(), xs.end());
+            for (int idx : idxs) {
+                int g = getGlobalNodeIndex(1, idx);
+                if (g != -1 && g < static_cast<int>(nodeDisplayOffset_.size())) {
+                    nodeDisplayOffset_[g].x = jx(gen);
+                    nodeDisplayOffset_[g].y = jy(gen);
+                }
+            }
+        }
+    }
+    // 起点与终点保持较小的抖动
+    if (!layerNodes_[0].empty()) {
+        int g = getGlobalNodeIndex(0, 0);
+        if (g != -1 && g < static_cast<int>(nodeDisplayOffset_.size())) {
+            nodeDisplayOffset_[g].x = 0;
+            nodeDisplayOffset_[g].y = 0;
+        }
+    }
+    if (numLayers_ >= 2 && !layerNodes_[numLayers_].empty()) {
+        int g = getGlobalNodeIndex(numLayers_, 0);
+        if (g != -1 && g < static_cast<int>(nodeDisplayOffset_.size())) {
+            nodeDisplayOffset_[g].x = 0;
+            nodeDisplayOffset_[g].y = 0;
+        }
+    }
+}
+
+void MapExploreState::updateScrollBounds() {
+    // 计算世界坐标的最小/最大Y（不含偏移与滚动）
+    bool inited = false;
+    int minY = 0, maxY = 0;
+    for (int layer = 0; layer <= numLayers_; ++layer) {
+        for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
+            const MapNode& node = layerNodes_[layer][i];
+            if (!inited) { minY = maxY = node.y; inited = true; }
+            if (node.y < minY) minY = node.y;
+            if (node.y > maxY) maxY = node.y;
+        }
+    }
+    minWorldY_ = minY; maxWorldY_ = maxY;
+    // 根据可视行数估算屏幕允许范围，由于渲染时会加上mapOffsetY_
+    // 计算在当前偏移下，能向下滚动的最大像素：
+    // 地图内容高度: (maxWorldY_ - minWorldY_)；
+    // 可视高度: screenH_ - mapOffsetY_ - 下边距40；
+    int contentHeight = (maxWorldY_ - minWorldY_);
+    int visibleHeight = screenH_ - mapOffsetY_ - 40;
+    if (visibleHeight < 0) visibleHeight = 0;
+    if (contentHeight <= visibleHeight) {
+        maxScrollY_ = 0; // 内容不满屏，无需滚动
+        scrollY_ = 0;
+    } else {
+        maxScrollY_ = contentHeight - visibleHeight;
+        // 施加上限
+        if (maxScrollY_ > maxScrollYCap_) maxScrollY_ = maxScrollYCap_;
+        if (scrollY_ < 0) scrollY_ = 0;
+        if (scrollY_ > maxScrollY_) scrollY_ = maxScrollY_;
+    }
 }
 
 void MapExploreState::initializePlayer() {
@@ -1121,6 +1577,8 @@ void MapExploreState::updateAccessibleNodes() {
         return;
     }
     
+    SDL_Log("Current node %d has %zu connections", playerCurrentNode_, currentNode->connections.size());
+    
     // 添加当前节点连接的所有节点到可移动列表
     for (int connection : currentNode->connections) {
         if (connection >= 0 && connection < getTotalNodeCount()) {
@@ -1128,6 +1586,7 @@ void MapExploreState::updateAccessibleNodes() {
             MapNode* connectedNode = getNodeByGlobalIndex(connection);
             if (connectedNode) {
                 accessibleNodes_.push_back(connection);
+                SDL_Log("Added accessible node %d (type: %d)", connection, static_cast<int>(connectedNode->type));
             } else {
                 SDL_Log("Warning: Connected node %d does not exist", connection);
             }

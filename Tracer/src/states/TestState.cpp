@@ -82,11 +82,11 @@ void TestState::onEnter(App& app) {
 	// 按钮标签：保留前三个入口，其余替换为功能测试入口
 	std::vector<std::string> buttonLabels = {
 		u8"主菜单",
-		u8"战斗界面",
+		u8"诗剑之争/意境之斗",
 		u8"地图探索",
 		u8"文脉传承",
 		u8"意境刻画",
-		u8"诗剑之争/意境之斗",
+		u8"墨鬼",
 		u8"墨坊",
 		u8"记忆修复",
 		u8"墨宝拾遗",
