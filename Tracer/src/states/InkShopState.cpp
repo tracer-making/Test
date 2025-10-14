@@ -1,5 +1,6 @@
 #include "InkShopState.h"
 #include "TestState.h"
+#include "MapExploreState.h"
 #include "../core/App.h"
 
 InkShopState::InkShopState() = default;
@@ -25,7 +26,7 @@ void InkShopState::onEnter(App& app) {
 		backButton_->setRect({20,20,120,36});
 		backButton_->setText(u8"返回测试");
 		if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
-		backButton_->setOnClick([this]() { pendingBackToTest_ = true; });
+		backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; });
 	}
 
 	grantEntryGift();
@@ -53,6 +54,11 @@ void InkShopState::update(App& app, float dt) {
 	if (pendingBackToTest_) {
 		pendingBackToTest_ = false;
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
+		return;
+	}
+	if (pendingGoMapExplore_) {
+		pendingGoMapExplore_ = false;
+		app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
 		return;
 	}
 }

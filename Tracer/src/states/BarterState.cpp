@@ -1,5 +1,6 @@
 #include "BarterState.h"
 #include "TestState.h"
+#include "MapExploreState.h"
 #include "../core/App.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -27,7 +28,7 @@ void BarterState::onEnter(App& app) {
 	statFont_  = TTF_OpenFont("assets/fonts/Sanji.ttf", 24);
 	if (titleFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s=TTF_RenderUTF8_Blended(titleFont_, u8"以物易物", col); if (s){ titleTex_=SDL_CreateTextureFromSurface(app.getRenderer(), s); SDL_FreeSurface(s);} }
 
-	backButton_ = new Button(); if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回测试"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this](){ pendingBackToTest_ = true; }); }
+	backButton_ = new Button(); if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回地图"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this](){ pendingGoMapExplore_ = true; }); }
 	confirmButton_ = new Button(); if (confirmButton_) { confirmButton_->setRect({screenW_/2-60, screenH_-100, 120, 40}); confirmButton_->setText(u8"成交"); if (smallFont_) confirmButton_->setFont(smallFont_, app.getRenderer()); confirmButton_->setOnClick([this](){
 		auto& lib = DeckStore::instance().library();
 		if (selectedLibraryIndex_>=0 && selectedLibraryIndex_<(int)lib.size() && selectedOfferIndex_>=0 && selectedOfferIndex_<(int)offers_.size()) {
@@ -67,6 +68,7 @@ void BarterState::handleEvent(App& app, const SDL_Event& e) {
 
 void BarterState::update(App& app, float dt) {
 	if (pendingBackToTest_) { pendingBackToTest_=false; app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState()))); }
+	if (pendingGoMapExplore_) { pendingGoMapExplore_=false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); }
 }
 
 void BarterState::render(App& app) {
@@ -100,11 +102,9 @@ void BarterState::render(App& app) {
 void BarterState::ensureDemoLibraryIfEmpty() {
 	auto& lib = DeckStore::instance().library();
 	if (lib.empty()) {
-		Card c1; c1.id="demo_sword"; c1.name=u8"残锋"; c1.attack=3; c1.health=2;
-		Card c2; c2.id="demo_poem";  c2.name=u8"柳絮"; c2.attack=1; c2.health=4;
-		Card c3; c3.id="demo_ink";   c3.name=u8"墨痕"; c3.attack=2; c3.health=3;
-		lib.push_back(c1); lib.push_back(c2); lib.push_back(c3);
-		message_ = u8"提示：牌库为空，已注入示例卡用于以物易物演示";
+		// 如果牌库为空，初始化玩家牌堆
+		DeckStore::instance().initializePlayerDeck();
+		message_ = u8"提示：牌库为空，已初始化玩家牌堆";
 	}
 }
 

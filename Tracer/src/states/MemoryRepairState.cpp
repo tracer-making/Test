@@ -1,5 +1,6 @@
 #include "MemoryRepairState.h"
 #include "TestState.h"
+#include "MapExploreState.h"
 #include "../core/App.h"
 #include <random>
 
@@ -27,7 +28,7 @@ void MemoryRepairState::onEnter(App& app) {
 		backButton_->setRect({20,20,120,36});
 		backButton_->setText(u8"返回测试");
 		if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
-		backButton_->setOnClick([this]() { pendingBackToTest_ = true; });
+		backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; });
 	}
 
 	confirmButton_ = new Button();
@@ -63,6 +64,7 @@ void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
 
 void MemoryRepairState::update(App& app, float dt) {
 	if (pendingBackToTest_) { pendingBackToTest_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState()))); return; }
+	if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); return; }
 }
 
 void MemoryRepairState::render(App& app) {

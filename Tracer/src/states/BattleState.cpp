@@ -1,7 +1,8 @@
 #include "BattleState.h"
 #include "TestState.h"
+#include "MapExploreState.h"
 #include "../core/App.h"
-
+#include "../core/Deck.h"
 
 #include "../core/Cards.h"
 #include <SDL.h>
@@ -76,7 +77,7 @@ void BattleState::onEnter(App& app) {
 		backButton_->setText("返回");
 		if (infoFont_) backButton_->setFont(infoFont_, app.getRenderer());
 		backButton_->setOnClick([this]() {
-			pendingBackToTest_ = true;
+			pendingGoMapExplore_ = true;
 			});
 	}
 
@@ -306,7 +307,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 		}
 
 		// 检查手牌悬停
-		for (size_t i = 0; i < handCardRects_.size(); ++i) {
+		for (size_t i = 0; i < handCardRects_.size() && i < handCards_.size(); ++i) {
 			const auto& rect = handCardRects_[i];
 			if (mouseX >= rect.x && mouseX <= rect.x + rect.w &&
 				mouseY >= rect.y && mouseY <= rect.y + rect.h) {
@@ -338,7 +339,8 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			int cardSpacing = searchAllCardsMode_ ? 10 : 15;  // 全卡库更紧凑
 			int rowSpacing = searchAllCardsMode_ ? 14 : 20;   // 全卡库更紧凑
 			
-			int totalCards = static_cast<int>(searchAllCardsMode_ ? searchCandidates_.size() : playerDeck_.size());
+			auto& store = DeckStore::instance();
+			int totalCards = static_cast<int>(searchAllCardsMode_ ? searchCandidates_.size() : store.library().size());
 			if (totalCards == 0) return;
 			
 			// 根据屏幕宽度和卡牌数量动态计算每行卡牌数
@@ -357,7 +359,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			int totalLayoutHeight = totalRows * cardHeight + (totalRows - 1) * rowSpacing;
 			int startY = (screenH_ - totalLayoutHeight) / 2;
 			
-			for (size_t i = 0; i < (searchAllCardsMode_ ? searchCandidates_.size() : playerDeck_.size()); ++i) {
+			for (size_t i = 0; i < (searchAllCardsMode_ ? searchCandidates_.size() : store.library().size()); ++i) {
 				int row = static_cast<int>(i) / cardsPerRow;
 				int col = static_cast<int>(i) % cardsPerRow;
 				
@@ -377,11 +379,10 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 					selectedDeckCardIndex_ = static_cast<int>(i);
 					
 					// 确定选中的卡ID
-					std::string selectedCardId = searchAllCardsMode_ ? searchCandidates_[i] : playerDeck_[i];
+					std::string selectedCardId = searchAllCardsMode_ ? searchCandidates_[i] : store.library()[i].id;
 					// 仅当非全卡库模式时，从玩家牌堆移除该卡
 					if (!searchAllCardsMode_) {
-						playerDeck_.erase(playerDeck_.begin() + i);
-						playerPileCount_ = static_cast<int>(playerDeck_.size());
+						store.library().erase(store.library().begin() + i);
 					}
 					
 					// 生成卡对象
@@ -480,24 +481,24 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			else if (hasDrawnThisTurn_) {
 				statusMessage_ = "本回合已抽过牌！";
 			}
-			else if (playerPileCount_ > 0 && !playerDeck_.empty()) {
-				// 从固定牌堆中抽取第一张牌
-				std::string cardId = playerDeck_[0];
-				Card newCard = CardDB::instance().make(cardId);
-				if (!newCard.id.empty()) {
+			else {
+				// 从全局牌堆中抽取一张牌
+				auto& store = DeckStore::instance();
+				if (!store.library().empty()) {
+					// 从牌库顶部抽牌
+					Card newCard = store.library()[0];
 					// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
 					applyRandomMarkEffect(newCard);
 					handCards_.push_back(newCard);
-					playerDeck_.erase(playerDeck_.begin()); // 移除已抽取的牌
-					playerPileCount_--;
+					store.hand().push_back(newCard);
+					store.library().erase(store.library().begin());
 					hasDrawnThisTurn_ = true;
 					mustDrawThisTurn_ = false; // 抽牌后取消强制抽牌要求
 					layoutHandCards();
 					statusMessage_ = "从玩家牌堆抽到：" + newCard.name;
+				} else {
+					statusMessage_ = "玩家牌堆已空！";
 				}
-			}
-			else {
-				statusMessage_ = "玩家牌堆已空！";
 			}
 		}
 		else if (mouseX >= inkStoneRect_.x && mouseX <= inkStoneRect_.x + inkStoneRect_.w &&
@@ -521,7 +522,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 		}
 
 		// 检查手牌点击
-		for (size_t i = 0; i < handCardRects_.size(); ++i) {
+		for (size_t i = 0; i < handCardRects_.size() && i < handCards_.size(); ++i) {
 			const auto& rect = handCardRects_[i];
 			if (mouseX >= rect.x && mouseX <= rect.x + rect.w &&
 				mouseY >= rect.y && mouseY <= rect.y + rect.h) {
@@ -549,7 +550,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 					return;
 				}
 				selectedHandCard_ = static_cast<int>(i);
-
+				
 				// 检查是否有消耗骨头词条
 				bool hasBoneCost = false;
 				for (const auto& mark : handCards_[i].marks) {
@@ -981,6 +982,12 @@ void BattleState::update(App& app, float dt) {
 	if (pendingBackToTest_) {
 		pendingBackToTest_ = false;
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
+		return;
+	}
+	
+	if (pendingGoMapExplore_) {
+		pendingGoMapExplore_ = false;
+		app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
 		return;
 	}
 
@@ -1662,33 +1669,31 @@ void BattleState::initializeBattle() {
 	// 开局抽牌：1张墨锭 + 3张玩家牌
 	handCards_.clear();
 
-	// 抽1张墨锭（必须是墨锭）
-	Card inkCard = CardDB::instance().make("moding");
-	if (!inkCard.id.empty()) {
-		handCards_.push_back(inkCard);
-	}
+	// 使用全局牌堆，但维护本地手牌副本
+	auto& store = DeckStore::instance();
 
-	playerDeck_.clear();
-    // 初始牌堆：两张书林署丞 + 一张守宫 + 一张刀笔吏 + 一张蛇自环
-    playerDeck_.push_back("shulin_shucheng");
-    playerDeck_.push_back("shulin_shucheng");
-    playerDeck_.push_back("shougong");
-    playerDeck_.push_back("daobi_li");
-    playerDeck_.push_back("tengshe_zihuan");
-	playerPileCount_ = static_cast<int>(playerDeck_.size());
+	// 同步全局手牌到本地手牌
+	handCards_ = store.hand();
 
-	// 抽3张玩家牌（从固定玩家牌堆中抽取）
-	for (int i = 0; i < 3 && i < static_cast<int>(playerDeck_.size()); ++i) {
-		std::string cardId = playerDeck_[0];
-		Card card = CardDB::instance().make(cardId);
-		if (!card.id.empty()) {
+	// 如果本地手牌为空，初始化手牌
+	if (handCards_.empty()) {
+		// 抽1张墨锭（必须是墨锭）
+		Card inkCard = CardDB::instance().make("moding");
+		if (!inkCard.id.empty()) {
+			handCards_.push_back(inkCard);
+			store.hand().push_back(inkCard);
+		}
+
+		// 抽3张玩家牌（从全局牌堆中抽取）
+		for (int i = 0; i < 3 && !store.library().empty(); ++i) {
+			Card card = store.library()[0];
 			// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
 			applyRandomMarkEffect(card);
 			handCards_.push_back(card);
+			store.hand().push_back(card);
+			// 从牌库中移除已抽取的卡牌
+			store.library().erase(store.library().begin());
 		}
-		// 从牌堆中移除已抽取的卡牌
-		playerDeck_.erase(playerDeck_.begin());
-		playerPileCount_--;
 	}
 
 	// 调试信息：确认手牌数量
@@ -1841,6 +1846,7 @@ void BattleState::layoutBattlefield() {
 
 void BattleState::layoutHandCards() {
 	handCardRects_.clear();
+	
 	if (handCards_.empty()) return;
 
 	int cardWidth = 130;  // 从120增加到130
@@ -4487,7 +4493,8 @@ void BattleState::renderUI(App& app) {
 			SDL_FreeSurface(s3);
 		}
 
-		std::string playerCountText = "x" + std::to_string(playerPileCount_);
+		auto& store = DeckStore::instance();
+		std::string playerCountText = "x" + std::to_string(store.library().size());
 		SDL_Surface* s4 = TTF_RenderUTF8_Blended(infoFont_, playerCountText.c_str(), textColor);
 		if (s4) {
 			SDL_Texture* t4 = SDL_CreateTextureFromSurface(r, s4);
@@ -5533,7 +5540,8 @@ void BattleState::renderDeckSelection(App& app) {
 	int rowSpacing = searchAllCardsMode_ ? 14 : 20;   // 全卡库更紧凑
 	
 	// 动态计算每行卡牌数和布局
-	int totalCards = static_cast<int>(searchAllCardsMode_ ? searchCandidates_.size() : playerDeck_.size());
+	auto& store = DeckStore::instance();
+	int totalCards = static_cast<int>(searchAllCardsMode_ ? searchCandidates_.size() : store.library().size());
 	if (totalCards == 0) return;
 	
 	// 根据屏幕宽度和卡牌数量动态计算每行卡牌数
@@ -5556,7 +5564,7 @@ void BattleState::renderDeckSelection(App& app) {
 	int startY = (screenH_ - totalLayoutHeight) / 2;
 	
 	// 渲染牌堆中的所有卡牌
-	for (size_t i = 0; i < (searchAllCardsMode_ ? searchCandidates_.size() : playerDeck_.size()); ++i) {
+	for (size_t i = 0; i < (searchAllCardsMode_ ? searchCandidates_.size() : store.library().size()); ++i) {
 		int row = static_cast<int>(i) / cardsPerRow;
 		int col = static_cast<int>(i) % cardsPerRow;
 		
@@ -5571,7 +5579,7 @@ void BattleState::renderDeckSelection(App& app) {
 		int cardY = startY + row * (cardHeight + rowSpacing);
 		
 		// 使用和战斗界面一样的卡牌渲染方式
-		const std::string& cid = searchAllCardsMode_ ? searchCandidates_[i] : playerDeck_[i];
+		const std::string& cid = searchAllCardsMode_ ? searchCandidates_[i] : store.library()[i].id;
 		Card card = CardDB::instance().make(cid);
 		if (!card.id.empty()) {
 			SDL_Rect cardRect = { cardX, cardY, cardWidth, cardHeight };

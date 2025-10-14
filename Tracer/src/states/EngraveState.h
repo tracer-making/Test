@@ -28,6 +28,9 @@ private:
 	Button* backButton_ = nullptr;
 	Button* confirmButton_ = nullptr;
 	int screenW_ = 1280, screenH_ = 720;
+	
+	// 状态切换
+	bool pendingGoMapExplore_ = false;  // 返回地图探索
 
 	std::vector<Choice> choices_; // 3项
 	int selected_ = -1;

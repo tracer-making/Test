@@ -8,6 +8,7 @@
 #endif
 #include <memory>
 #include "Cards.h"
+#include "Deck.h"
 
 App::App() = default;
 App::~App() { shutdown(); }
@@ -37,6 +38,9 @@ bool App::init(const char* title, int width, int height) {
 
 	// 加载内置卡牌数据库
 	CardDB::instance().loadBuiltinCards();
+	
+	// 初始化全局玩家牌堆
+	DeckStore::instance().initializePlayerDeck();
 
 	running_ = true;
 	return true;

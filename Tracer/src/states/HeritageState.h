@@ -26,33 +26,66 @@ private:
 	// UI / 字体
 	_TTF_Font* titleFont_ = nullptr;
 	_TTF_Font* smallFont_ = nullptr;
+	_TTF_Font* cardNameFont_ = nullptr;  // 卡牌名称字体
+	_TTF_Font* cardStatFont_ = nullptr;  // 卡牌属性字体
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
-	Button* confirmButton_ = nullptr;
+	Button* confirmButton_ = nullptr;  // 动态创建的确认按钮
 
 	// 屏幕
 	int screenW_ = 1280;
 	int screenH_ = 720;
+	
+	// 状态切换
+	bool pendingGoMapExplore_ = false;  // 返回地图探索
 
 	// 数据选择状态
-	int selectedSource_ = -1;
-	int selectedTarget_ = -1;
+	Card selectedSourceCard_;  // 被献祭的卡
+	Card selectedTargetCard_;  // 接受传承的卡
+	bool hasSourceCard_ = false;
+	bool hasTargetCard_ = false;
 	std::string message_;
 
-	// 手牌数量滑动条（2..10）
-	int handCount_ = 6;
-	const int handMin_ = 2;
-	const int handMax_ = 10;
-	SDL_Rect sliderTrack_{0,0,0,0};
-	SDL_Rect sliderThumb_{0,0,0,0};
-	bool sliderDragging_ = false;
 	bool pendingBackToTest_ = false;
+	
+	// 手牌区状态
+	bool showingHandCards_ = false;
+	bool selectingSource_ = false;  // true=选择被献祭卡, false=选择接受传承卡
+	std::vector<Card> availableCards_;
+	std::vector<SDL_Rect> handCardRects_;
+	int selectedHandCardIndex_ = -1;
+	
+	// 中间+按钮
+	Button* plusButton_ = nullptr;
+	
+	// 悬停动画
+	float leftSlotHover_ = 0.0f;   // 左边牌位悬停动画值
+	float rightSlotHover_ = 0.0f;  // 右边牌位悬停动画值
+	float plusButtonHover_ = 0.0f; // +按钮悬停动画值
+	std::vector<float> handCardHovers_; // 手牌区卡牌悬停动画值
+	
+	// 传承动画
+	bool isAnimating_ = false;     // 是否正在播放传承动画
+	float animationTime_ = 0.0f;   // 动画时间
+	float animationDuration_ = 2.0f; // 动画持续时间
+	bool sourceCardDestroyed_ = false; // 源卡是否已被摧毁
+	bool targetCardEnhanced_ = false;  // 目标卡是否已被强化
+
+	// 持续漂浮动画
+	float hoverTime_ = 0.0f;
 
 	// 方法
-	void layoutGrid();
-	void layoutSlider();
-	void updateSliderFromMouse(int mx);
+	void layoutCardSlots();
 	void performInheritance();
+	void showHandCards(bool isSource);
+	void hideHandCards();
+	void layoutHandCards();
+	bool canBeSacrificed(const Card& card);
+	bool canReceiveInheritance(const Card& card);
+	void renderMainInterface(App& app);
+	void renderHandCardArea(App& app);
+	void renderCardInSlot(App& app, const SDL_Rect& slot, const Card& card);
+	void layoutGrid();
 };
 
 

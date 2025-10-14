@@ -28,6 +28,9 @@ private:
 	Button* backButton_ = nullptr;
 	Button* confirmButton_ = nullptr; // 破壁
 	int screenW_ = 1600, screenH_ = 1000;
+	
+	// 状态切换
+	bool pendingGoMapExplore_ = false;  // 返回地图探索
 
 	struct Artifact {
 		std::string title;      // 展示名称（未揭示时可为“未知文物”）

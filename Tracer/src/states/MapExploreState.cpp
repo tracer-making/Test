@@ -1,6 +1,16 @@
 #include "MapExploreState.h"
 #include "TestState.h"
+#include "BattleState.h"
+#include "BarterState.h"
+#include "EngraveState.h"
+#include "HeritageState.h"
+#include "InkShopState.h"
+#include "MemoryRepairState.h"
+#include "RelicPickupState.h"
+#include "SeekerState.h"
+#include "TemperState.h"
 #include "../core/App.h"
+#include "../core/Deck.h"
 #include "../ui/Button.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -12,6 +22,9 @@
 #include <map>
 #include <set>
 
+// 静态成员变量定义（仅控制首次自动生成）
+bool MapExploreState::s_mapGenerated_ = false;
+
 MapExploreState::MapExploreState() = default;
 MapExploreState::~MapExploreState() {
     delete regenerateButton_;
@@ -21,6 +34,14 @@ MapExploreState::~MapExploreState() {
 }
 
 void MapExploreState::onEnter(App& app) {
+    // 初始化玩家牌堆（如果还没有初始化）
+    auto& store = DeckStore::instance();
+    if (store.library().empty() && store.hand().empty()) {
+        store.initializePlayerDeck();
+        SDL_Log("Player deck initialized with %d cards in library and %d cards in hand", 
+                (int)store.library().size(), (int)store.hand().size());
+    }
+    
     // 获取屏幕尺寸
     int w, h;
     SDL_GetWindowSize(app.getWindow(), &w, &h);
@@ -44,8 +65,73 @@ void MapExploreState::onEnter(App& app) {
         }
     }
 
-    // 生成分层地图
+    // 只在第一次进入时生成地图；否则从全局MapStore恢复
+    auto& ms = MapStore::instance();
+    if (!s_mapGenerated_ || !ms.hasMap()) {
     generateLayeredMap();
+        s_mapGenerated_ = true;
+        // 将本地数据写入全局
+        ms.layerNodes().clear();
+        ms.layerNodes().resize(layerNodes_.size());
+        for (size_t i = 0; i < layerNodes_.size(); ++i) {
+            ms.layerNodes()[i].clear();
+            ms.layerNodes()[i].reserve(layerNodes_[i].size());
+            for (const auto& n : layerNodes_[i]) {
+                MapStore::MapNodeData d;
+                d.layer = n.layer; d.x = n.x; d.y = n.y; d.size = n.size; d.label = n.label;
+                d.visited = n.visited; d.accessible = n.accessible; d.connections = n.connections;
+                switch (n.type) {
+                case MapNode::NodeType::START: d.type = MapStore::MapNodeData::NodeType::START; break;
+                case MapNode::NodeType::NORMAL: d.type = MapStore::MapNodeData::NodeType::NORMAL; break;
+                case MapNode::NodeType::BOSS: d.type = MapStore::MapNodeData::NodeType::BOSS; break;
+                case MapNode::NodeType::ELITE: d.type = MapStore::MapNodeData::NodeType::ELITE; break;
+                case MapNode::NodeType::SHOP: d.type = MapStore::MapNodeData::NodeType::SHOP; break;
+                case MapNode::NodeType::EVENT: d.type = MapStore::MapNodeData::NodeType::EVENT; break;
+                }
+                ms.layerNodes()[i].push_back(d);
+            }
+        }
+        ms.numLayers() = numLayers_;
+        ms.startNodeIdx() = startNodeIdx_;
+        ms.bossNodeIdx() = bossNodeIdx_;
+        ms.currentMapLayer() = currentMapLayer_;
+        ms.playerCurrentNode() = playerCurrentNode_;
+        ms.accessibleNodes() = accessibleNodes_;
+        ms.generated() = true;
+    } else {
+        // 从全局读回
+        layerNodes_.clear();
+        layerNodes_.resize(ms.layerNodes().size());
+        for (size_t i = 0; i < ms.layerNodes().size(); ++i) {
+            layerNodes_[i].clear();
+            layerNodes_[i].reserve(ms.layerNodes()[i].size());
+            for (const auto& d : ms.layerNodes()[i]) {
+                MapNode n;
+                n.layer = d.layer; n.x = d.x; n.y = d.y; n.size = d.size; n.label = d.label;
+                n.visited = d.visited; n.accessible = d.accessible; n.connections = d.connections;
+                switch (d.type) {
+                case MapStore::MapNodeData::NodeType::START: n.type = MapNode::NodeType::START; break;
+                case MapStore::MapNodeData::NodeType::NORMAL: n.type = MapNode::NodeType::NORMAL; break;
+                case MapStore::MapNodeData::NodeType::BOSS: n.type = MapNode::NodeType::BOSS; break;
+                case MapStore::MapNodeData::NodeType::ELITE: n.type = MapNode::NodeType::ELITE; break;
+                case MapStore::MapNodeData::NodeType::SHOP: n.type = MapNode::NodeType::SHOP; break;
+                case MapStore::MapNodeData::NodeType::EVENT: n.type = MapNode::NodeType::EVENT; break;
+                }
+                layerNodes_[i].push_back(n);
+            }
+        }
+        numLayers_ = ms.numLayers();
+        startNodeIdx_ = ms.startNodeIdx();
+        bossNodeIdx_ = ms.bossNodeIdx();
+        currentMapLayer_ = ms.currentMapLayer();
+        playerCurrentNode_ = ms.playerCurrentNode();
+        accessibleNodes_ = ms.accessibleNodes();
+        // 保险：如果全局没有可达节点而当前位置有效，则重新计算可达节点
+        if (playerCurrentNode_ != -1 && accessibleNodes_.empty()) {
+            updateAccessibleNodes();
+            ms.accessibleNodes() = accessibleNodes_;
+        }
+    }
     
     // 创建重新生成按钮（右上角）
     regenerateButton_ = new Button();
@@ -60,6 +146,38 @@ void MapExploreState::onEnter(App& app) {
         }
         regenerateButton_->setOnClick([this]() {
             generateLayeredMap();
+            s_mapGenerated_ = true; // 确保标志被设置
+            // 更新全局
+            auto& ms = MapStore::instance();
+            ms.generated() = false; // 强制重写
+            // 复用 onEnter 的保存流程：这里直接保存
+            ms.layerNodes().clear();
+            ms.layerNodes().resize(layerNodes_.size());
+            for (size_t i = 0; i < layerNodes_.size(); ++i) {
+                ms.layerNodes()[i].clear();
+                ms.layerNodes()[i].reserve(layerNodes_[i].size());
+                for (const auto& n : layerNodes_[i]) {
+                    MapStore::MapNodeData d;
+                    d.layer = n.layer; d.x = n.x; d.y = n.y; d.size = n.size; d.label = n.label;
+                    d.visited = n.visited; d.accessible = n.accessible; d.connections = n.connections;
+                    switch (n.type) {
+                    case MapNode::NodeType::START: d.type = MapStore::MapNodeData::NodeType::START; break;
+                    case MapNode::NodeType::NORMAL: d.type = MapStore::MapNodeData::NodeType::NORMAL; break;
+                    case MapNode::NodeType::BOSS: d.type = MapStore::MapNodeData::NodeType::BOSS; break;
+                    case MapNode::NodeType::ELITE: d.type = MapStore::MapNodeData::NodeType::ELITE; break;
+                    case MapNode::NodeType::SHOP: d.type = MapStore::MapNodeData::NodeType::SHOP; break;
+                    case MapNode::NodeType::EVENT: d.type = MapStore::MapNodeData::NodeType::EVENT; break;
+                    }
+                    ms.layerNodes()[i].push_back(d);
+                }
+            }
+            ms.numLayers() = numLayers_;
+            ms.startNodeIdx() = startNodeIdx_;
+            ms.bossNodeIdx() = bossNodeIdx_;
+            ms.currentMapLayer() = currentMapLayer_;
+            ms.playerCurrentNode() = playerCurrentNode_;
+            ms.accessibleNodes() = accessibleNodes_;
+            ms.generated() = true;
             SDL_Log("Map regenerated by button click!");
         });
     }
@@ -86,8 +204,46 @@ void MapExploreState::onEnter(App& app) {
         b->setText(mapNames[i-1]);
         if (smallFont_) b->setFont(smallFont_, app.getRenderer());
         b->setOnClick([this, i]() {
-            currentMapLayer_ = i; // 1..4
-            generateMapForLayer(i);
+            if (currentMapLayer_ != i) {
+                // 切换到新层时生成地图
+                currentMapLayer_ = i; // 1..4
+                generateMapForLayer(i);
+                s_mapGenerated_ = true; // 确保标志被设置
+                // 更新全局当前层与结构
+                auto& ms = MapStore::instance();
+                ms.currentMapLayer() = currentMapLayer_;
+                // 不重建所有层，仅覆盖本层
+                if (ms.layerNodes().size() != layerNodes_.size()) {
+                    ms.layerNodes().clear();
+                    ms.layerNodes().resize(layerNodes_.size());
+                }
+                if (i >= 0 && i < (int)layerNodes_.size()) {
+                    ms.layerNodes()[i].clear();
+                    ms.layerNodes()[i].reserve(layerNodes_[i].size());
+                    for (const auto& n : layerNodes_[i]) {
+                        MapStore::MapNodeData d;
+                        d.layer = n.layer; d.x = n.x; d.y = n.y; d.size = n.size; d.label = n.label;
+                        d.visited = n.visited; d.accessible = n.accessible; d.connections = n.connections;
+                        switch (n.type) {
+                        case MapNode::NodeType::START: d.type = MapStore::MapNodeData::NodeType::START; break;
+                        case MapNode::NodeType::NORMAL: d.type = MapStore::MapNodeData::NodeType::NORMAL; break;
+                        case MapNode::NodeType::BOSS: d.type = MapStore::MapNodeData::NodeType::BOSS; break;
+                        case MapNode::NodeType::ELITE: d.type = MapStore::MapNodeData::NodeType::ELITE; break;
+                        case MapNode::NodeType::SHOP: d.type = MapStore::MapNodeData::NodeType::SHOP; break;
+                        case MapNode::NodeType::EVENT: d.type = MapStore::MapNodeData::NodeType::EVENT; break;
+                        }
+                        ms.layerNodes()[i].push_back(d);
+                    }
+                }
+                ms.numLayers() = numLayers_;
+                ms.startNodeIdx() = startNodeIdx_;
+                ms.bossNodeIdx() = bossNodeIdx_;
+                ms.playerCurrentNode() = playerCurrentNode_;
+                ms.accessibleNodes() = accessibleNodes_;
+                ms.generated() = true;
+            }
+            // 恢复视图到最下方
+            scrollY_ = 0;
             SDL_Log("Selected map layer %d", i);
         });
         difficultyButtons_.push_back(b);
@@ -134,6 +290,36 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
     // 处理重新生成地图（R键）
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_r) {
         generateLayeredMap();
+        s_mapGenerated_ = true; // 确保标志被设置
+        // 更新全局
+        auto& ms = MapStore::instance();
+        ms.layerNodes().clear();
+        ms.layerNodes().resize(layerNodes_.size());
+        for (size_t i = 0; i < layerNodes_.size(); ++i) {
+            ms.layerNodes()[i].clear();
+            ms.layerNodes()[i].reserve(layerNodes_[i].size());
+            for (const auto& n : layerNodes_[i]) {
+                MapStore::MapNodeData d;
+                d.layer = n.layer; d.x = n.x; d.y = n.y; d.size = n.size; d.label = n.label;
+                d.visited = n.visited; d.accessible = n.accessible; d.connections = n.connections;
+                switch (n.type) {
+                case MapNode::NodeType::START: d.type = MapStore::MapNodeData::NodeType::START; break;
+                case MapNode::NodeType::NORMAL: d.type = MapStore::MapNodeData::NodeType::NORMAL; break;
+                case MapNode::NodeType::BOSS: d.type = MapStore::MapNodeData::NodeType::BOSS; break;
+                case MapNode::NodeType::ELITE: d.type = MapStore::MapNodeData::NodeType::ELITE; break;
+                case MapNode::NodeType::SHOP: d.type = MapStore::MapNodeData::NodeType::SHOP; break;
+                case MapNode::NodeType::EVENT: d.type = MapStore::MapNodeData::NodeType::EVENT; break;
+                }
+                ms.layerNodes()[i].push_back(d);
+            }
+        }
+        ms.numLayers() = numLayers_;
+        ms.startNodeIdx() = startNodeIdx_;
+        ms.bossNodeIdx() = bossNodeIdx_;
+        ms.currentMapLayer() = currentMapLayer_;
+        ms.playerCurrentNode() = playerCurrentNode_;
+        ms.accessibleNodes() = accessibleNodes_;
+        ms.generated() = true;
         SDL_Log("Map regenerated!");
         return;
     }
@@ -173,8 +359,8 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
                     
                     // 如果点击的是可访问的节点，移动玩家
                     if (isNodeAccessible(globalIndex)) {
-                        movePlayerToNode(globalIndex);
-                        SDL_Log("Player moved to accessible node %d", globalIndex);
+                        startMoveAnimation(globalIndex);
+                        SDL_Log("Start moving to accessible node %d", globalIndex);
                     } else if (globalIndex == playerCurrentNode_) {
                         SDL_Log("Player is already at node %d", globalIndex);
                     } else {
@@ -188,10 +374,85 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void MapExploreState::update(App& app, float dt) {
+    // 移动动画推进
+    if (isMoving_) {
+        moveT_ += dt / moveDuration_;
+        if (moveT_ >= 1.0f) {
+            moveT_ = 1.0f;
+        }
+        if (moveT_ >= 1.0f) {
+            isMoving_ = false;
+            // 到达目标节点后，正式移动并触发事件
+            if (moveToNode_ != -1) {
+                movePlayerToNode(moveToNode_);
+                // 写回全局存储当前位置
+                auto& ms = MapStore::instance();
+                ms.playerCurrentNode() = playerCurrentNode_;
+            }
+            moveFromNode_ = -1;
+            moveToNode_ = -1;
+        }
+    }
+
     // 更新逻辑（如果需要）
     if (pendingGoTest_) {
         pendingGoTest_ = false;
         app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
+        return;
+    }
+    
+    // 处理各种状态切换
+    if (pendingGoBattle_) {
+        pendingGoBattle_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState())));
+        return;
+    }
+    
+    if (pendingGoBarter_) {
+        pendingGoBarter_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new BarterState())));
+        return;
+    }
+    
+    if (pendingGoEngrave_) {
+        pendingGoEngrave_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new EngraveState())));
+        return;
+    }
+    
+    if (pendingGoHeritage_) {
+        pendingGoHeritage_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new HeritageState())));
+        return;
+    }
+    
+    if (pendingGoInkShop_) {
+        pendingGoInkShop_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new InkShopState())));
+        return;
+    }
+    
+    if (pendingGoMemoryRepair_) {
+        pendingGoMemoryRepair_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new MemoryRepairState())));
+        return;
+    }
+    
+    if (pendingGoRelicPickup_) {
+        pendingGoRelicPickup_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new RelicPickupState())));
+        return;
+    }
+    
+    if (pendingGoSeeker_) {
+        pendingGoSeeker_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new SeekerState())));
+        return;
+    }
+    
+    if (pendingGoTemper_) {
+        pendingGoTemper_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new TemperState())));
         return;
     }
 }
@@ -1127,6 +1388,7 @@ void MapExploreState::validateAndTrimPaths() {
     if (!hasPathFromStartToBoss()) {
         SDL_Log("Warning: No path from start to boss found, regenerating...");
         generateLayeredMap(); // 重新生成
+        s_mapGenerated_ = true; // 确保标志被设置
         return;
     }
     
@@ -1134,6 +1396,7 @@ void MapExploreState::validateAndTrimPaths() {
     if (!allPathsFromStartReachBoss()) {
         SDL_Log("Warning: Not all paths from start reach boss, regenerating...");
         generateLayeredMap(); // 重新生成
+        s_mapGenerated_ = true; // 确保标志被设置
         return;
     }
     
@@ -1198,6 +1461,18 @@ void MapExploreState::renderMap(SDL_Renderer* renderer) {
             int globalIndex = getGlobalNodeIndex(layer, static_cast<int>(i));
             renderNode(renderer, layerNodes_[layer][i], globalIndex);
         }
+    }
+
+    // 绘制移动中的玩家位置（小白点）
+    if (isMoving_) {
+        // 插值世界坐标
+        float px = moveStartPos_.x + (moveEndPos_.x - moveStartPos_.x) * moveT_;
+        float py = moveStartPos_.y + (moveEndPos_.y - moveStartPos_.y) * moveT_;
+        int sx = mapOffsetX_ + static_cast<int>(px);
+        int sy = mapOffsetY_ + static_cast<int>(py + scrollY_);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_Rect r{ sx - 6, sy - 6, 12, 12 };
+        SDL_RenderFillRect(renderer, &r);
     }
 }
 
@@ -1303,6 +1578,8 @@ void MapExploreState::renderNode(SDL_Renderer* renderer, const MapNode& node, in
 void MapExploreState::assignRowEventLabels() {
     // 为每一行的节点分配不重复的事件名称
     if (layerNodes_.size() <= 1) return;
+    
+    // 只处理中间层（layer 1），因为其他层有固定的标签
     auto& nodes = layerNodes_[1];
     if (nodes.empty()) return;
 
@@ -1322,13 +1599,13 @@ void MapExploreState::assignRowEventLabels() {
     };
     
     static const std::vector<EventWithWeight> eventEvents = {
-        {u8"文脉传承", 1, true},
-        {u8"意境刻画", 1, true},
-        {u8"淬炼", 1, true},
-        {u8"墨宝拾遗", 1, true},
-        {u8"墨鬼", 1, false}, // 不在第一层出现
-        {u8"焚书", 1, false}, // 不在第一层出现
-        {u8"合卷", 1, false}  // 不在第一层出现
+        {u8"文脉传承", 2, true},
+        {u8"意境刻画", 2, true},
+        {u8"淬炼", 2, true},
+        {u8"墨宝拾遗", 2, true},
+        {u8"墨鬼", 1, false}, // 不在第一层出现，权重减半
+        {u8"焚书", 1, false}, // 不在第一层出现，权重减半
+        {u8"合卷", 1, false}  // 不在第一层出现，权重减半
     };
     
     static const std::vector<EventWithWeight> battleEvents = {
@@ -1368,8 +1645,9 @@ void MapExploreState::assignRowEventLabels() {
                     continue;
                 }
                 
-                // 检查是否已经使用过（限制"以物易物"和"墨坊"每层最多1个）
-                if (usedEvents.find(event.name) != usedEvents.end()) {
+                // 检查是否已经使用过（只限制"以物易物"和"墨坊"每层最多1个）
+                if ((event.name == u8"以物易物" || event.name == u8"墨坊") && 
+                    usedEvents.find(event.name) != usedEvents.end()) {
                     continue;
                 }
                 
@@ -1381,7 +1659,15 @@ void MapExploreState::assignRowEventLabels() {
         }
         
         if (availableEvents.empty()) {
-            for (int idx : idxs) nodes[idx].label.clear();
+            // 如果没有可用事件，使用默认标签而不是清空
+            for (int idx : idxs) {
+                switch (rowType) {
+                    case MapNode::NodeType::SHOP: nodes[idx].label = u8"商店"; break;
+                    case MapNode::NodeType::EVENT: nodes[idx].label = u8"事件"; break;
+                    case MapNode::NodeType::ELITE: nodes[idx].label = u8"战斗"; break;
+                    default: nodes[idx].label = u8"节点"; break;
+                }
+            }
             continue;
         }
         
@@ -1399,8 +1685,10 @@ void MapExploreState::assignRowEventLabels() {
         size_t take = std::min(uniqueEvents.size(), idxs.size());
         for (size_t k = 0; k < take; ++k) {
             nodes[idxs[k]].label = uniqueEvents[k];
-            // 将使用的事件添加到已使用集合中
-            usedEvents.insert(uniqueEvents[k]);
+            // 只跟踪"以物易物"和"墨坊"的使用情况
+            if (uniqueEvents[k] == u8"以物易物" || uniqueEvents[k] == u8"墨坊") {
+                usedEvents.insert(uniqueEvents[k]);
+            }
         }
         
         // 多余的节点复用已有事件
@@ -1622,6 +1910,51 @@ void MapExploreState::movePlayerToNode(int nodeIndex) {
     
     playerCurrentNode_ = nodeIndex;
     updateAccessibleNodes();
+    // 将当前位置与可达节点写入全局存储，保持跨界面一致
+    auto& ms = MapStore::instance();
+    ms.playerCurrentNode() = playerCurrentNode_;
+    ms.accessibleNodes() = accessibleNodes_;
     
-    SDL_Log("Player moved to node %d", nodeIndex);
+    // 根据节点标签进入对应界面
+    const MapNode* node = getNodeByGlobalIndex(nodeIndex);
+    if (node && !node->label.empty()) {
+        if (node->label == u8"诗剑之争" || node->label == u8"意境之斗") {
+            pendingGoBattle_ = true;
+        } else if (node->label == u8"以物易物") {
+            pendingGoBarter_ = true;
+        } else if (node->label == u8"意境刻画") {
+            pendingGoEngrave_ = true;
+        } else if (node->label == u8"文脉传承") {
+            pendingGoHeritage_ = true;
+        } else if (node->label == u8"墨坊") {
+            pendingGoInkShop_ = true;
+        } else if (node->label == u8"记忆修复") {
+            pendingGoMemoryRepair_ = true;
+        } else if (node->label == u8"墨宝拾遗") {
+            pendingGoRelicPickup_ = true;
+        } else if (node->label == u8"寻物人") {
+            pendingGoSeeker_ = true;
+        } else if (node->label == u8"淬炼") {
+            pendingGoTemper_ = true;
+        }
+        // 其他事件（如"文心试炼"、"墨鬼"、"焚书"、"合卷"）暂时不处理
+    }
+    
+    SDL_Log("Player moved to node %d with label '%s'", nodeIndex, node ? node->label.c_str() : "null");
+}
+
+void MapExploreState::startMoveAnimation(int targetNodeIndex) {
+    if (!isNodeAccessible(targetNodeIndex)) return;
+    if (playerCurrentNode_ == -1) return;
+    int sx0, sy0; getScreenXYForGlobalIndex(playerCurrentNode_, sx0, sy0);
+    int sx1, sy1; getScreenXYForGlobalIndex(targetNodeIndex, sx1, sy1);
+    // 转换为世界坐标反推：world = screen - offsets
+    moveStartPos_.x = static_cast<float>(sx0 - mapOffsetX_);
+    moveStartPos_.y = static_cast<float>(sy0 - mapOffsetY_ - scrollY_);
+    moveEndPos_.x = static_cast<float>(sx1 - mapOffsetX_);
+    moveEndPos_.y = static_cast<float>(sy1 - mapOffsetY_ - scrollY_);
+    moveFromNode_ = playerCurrentNode_;
+    moveToNode_ = targetNodeIndex;
+    moveT_ = 0.0f;
+    isMoving_ = true;
 }

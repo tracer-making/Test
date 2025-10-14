@@ -1,5 +1,6 @@
 #include "RelicPickupState.h"
 #include "TestState.h"
+#include "MapExploreState.h"
 #include "../core/App.h"
 #include <random>
 
@@ -18,7 +19,7 @@ void RelicPickupState::onEnter(App& app) {
 	if (titleFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, u8"墨宝拾遗", col); if (s) { titleTex_ = SDL_CreateTextureFromSurface(app.getRenderer(), s); SDL_FreeSurface(s);} }
 
 	backButton_ = new Button();
-	if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回测试"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this]() { pendingBackToTest_ = true; }); }
+	if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回地图"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; }); }
 
 	ensureThreeRelics();
 }
@@ -31,6 +32,7 @@ void RelicPickupState::handleEvent(App& app, const SDL_Event& e) {
 
 void RelicPickupState::update(App& app, float dt) {
 	if (pendingBackToTest_) { pendingBackToTest_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState()))); return; }
+	if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); return; }
 }
 
 void RelicPickupState::render(App& app) {

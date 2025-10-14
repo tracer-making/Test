@@ -29,6 +29,9 @@ private:
 	Button* backButton_ = nullptr;
 	Button* confirmButton_ = nullptr;
 	int screenW_ = 1280, screenH_ = 720;
+	
+	// 状态切换
+	bool pendingGoMapExplore_ = false;  // 返回地图探索
 
 	// 模式标签（占位）
 	int mode_ = 0; // 0随机 1种族 2指定消耗

@@ -1,5 +1,6 @@
 #include "SeekerState.h"
 #include "TestState.h"
+#include "MapExploreState.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
 #include "../ui/CardRenderer.h"
@@ -54,7 +55,7 @@ void SeekerState::onEnter(App& app) {
 		backButton_->setText(u8"返回");
 		if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
 		backButton_->setOnClick([this]() {
-			pendingBackToTest_ = true;
+			pendingGoMapExplore_ = true;
 		});
 	}
 
@@ -120,6 +121,11 @@ void SeekerState::update(App& app, float dt) {
 		pendingBackToTest_ = false;
 		// 返回到测试界面
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
+	}
+	if (pendingGoMapExplore_) {
+		pendingGoMapExplore_ = false;
+		// 返回到地图探索界面
+		app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
 	}
 }
 

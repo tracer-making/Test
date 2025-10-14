@@ -97,6 +97,9 @@ private:
 	// 道具UI相关
 	SDL_Rect itemSlots_[MAX_ITEMS];  // 道具槽位矩形
 	bool isItemHovered_[MAX_ITEMS] = {false};  // 道具悬停状态
+	
+	// 状态切换
+	bool pendingGoMapExplore_ = false;  // 返回地图探索
 	int hoveredItemIndex_ = -1; // 当前悬停的道具索引
 	
 	// 风雅扇效果跟踪

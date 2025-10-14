@@ -1,20 +1,27 @@
 #include "HeritageState.h"
 #include "TestState.h"
+#include "MapExploreState.h"
 #include "../core/App.h"
+#include "../ui/CardRenderer.h"
 
 HeritageState::HeritageState() = default;
 HeritageState::~HeritageState() {
 	if (titleTex_) SDL_DestroyTexture(titleTex_);
 	if (titleFont_) TTF_CloseFont(titleFont_);
 	if (smallFont_) TTF_CloseFont(smallFont_);
+	if (cardNameFont_) TTF_CloseFont(cardNameFont_);
+	if (cardStatFont_) TTF_CloseFont(cardStatFont_);
 	delete backButton_;
 	delete confirmButton_;
+	delete plusButton_;
 }
 
 void HeritageState::onEnter(App& app) {
 	int w,h; SDL_GetWindowSize(app.getWindow(), &w, &h); screenW_ = w; screenH_ = h;
 	titleFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 56);
 	smallFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 18);
+	cardNameFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 16);  // 卡牌名称字体
+	cardStatFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 14);  // 卡牌属性字体
 	if (titleFont_) {
 		SDL_Color col{200,230,255,255};
 		SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, u8"文脉传承", col);
@@ -24,68 +31,153 @@ void HeritageState::onEnter(App& app) {
 	backButton_ = new Button();
 	if (backButton_) {
 		backButton_->setRect({20,20,120,36});
-		backButton_->setText(u8"返回测试");
+		backButton_->setText(u8"返回地图");
 		if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
-		backButton_->setOnClick([this]() { pendingBackToTest_ = true; });
+		backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; });
 	}
 
-	confirmButton_ = new Button();
-	if (confirmButton_) {
-		confirmButton_->setRect({screenW_ - 160, 20, 140, 36});
-		confirmButton_->setText(u8"确定传承");
-		if (smallFont_) confirmButton_->setFont(smallFont_, app.getRenderer());
-		confirmButton_->setOnClick([this]() { performInheritance(); });
+	// 创建中间的+按钮
+	plusButton_ = new Button();
+	if (plusButton_) {
+		plusButton_->setRect({screenW_/2 - 25, screenH_/2 - 25, 50, 50});
+		plusButton_->setText(u8"+");
+		if (titleFont_) plusButton_->setFont(titleFont_, app.getRenderer());
+		plusButton_->setOnClick([this]() { performInheritance(); });
 	}
 
-	// 若首次进入且无数据，构造示例到库并抽到手牌
+	// 使用玩家的实际牌堆
 	auto& store = DeckStore::instance();
-	if (store.hand().empty() && store.library().empty()) {
-		for (int i=0;i<12;++i) {
-			Card c; c.id = "C"+std::to_string(i+1); c.name = "手牌"+std::to_string(i+1); c.attack = 1 + (i%5); c.health = 3 + (i%4);
-			if (i%3==0) c.marks = {"锐意"}; else if (i%3==1) c.marks = {"清风","博学"};
-			store.addToLibrary(c);
-		}
-		store.drawToHand(handCount_);
+	
+	// 如果牌库为空，重新初始化玩家牌堆
+	if (store.library().empty()) {
+		store.initializePlayerDeck();
 	}
-	else {
-		// 依据滑条目标同步到手牌数量（简单示例：若手牌少于目标，从库抽补足；若多于目标，从尾部弃置）
-		while ((int)store.hand().size() < handCount_ && !store.library().empty()) store.drawToHand(1);
-		while ((int)store.hand().size() > handCount_ && !store.hand().empty()) store.discardFromHand((int)store.hand().size()-1);
+	
+	// 如果手牌为空，从牌库抽取一些卡牌到手牌
+	if (store.hand().empty() && !store.library().empty()) {
+		// 抽取一些卡牌到手牌用于文脉传承
+		int drawCount = std::min(6, (int)store.library().size());
+		store.drawToHand(drawCount);
 	}
 
-	layoutSlider();
-	layoutGrid();
+	layoutCardSlots();
 }
 
 void HeritageState::onExit(App& app) {}
 
 void HeritageState::handleEvent(App& app, const SDL_Event& e) {
 	if (backButton_) backButton_->handleEvent(e);
-	if (confirmButton_) confirmButton_->handleEvent(e);
+	
+	// 只有两个牌位都有卡牌时才处理+按钮事件
+	if (hasSourceCard_ && hasTargetCard_ && plusButton_) {
+		plusButton_->handleEvent(e);
+	}
 
-	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-		int mx=e.button.x, my=e.button.y;
-		// 滑条
-		if (mx>=sliderTrack_.x && mx<=sliderTrack_.x+sliderTrack_.w && my>=sliderTrack_.y-6 && my<=sliderTrack_.y+sliderTrack_.h+6) {
-			sliderDragging_ = true;
-			updateSliderFromMouse(mx);
+	if (e.type == SDL_MOUSEMOTION) {
+		// 处理鼠标移动，检测悬停
+		int mx = e.motion.x, my = e.motion.y;
+		
+		// 检测左边牌位悬停
+		SDL_Rect leftSlot = {screenW_/2 - 300, screenH_/2 - 150, 200, 300};
+		if (mx >= leftSlot.x && mx <= leftSlot.x + leftSlot.w && 
+			my >= leftSlot.y && my <= leftSlot.y + leftSlot.h) {
+			leftSlotHover_ = 1.0f;  // 设置悬停状态
 		}
-		// 选择卡
-		for (size_t i=0;i<DeckStore::instance().hand().size();++i) {
-			const SDL_Rect& rc = cardRects_[i];
-			if (mx>=rc.x && mx<=rc.x+rc.w && my>=rc.y && my<=rc.y+rc.h) {
-				if (selectedSource_==-1) selectedSource_ = (int)i;
-				else if (selectedTarget_==-1 && (int)i!=selectedSource_) selectedTarget_ = (int)i;
-				else { selectedSource_ = (int)i; selectedTarget_ = -1; }
-				break;
+		
+		// 检测右边牌位悬停
+		SDL_Rect rightSlot = {screenW_/2 + 100, screenH_/2 - 150, 200, 300};
+		if (mx >= rightSlot.x && mx <= rightSlot.x + rightSlot.w && 
+			my >= rightSlot.y && my <= rightSlot.y + rightSlot.h) {
+			rightSlotHover_ = 1.0f;  // 设置悬停状态
+		}
+		
+		// 检测+按钮悬停（只有两个牌位都有卡牌时才检测）
+		if (hasSourceCard_ && hasTargetCard_ && plusButton_) {
+			SDL_Rect plusRect = plusButton_->getRect();
+			if (mx >= plusRect.x && mx <= plusRect.x + plusRect.w && 
+				my >= plusRect.y && my <= plusRect.y + plusRect.h) {
+				plusButtonHover_ = 1.0f;  // 设置悬停状态
+			}
+		}
+		
+		// 检测手牌区卡牌悬停
+		if (showingHandCards_) {
+			for (size_t i = 0; i < handCardRects_.size(); ++i) {
+				const SDL_Rect& rc = handCardRects_[i];
+				if (mx >= rc.x && mx <= rc.x + rc.w && 
+					my >= rc.y && my <= rc.y + rc.h) {
+					handCardHovers_[i] = 1.0f;  // 设置悬停状态
+					break;  // 只处理一个卡牌的悬停
+				}
 			}
 		}
 	}
-	else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-		sliderDragging_ = false;
-	}
-	else if (e.type == SDL_MOUSEMOTION && sliderDragging_) {
-		updateSliderFromMouse(e.motion.x);
+
+	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+		int mx=e.button.x, my=e.button.y;
+		
+		if (showingHandCards_) {
+			// 在手牌区中选择卡牌
+			for (size_t i=0; i<handCardRects_.size(); ++i) {
+				const SDL_Rect& rc = handCardRects_[i];
+				if (mx>=rc.x && mx<=rc.x+rc.w && my>=rc.y && my<=rc.y+rc.h) {
+					selectedHandCardIndex_ = (int)i;
+					break;
+				}
+			}
+			
+			// 检查是否点击了卡牌
+			if (selectedHandCardIndex_ >= 0 && selectedHandCardIndex_ < (int)availableCards_.size()) {
+				// 确认选择
+				if (selectingSource_) {
+					selectedSourceCard_ = availableCards_[selectedHandCardIndex_];
+					hasSourceCard_ = true;
+				} else {
+					selectedTargetCard_ = availableCards_[selectedHandCardIndex_];
+					hasTargetCard_ = true;
+				}
+				hideHandCards();
+			}
+		} else {
+			// 在主界面中点击牌位 - 两个牌位都可以点击，支持重新选择
+			// 左边牌位（被献祭的卡）
+			SDL_Rect leftSlot = {screenW_/2 - 300, screenH_/2 - 150, 200, 300};
+			if (mx>=leftSlot.x && mx<=leftSlot.x+leftSlot.w && my>=leftSlot.y && my<=leftSlot.y+leftSlot.h) {
+				// 如果当前正在显示手牌区且是选择源卡，则隐藏手牌区
+				if (showingHandCards_ && selectingSource_) {
+					hideHandCards();
+				} else {
+					// 否则显示选择被献祭的卡
+					showHandCards(true);
+				}
+			}
+			
+			// 右边牌位（接受传承的卡）
+			SDL_Rect rightSlot = {screenW_/2 + 100, screenH_/2 - 150, 200, 300};
+			if (mx>=rightSlot.x && mx<=rightSlot.x+rightSlot.w && my>=rightSlot.y && my<=rightSlot.y+rightSlot.h) {
+				// 如果当前正在显示手牌区且是选择目标卡，则隐藏手牌区
+				if (showingHandCards_ && !selectingSource_) {
+					hideHandCards();
+				} else {
+					// 否则显示选择接受传承的卡
+					showHandCards(false);
+				}
+			}
+		}
+		
+		// 点击左右牌位：进入/切换选择模式
+		SDL_Rect leftSlot = {screenW_/2 - 300, screenH_/2 - 150, 200, 300};
+		SDL_Rect rightSlot = {screenW_/2 + 100, screenH_/2 - 150, 200, 300};
+		if (mx >= leftSlot.x && mx <= leftSlot.x + leftSlot.w && my >= leftSlot.y && my <= leftSlot.y + leftSlot.h) {
+			// 切换为选择被献祭卡
+			showHandCards(true);
+			return;
+		}
+		if (mx >= rightSlot.x && mx <= rightSlot.x + rightSlot.w && my >= rightSlot.y && my <= rightSlot.y + rightSlot.h) {
+			// 切换为选择接受传承卡
+			showHandCards(false);
+			return;
+		}
 	}
 }
 
@@ -94,6 +186,52 @@ void HeritageState::update(App& app, float dt) {
 		pendingBackToTest_ = false;
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
 		return;
+	}
+	if (pendingGoMapExplore_) {
+		pendingGoMapExplore_ = false;
+		app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+		return;
+	}
+	
+	// 更新悬停动画
+	const float hoverSpeed = 3.0f;  // 悬停响应速度（用于高亮/缩放）
+	leftSlotHover_ = std::max(0.0f, leftSlotHover_ - hoverSpeed * dt);
+	rightSlotHover_ = std::max(0.0f, rightSlotHover_ - hoverSpeed * dt);
+	plusButtonHover_ = std::max(0.0f, plusButtonHover_ - hoverSpeed * dt);
+	// 持续漂浮时间推进（正弦波）
+	hoverTime_ += dt;
+	
+	// 更新手牌区卡牌悬停动画
+	for (size_t i = 0; i < handCardHovers_.size(); ++i) {
+		handCardHovers_[i] = std::max(0.0f, handCardHovers_[i] - hoverSpeed * dt);
+	}
+	
+	// 更新传承动画
+	if (isAnimating_) {
+		animationTime_ += dt;
+		
+		// 动画进行到一半时摧毁源卡
+		if (animationTime_ >= animationDuration_ * 0.3f && !sourceCardDestroyed_) {
+			sourceCardDestroyed_ = true;
+			// 这里可以添加摧毁源卡的实际逻辑
+		}
+		
+		// 动画进行到一半时强化目标卡
+		if (animationTime_ >= animationDuration_ * 0.6f && !targetCardEnhanced_) {
+			targetCardEnhanced_ = true;
+			// 这里可以添加强化目标卡的实际逻辑
+		}
+		
+		// 动画结束后返回地图
+		if (animationTime_ >= animationDuration_) {
+			isAnimating_ = false;
+			// 重置选择状态
+			hasSourceCard_ = false;
+			hasTargetCard_ = false;
+			selectedSourceCard_ = Card();
+			selectedTargetCard_ = Card();
+			pendingGoMapExplore_ = true;
+		}
 	}
 }
 
@@ -109,69 +247,258 @@ void HeritageState::render(App& app) {
 	}
 
 	if (backButton_) backButton_->render(r);
-	if (confirmButton_) confirmButton_->render(r);
+	
+	// 只有两个牌位都有卡牌时才显示+按钮
+	if (hasSourceCard_ && hasTargetCard_ && plusButton_) {
+		// 应用悬停动画到+按钮 + 持续漂浮
+		SDL_Rect originalRect = plusButton_->getRect();
+		SDL_Rect animatedRect = originalRect;
+		// 悬停响应（仅在悬停时上移/放大）
+		animatedRect.y -= (int)(plusButtonHover_ * 5);
+		animatedRect.w += (int)(plusButtonHover_ * 10); // 放大
+		animatedRect.h += (int)(plusButtonHover_ * 10);
+		animatedRect.x -= (int)(plusButtonHover_ * 5);  // 居中调整
+		
+		// 临时设置动画后的位置
+		plusButton_->setRect(animatedRect);
+		plusButton_->render(r);
+		// 恢复原始位置
+		plusButton_->setRect(originalRect);
+	}
 
-	// 滑动条
-	SDL_SetRenderDrawColor(r, 100,130,180,180);
-	SDL_RenderFillRect(r, &sliderTrack_);
-	SDL_SetRenderDrawColor(r, 180,210,255,230);
-	SDL_RenderFillRect(r, &sliderThumb_);
+	// 渲染主界面
+	renderMainInterface(app);
+	
+	// 如果显示手牌区，渲染手牌区
+	if (showingHandCards_) {
+		renderHandCardArea(app);
+	}
+}
 
-	// 卡牌网格（信息展示与明显选中标记）
-	auto& hand = DeckStore::instance().hand();
-	for (size_t i=0;i<hand.size();++i) {
-		if (i >= cardRects_.size()) break;
-		const auto& c = hand[i];
-		const SDL_Rect& rc = cardRects_[i];
-		// 背板
-		SDL_SetRenderDrawColor(r, 235, 230, 220, 230);
-		SDL_RenderFillRect(r, &rc);
-		// 边框（选中加粗）
-		bool isSrc = ((int)i == selectedSource_);
-		bool isDst = ((int)i == selectedTarget_);
-		if (isSrc) SDL_SetRenderDrawColor(r, 255, 215, 0, 255);
-		else if (isDst) SDL_SetRenderDrawColor(r, 0, 220, 180, 255);
-		else SDL_SetRenderDrawColor(r, 60, 50, 40, 220);
-		SDL_RenderDrawRect(r, &rc);
-		if (isSrc || isDst) { for (int t=1; t<=3; ++t) { SDL_Rect rr{ rc.x - t, rc.y - t, rc.w + 2*t, rc.h + 2*t }; SDL_RenderDrawRect(r, &rr); } }
-
-		// 名称
-		if (smallFont_) {
-			SDL_Color nameCol{50,40,30,255};
-			SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, c.name.c_str(), nameCol);
-			if (s) {
-				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
-				int desiredH = SDL_max(12, (int)(rc.h * 0.16f)); float sc=(float)desiredH/(float)s->h; int w=(int)(s->w*sc);
-				SDL_Rect nd{ rc.x + (rc.w - w)/2, rc.y + (int)(rc.h*0.05f), w, desiredH }; SDL_RenderCopy(r, t, nullptr, &nd); SDL_DestroyTexture(t);
-				SDL_SetRenderDrawColor(r, 80,70,60,220); int lineY = nd.y + nd.h + SDL_max(2, (int)(rc.h*0.015f)); int thick = SDL_max(1, (int)(rc.h*0.007f)); for (int k=0;k<thick;++k) SDL_RenderDrawLine(r, rc.x+6, lineY+k, rc.x+rc.w-6, lineY+k);
-				SDL_FreeSurface(s);
+void HeritageState::renderMainInterface(App& app) {
+	SDL_Renderer* r = app.getRenderer();
+	// 说明文字
+	if (smallFont_) {
+		SDL_Color textColor{200,230,255,255};
+		SDL_Surface* textSurface = TTF_RenderUTF8_Blended(smallFont_, u8"点击牌位选择卡牌进行文脉传承", textColor);
+		if (textSurface) {
+			SDL_Texture* textTexture = SDL_CreateTextureFromSurface(r, textSurface);
+			if (textTexture) {
+				SDL_Rect textRect = {20, screenH_ - 60, textSurface->w, textSurface->h};
+				SDL_RenderCopy(r, textTexture, nullptr, &textRect);
+				SDL_DestroyTexture(textTexture);
 			}
-		}
-		// 攻击/生命
-		if (smallFont_) {
-			int desiredH = SDL_max(12, (int)(rc.h * 0.18f)); int margin = SDL_max(6, (int)(rc.h * 0.035f)); char buf[32];
-			SDL_Color atkCol{80,50,40,255}; snprintf(buf, sizeof(buf), "%d", c.attack); SDL_Surface* sa = TTF_RenderUTF8_Blended(smallFont_, buf, atkCol);
-			if (sa) { SDL_Texture* ta = SDL_CreateTextureFromSurface(r, sa); float sc=(float)desiredH/(float)sa->h; int w=(int)(sa->w*sc); SDL_Rect ad{ rc.x + margin, rc.y + rc.h - desiredH - margin, w, desiredH }; SDL_RenderCopy(r, ta, nullptr, &ad); SDL_DestroyTexture(ta); SDL_FreeSurface(sa);} 
-			SDL_Color hpCol{160,30,40,255}; snprintf(buf, sizeof(buf), "%d", c.health); SDL_Surface* sh = TTF_RenderUTF8_Blended(smallFont_, buf, hpCol);
-			if (sh) { SDL_Texture* th = SDL_CreateTextureFromSurface(r, sh); float sc=(float)desiredH/(float)sh->h; int w=(int)(sh->w*sc); SDL_Rect hd{ rc.x + rc.w - w - margin, rc.y + rc.h - desiredH - margin, w, desiredH }; SDL_RenderCopy(r, th, nullptr, &hd); SDL_DestroyTexture(th); SDL_FreeSurface(sh);} 
-		}
-		// 印记一行
-		if (smallFont_ && !c.marks.empty()) {
-			std::string marks; for (size_t mi=0; mi<c.marks.size(); ++mi) { if (mi) marks += "  "; marks += c.marks[mi]; }
-			SDL_Color markCol{70,80,120,220}; SDL_Surface* ms = TTF_RenderUTF8_Blended_Wrapped(smallFont_, marks.c_str(), markCol, rc.w - 12);
-			if (ms) { SDL_Texture* mt = SDL_CreateTextureFromSurface(r, ms); int top = rc.y + (int)(rc.h*0.28f); SDL_Rect md{ rc.x + 6, top, ms->w, ms->h }; SDL_RenderCopy(r, mt, nullptr, &md); SDL_DestroyTexture(mt); SDL_FreeSurface(ms);} 
-		}
-		// 水印
-		if ((isSrc || isDst) && smallFont_) {
-			const char* txt = isSrc ? u8"源" : u8"承"; SDL_Color mwCol = isSrc ? SDL_Color{255,220,100,140} : SDL_Color{120,240,220,140};
-			SDL_Surface* ws = TTF_RenderUTF8_Blended(smallFont_, txt, mwCol); if (ws) { SDL_Texture* wt = SDL_CreateTextureFromSurface(r, ws); int targetH = SDL_max(24, (int)(rc.h * 0.5f)); float sc=(float)targetH/(float)ws->h; int w=(int)(ws->w*sc); SDL_Rect wd{ rc.x + (rc.w - w)/2, rc.y + (rc.h - targetH)/2, w, targetH }; SDL_SetTextureAlphaMod(wt, 130); SDL_RenderCopy(r, wt, nullptr, &wd); SDL_DestroyTexture(wt); SDL_FreeSurface(ws);} 
+			SDL_FreeSurface(textSurface);
 		}
 	}
+
+    // 左边牌位（被献祭的卡）- 更大更分开，仅在悬停时漂浮
+    SDL_Rect leftSlot = {screenW_/2 - 300, screenH_/2 - 150, 200, 300};
+    // 悬停响应放大/上移 + 悬停持续漂浮（正弦）
+    if (leftSlotHover_ > 0.0f) {
+        leftSlot.y += (int)(sinf(hoverTime_ * 2.2f) * 6.0f);
+    }
+    leftSlot.y -= (int)(leftSlotHover_ * 10);
+    leftSlot.w += (int)(leftSlotHover_ * 4);
+    leftSlot.h += (int)(leftSlotHover_ * 6);
+    leftSlot.x -= (int)(leftSlotHover_ * 2);
+    
+    // 选中高亮：当前在选择被献祭卡时高亮左槽
+    if (showingHandCards_ && selectingSource_) {
+        SDL_SetRenderDrawColor(r, 120, 120, 160, 220); // 带蓝紫调的高亮
+    } else {
+        SDL_SetRenderDrawColor(r, 100, 100, 100, 200);
+    }
+    SDL_RenderFillRect(r, &leftSlot);
+	SDL_SetRenderDrawColor(r, 200, 200, 200, 255);
+	SDL_RenderDrawRect(r, &leftSlot);
+	
+	// 左边牌位标签
+	if (smallFont_) {
+		SDL_Color col{200,200,200,255};
+		SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, u8"被献祭的卡", col);
+		if (s) {
+			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+			SDL_Rect d{leftSlot.x + (leftSlot.w - s->w)/2, leftSlot.y - 30, s->w, s->h};
+			SDL_RenderCopy(r, t, nullptr, &d);
+			SDL_DestroyTexture(t);
+			SDL_FreeSurface(s);
+		}
+	}
+	
+	// 如果已选择被献祭的卡，显示卡牌信息
+	if (hasSourceCard_) {
+		// 如果正在播放动画且源卡已被摧毁，不显示源卡
+		if (!isAnimating_ || !sourceCardDestroyed_) {
+			renderCardInSlot(app, leftSlot, selectedSourceCard_);
+		}
+	}
+
+    // 右边牌位（接受传承的卡）- 更大更分开，仅在悬停时漂浮
+    SDL_Rect rightSlot = {screenW_/2 + 100, screenH_/2 - 150, 200, 300};
+    // 悬停响应放大/上移 + 悬停持续漂浮（正弦）
+    if (rightSlotHover_ > 0.0f) {
+        rightSlot.y += (int)(sinf(hoverTime_ * 2.2f) * 6.0f);
+    }
+    rightSlot.y -= (int)(rightSlotHover_ * 10);
+    rightSlot.w += (int)(rightSlotHover_ * 4);
+    rightSlot.h += (int)(rightSlotHover_ * 6);
+    rightSlot.x -= (int)(rightSlotHover_ * 2);
+    
+    // 选中高亮：当前在选择接受传承卡时高亮右槽
+    if (showingHandCards_ && !selectingSource_) {
+        SDL_SetRenderDrawColor(r, 160, 120, 120, 220); // 带红调的高亮
+    } else {
+        SDL_SetRenderDrawColor(r, 100, 100, 100, 200);
+    }
+    SDL_RenderFillRect(r, &rightSlot);
+	SDL_SetRenderDrawColor(r, 200, 200, 200, 255);
+	SDL_RenderDrawRect(r, &rightSlot);
+	
+	// 右边牌位标签
+	if (smallFont_) {
+		SDL_Color col{200,200,200,255};
+		SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, u8"接受传承的卡", col);
+		if (s) {
+			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+			SDL_Rect d{rightSlot.x + (rightSlot.w - s->w)/2, rightSlot.y - 30, s->w, s->h};
+			SDL_RenderCopy(r, t, nullptr, &d);
+			SDL_DestroyTexture(t);
+			SDL_FreeSurface(s);
+		}
+	}
+	
+	// 如果已选择接受传承的卡，显示卡牌信息
+	if (hasTargetCard_) {
+		// 如果正在播放动画且目标卡已被强化，添加强化效果
+		if (isAnimating_ && targetCardEnhanced_) {
+			// 添加强化光环效果
+			SDL_SetRenderDrawColor(r, 255, 215, 0, 100); // 金色半透明
+			SDL_Rect glowRect = {rightSlot.x - 10, rightSlot.y - 10, rightSlot.w + 20, rightSlot.h + 20};
+			SDL_RenderFillRect(r, &glowRect);
+		}
+		renderCardInSlot(app, rightSlot, selectedTargetCard_);
+	}
+
+	// +按钮就是确认按钮，不需要额外的确认按钮
 
 	// 提示/信息
 	if (smallFont_) {
-		SDL_Color col{220,230,245,255}; std::string tip = message_.empty()? u8"点击选择牺牲卡，再选择目标卡，点击右上确定传承；上方滑条调节手牌数量" : message_; SDL_Surface* s = TTF_RenderUTF8_Blended_Wrapped(smallFont_, tip.c_str(), col, screenW_-40); if (s) { SDL_Texture* t = SDL_CreateTextureFromSurface(r, s); SDL_Rect dst{20, screenH_-s->h-20, s->w, s->h}; SDL_RenderCopy(r,t,nullptr,&dst); SDL_DestroyTexture(t); SDL_FreeSurface(s);} 
+		SDL_Color col{220,230,245,255}; 
+		std::string tip;
+		
+		if (isAnimating_) {
+			// 动画期间的提示
+			if (sourceCardDestroyed_ && targetCardEnhanced_) {
+				tip = u8"传承完成！即将返回地图...";
+			} else if (sourceCardDestroyed_) {
+				tip = u8"源卡已摧毁，正在强化目标卡...";
+			} else {
+				tip = u8"正在摧毁源卡...";
+			}
+		} else if (hasSourceCard_ && hasTargetCard_) {
+			tip = message_.empty()? u8"点击中间的+按钮完成传承，或点击牌位重新选择" : message_;
+		} else if (hasSourceCard_) {
+			tip = message_.empty()? u8"点击右边牌位选择接受传承的卡牌，或点击左边牌位重新选择" : message_;
+		} else if (hasTargetCard_) {
+			tip = message_.empty()? u8"点击左边牌位选择被献祭的卡牌，或点击右边牌位重新选择" : message_;
+		} else if (showingHandCards_) {
+			tip = message_.empty()? (selectingSource_ ? u8"选择被献祭的卡牌，或点击其他牌位切换" : u8"选择接受传承的卡牌，或点击其他牌位切换") : message_;
+		} else {
+			tip = message_.empty()? u8"点击任意牌位选择卡牌，下方会显示可选择的卡牌" : message_;
+		}
+		
+		SDL_Surface* s = TTF_RenderUTF8_Blended_Wrapped(smallFont_, tip.c_str(), col, screenW_-40); 
+		if (s) { 
+			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s); 
+			SDL_Rect dst{20, screenH_ - 40, s->w, s->h}; 
+			SDL_RenderCopy(r,t,nullptr,&dst); 
+			SDL_DestroyTexture(t); 
+			SDL_FreeSurface(s);
+		} 
 	}
+}
+
+void HeritageState::renderHandCardArea(App& app) {
+	SDL_Renderer* r = app.getRenderer();
+	
+	// 手牌区背景
+	SDL_SetRenderDrawColor(r, 30, 35, 45, 200);
+	SDL_Rect handArea = {0, screenH_ - 200, screenW_, 200};
+	SDL_RenderFillRect(r, &handArea);
+	
+	// 手牌区标题
+	if (smallFont_) {
+		SDL_Color textColor{200,230,255,255};
+		std::string title = selectingSource_ ? u8"选择被献祭的卡（必须有印记）" : u8"选择接受传承的卡";
+		SDL_Surface* textSurface = TTF_RenderUTF8_Blended(smallFont_, title.c_str(), textColor);
+		if (textSurface) {
+			SDL_Texture* textTexture = SDL_CreateTextureFromSurface(r, textSurface);
+			if (textTexture) {
+				SDL_Rect textRect = {20, screenH_ - 180, textSurface->w, textSurface->h};
+				SDL_RenderCopy(r, textTexture, nullptr, &textRect);
+				SDL_DestroyTexture(textTexture);
+			}
+			SDL_FreeSurface(textSurface);
+		}
+	}
+
+    // 渲染可选卡牌（仅悬停时上移/放大，参考战斗手牌）
+    for (size_t i=0; i<availableCards_.size() && i<handCardRects_.size(); ++i) {
+		const auto& card = availableCards_[i];
+		SDL_Rect rc = handCardRects_[i];
+        // 仅在悬停时做动画
+        if (i < handCardHovers_.size()) {
+            float hover = handCardHovers_[i];
+            rc.y -= (int)(hover * 12);
+            rc.w += (int)(hover * 8);
+            rc.h += (int)(hover * 12);
+            rc.x -= (int)(hover * 4);
+        }
+		
+		// 选中高亮效果
+		if (selectedHandCardIndex_ == (int)i) {
+			SDL_SetRenderDrawColor(r, 255, 215, 0, 200);
+			SDL_Rect highlightRect{ rc.x - 3, rc.y - 3, rc.w + 6, rc.h + 6 };
+			SDL_RenderFillRect(r, &highlightRect);
+		}
+		
+		// 使用CardRenderer渲染卡牌，与战斗界面保持一致
+		CardRenderer::renderCard(app, card, rc, cardNameFont_, cardStatFont_, selectedHandCardIndex_ == (int)i);
+	}
+	
+	// 确认选择提示
+	if (smallFont_ && selectedHandCardIndex_ >= 0) {
+		SDL_Color col{255,255,0,255};
+		SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, u8"点击卡牌确认选择", col);
+		if (s) { 
+			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s); 
+			SDL_Rect d{screenW_ - s->w - 20, screenH_ - 30, s->w, s->h}; 
+			SDL_RenderCopy(r,t,nullptr,&d); 
+			SDL_DestroyTexture(t); 
+			SDL_FreeSurface(s);
+		} 
+	}
+}
+
+void HeritageState::renderCardInSlot(App& app, const SDL_Rect& slot, const Card& card) {
+	// 使用固定的卡牌大小，类似于检索界面
+	const int cardWidth = 120;   // 固定宽度
+	const int cardHeight = 180;  // 固定高度（2:3比例）
+	
+	// 计算卡牌在牌位中的居中位置
+	int cardX = slot.x + (slot.w - cardWidth) / 2;
+	int cardY = slot.y + (slot.h - cardHeight) / 2;
+	
+	SDL_Rect cardRect = { cardX, cardY, cardWidth, cardHeight };
+	
+	// 使用CardRenderer渲染卡牌，与战斗界面保持一致
+	CardRenderer::renderCard(app, card, cardRect, cardNameFont_, cardStatFont_, false);
+}
+
+void HeritageState::layoutCardSlots() {
+	// 新的布局方法，不需要卡牌网格
+	// 牌位位置已经在renderMainInterface中硬编码
 }
 
 void HeritageState::layoutGrid() {
@@ -186,33 +513,226 @@ void HeritageState::layoutGrid() {
 	for (int i=0;i<n;++i) { int r=i/bestCols, c=i%bestCols; cardRects_[i] = { startX + c*(bestW+gap), startY + r*(bestH+gap), bestW, bestH }; }
 }
 
-void HeritageState::layoutSlider() { int trackW = SDL_max(200, screenW_ - 2*220); int trackH=6; int trackX=(screenW_-trackW)/2; int trackY=110; sliderTrack_={trackX,trackY,trackW,trackH}; int thumbW=14, thumbH=24; float t=(float)(SDL_clamp(handCount_,handMin_,handMax_) - handMin_)/(float)(handMax_ - handMin_); int thumbX = trackX + (int)(t*trackW) - thumbW/2; int thumbY=trackY + trackH/2 - thumbH/2; sliderThumb_={thumbX,thumbY,thumbW,thumbH}; }
 
-void HeritageState::updateSliderFromMouse(int mx) {
-	int cx = SDL_clamp(mx, sliderTrack_.x, sliderTrack_.x + sliderTrack_.w); float t=(float)(cx - sliderTrack_.x)/(float)sliderTrack_.w; int v=handMin_ + (int)(t*(handMax_-handMin_)+0.5f); v=SDL_clamp(v,handMin_,handMax_);
-	if (v!=handCount_) {
-		handCount_=v;
-		// 根据新数量同步 hand（简单策略）
-		auto& store = DeckStore::instance();
-		while ((int)store.hand().size() < handCount_ && !store.library().empty()) store.drawToHand(1);
-		while ((int)store.hand().size() > handCount_ && !store.hand().empty()) store.discardFromHand((int)store.hand().size()-1);
-		layoutGrid();
+void HeritageState::showHandCards(bool isSource) {
+	showingHandCards_ = true;
+	selectingSource_ = isSource;
+	selectedHandCardIndex_ = -1;
+	
+	// 获取所有可用的卡牌
+	auto& store = DeckStore::instance();
+	availableCards_.clear();
+	
+	// 从手牌和牌库中获取所有卡牌，排除已经放在牌位上的卡牌
+	for (const auto& card : store.hand()) {
+		// 检查是否已经放在牌位上
+		bool isAlreadySelected = false;
+		if (hasSourceCard_ && card.id == selectedSourceCard_.id) {
+			isAlreadySelected = true;
+		}
+		if (hasTargetCard_ && card.id == selectedTargetCard_.id) {
+			isAlreadySelected = true;
+		}
+		
+		if (!isAlreadySelected) {
+			if (isSource) {
+				// 选择被献祭的卡：必须有印记
+				if (canBeSacrificed(card)) {
+					availableCards_.push_back(card);
+				}
+			} else {
+				// 选择接受传承的卡：不能曾经接受过文脉传承
+				if (canReceiveInheritance(card)) {
+					availableCards_.push_back(card);
+				}
+			}
+		}
 	}
-	int tw=sliderThumb_.w, th=sliderThumb_.h; int tx = sliderTrack_.x + (int)( (float)(handCount_-handMin_)/(float)(handMax_-handMin_) * sliderTrack_.w) - tw/2; int ty=sliderTrack_.y + sliderTrack_.h/2 - th/2; sliderThumb_={tx,ty,tw,th};
+	
+	for (const auto& card : store.library()) {
+		// 检查是否已经放在牌位上
+		bool isAlreadySelected = false;
+		if (hasSourceCard_ && card.id == selectedSourceCard_.id) {
+			isAlreadySelected = true;
+		}
+		if (hasTargetCard_ && card.id == selectedTargetCard_.id) {
+			isAlreadySelected = true;
+		}
+		
+		if (!isAlreadySelected) {
+			if (isSource) {
+				// 选择被献祭的卡：必须有印记
+				if (canBeSacrificed(card)) {
+					availableCards_.push_back(card);
+				}
+			} else {
+				// 选择接受传承的卡：不能曾经接受过文脉传承
+				if (canReceiveInheritance(card)) {
+					availableCards_.push_back(card);
+				}
+			}
+		}
+	}
+	
+	layoutHandCards();
+	
+	// 初始化手牌区卡牌悬停动画
+	handCardHovers_.assign(availableCards_.size(), 0.0f);
+}
+
+void HeritageState::hideHandCards() {
+	showingHandCards_ = false;
+	selectingSource_ = false;
+	selectedHandCardIndex_ = -1;
+	availableCards_.clear();
+	handCardRects_.clear();
+	handCardHovers_.clear();
+}
+
+void HeritageState::layoutHandCards() {
+	int n = (int)availableCards_.size();
+	if (n <= 0) { 
+		handCardRects_.clear(); 
+		return; 
+	}
+	
+	handCardRects_.assign(n, SDL_Rect{0,0,0,0});
+	
+	// 手牌区布局：水平排列，固定大小
+	const int cardWidth = 100;
+	const int cardHeight = 150;
+	const int gap = 10;
+	const int startY = screenH_ - 160;  // 手牌区顶部
+	const int marginX = 20;
+	
+	// 计算起始X位置（居中）
+	int totalWidth = n * cardWidth + (n - 1) * gap;
+	int startX = (screenW_ - totalWidth) / 2;
+	if (startX < marginX) startX = marginX;
+	
+	// 设置每个卡牌的位置
+	for (int i = 0; i < n; ++i) {
+		handCardRects_[i] = { 
+			startX + i * (cardWidth + gap), 
+			startY, 
+			cardWidth, 
+			cardHeight 
+		};
+	}
+}
+
+bool HeritageState::canBeSacrificed(const Card& card) {
+	// 墨锭不能作为被献祭的卡
+	if (card.id == "moding") {
+		return false;
+	}
+	// 被献祭的卡必须有印记
+	return !card.marks.empty();
+}
+
+bool HeritageState::canReceiveInheritance(const Card& card) {
+	// 墨锭不能接受传承
+	if (card.id == "moding") {
+		return false;
+	}
+	// 接受传承的卡不能曾经接受过文脉传承
+	// 这里可以通过检查卡牌是否有特定的印记来判断
+	// 暂时假设没有接受过传承的卡都可以接受传承
+	// 可以添加一个特殊的印记来标记已经接受过传承的卡
+	for (const auto& mark : card.marks) {
+		if (mark == u8"文脉传承") {
+			return false;  // 已经接受过文脉传承
+		}
+	}
+	return true;
 }
 
 void HeritageState::performInheritance() {
-	if (selectedSource_==-1 || selectedTarget_==-1) { message_ = u8"请先选定牺牲卡与目标卡"; return; }
-	if (selectedSource_==selectedTarget_) { message_ = u8"目标不能与牺牲相同"; return; }
+	if (!hasSourceCard_ || !hasTargetCard_) { 
+		message_ = u8"请先选择被献祭的卡和接受传承的卡"; 
+		return; 
+	}
+	
+	if (selectedSourceCard_.id == selectedTargetCard_.id) { 
+		message_ = u8"被献祭的卡和接受传承的卡不能相同"; 
+		return; 
+	}
 	auto& store = DeckStore::instance();
-	// 如果源在目标之前，调用 inherit 后目标索引会左移一位
-	bool targetAfter = selectedTarget_ > selectedSource_;
-	store.inheritMarks(selectedSource_, selectedTarget_);
-	if (targetAfter) selectedTarget_ -= 1;
-	// 同步 handCount_ 显示
-	if (handCount_ > handMin_) handCount_ -= 1;
-	selectedSource_ = -1; selectedTarget_ = -1; layoutGrid();
-	message_ = u8"传承成功：源卡已消失，印记并入目标";
+	
+	// 找到被献祭的卡在牌堆中的位置
+	int sourceIndex = -1;
+	int targetIndex = -1;
+	
+	// 在手牌中查找
+	for (size_t i = 0; i < store.hand().size(); ++i) {
+		if (store.hand()[i].id == selectedSourceCard_.id) {
+			sourceIndex = (int)i;
+			break;
+		}
+	}
+	
+	for (size_t i = 0; i < store.hand().size(); ++i) {
+		if (store.hand()[i].id == selectedTargetCard_.id) {
+			targetIndex = (int)i;
+			break;
+		}
+	}
+	
+	// 如果在手牌中没找到，在牌库中查找
+	if (sourceIndex == -1) {
+		for (size_t i = 0; i < store.library().size(); ++i) {
+			if (store.library()[i].id == selectedSourceCard_.id) {
+				// 从牌库移动到手牌
+				Card sourceCard = store.library()[i];
+				store.library().erase(store.library().begin() + i);
+				store.hand().push_back(sourceCard);
+				sourceIndex = (int)store.hand().size() - 1;
+				break;
+			}
+		}
+	}
+	
+	if (targetIndex == -1) {
+		for (size_t i = 0; i < store.library().size(); ++i) {
+			if (store.library()[i].id == selectedTargetCard_.id) {
+				// 从牌库移动到手牌
+				Card targetCard = store.library()[i];
+				store.library().erase(store.library().begin() + i);
+				store.hand().push_back(targetCard);
+				targetIndex = (int)store.hand().size() - 1;
+				break;
+			}
+		}
+	}
+	
+	if (sourceIndex != -1 && targetIndex != -1) {
+		// 执行传承：将源卡的印记传给目标卡
+		Card& sourceCard = store.hand()[sourceIndex];
+		Card& targetCard = store.hand()[targetIndex];
+		
+		// 将源卡的印记添加到目标卡
+		for (const auto& mark : sourceCard.marks) {
+			targetCard.marks.push_back(mark);
+		}
+		
+		// 更新selectedTargetCard_以反映新的印记
+		selectedTargetCard_ = targetCard;
+		
+		// 移除源卡
+		store.hand().erase(store.hand().begin() + sourceIndex);
+		
+		message_ = u8"传承成功：源卡已消失，印记并入目标";
+		
+		// 启动传承动画
+		isAnimating_ = true;
+		animationTime_ = 0.0f;
+		sourceCardDestroyed_ = false;
+		targetCardEnhanced_ = false;
+	} else {
+		message_ = u8"传承失败：找不到指定的卡牌";
+	}
+	
+	// 注意：不在这里重置选择状态，等动画完成后再重置
 }
 
 

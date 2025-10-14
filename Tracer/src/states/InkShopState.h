@@ -27,6 +27,9 @@ private:
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
 	int screenW_ = 1280, screenH_ = 720;
+	
+	// 状态切换
+	bool pendingGoMapExplore_ = false;  // 返回地图探索
 
 	// 数据
 	int wenmai_ = 30; // 文脉余额（示例）

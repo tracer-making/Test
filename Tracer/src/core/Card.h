@@ -12,6 +12,13 @@ struct Card {
 	int health = 0;            // 生命值
 	std::string face;          // 牌面（资源ID/图片路径/样式名）
 	std::vector<std::string> marks; // 印记
+	
+	// 默认构造函数
+	Card() = default;
+	
+	// 带参数的构造函数
+	Card(const std::string& id, const std::string& name, int sacrificeCost, const std::string& category, int attack, int health, const std::string& face, const std::vector<std::string>& marks = {})
+		: id(id), name(name), sacrificeCost(sacrificeCost), category(category), attack(attack), health(health), face(face), marks(marks) {}
 };
 
 

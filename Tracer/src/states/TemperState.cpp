@@ -1,5 +1,6 @@
 #include "TemperState.h"
 #include "TestState.h"
+#include "MapExploreState.h"
 #include "../core/App.h"
 #include <random>
 
@@ -19,22 +20,21 @@ void TemperState::onEnter(App& app) {
 	smallFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 18);
 	if (titleFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, u8"淬炼：选择一张手牌", col); if (s) { titleTex_ = SDL_CreateTextureFromSurface(app.getRenderer(), s); SDL_FreeSurface(s);} }
 
-	backButton_ = new Button(); if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回测试"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this]() { pendingBackToTest_ = true; }); }
+	backButton_ = new Button(); if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回地图"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; }); }
 	atkButton_ = new Button(); if (atkButton_) { atkButton_->setRect({screenW_/2 - 140, 100, 120, 36}); atkButton_->setText(u8"+1 攻击"); if (smallFont_) atkButton_->setFont(smallFont_, app.getRenderer()); atkButton_->setOnClick([this]() { applyTemper(true); }); }
 	hpButton_ = new Button(); if (hpButton_) { hpButton_->setRect({screenW_/2 + 20, 100, 120, 36}); hpButton_->setText(u8"+2 生命"); if (smallFont_) hpButton_->setFont(smallFont_, app.getRenderer()); hpButton_->setOnClick([this]() { applyTemper(false); }); }
 
-	// 如果手牌为空，构造示例数据或从牌库抽取
+	// 使用玩家的实际牌堆
 	auto& store = DeckStore::instance();
 	if (store.hand().empty()) {
 		if (store.library().empty()) {
-			for (int i=0;i<8;++i) {
-				Card c; c.id = "T"+std::to_string(i+1); c.name = "手牌"+std::to_string(i+1); c.attack = 1 + (i%5); c.health = 3 + (i%4);
-				store.addToLibrary(c);
-			}
+			// 如果牌库也为空，初始化玩家牌堆
+			store.initializePlayerDeck();
+		} else {
+			// 从牌库抽取一些卡牌到手牌用于淬炼
+			int drawCount = std::min(6, (int)store.library().size());
+			store.drawToHand(drawCount);
 		}
-		// 抽到手牌（最多6张）
-		int need = 6;
-		store.drawToHand(need);
 	}
 
 	layoutHandGrid();
@@ -53,6 +53,7 @@ void TemperState::handleEvent(App& app, const SDL_Event& e) {
 
 void TemperState::update(App& app, float dt) {
 	if (pendingBackToTest_) { pendingBackToTest_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState()))); return; }
+	if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); return; }
 }
 
 void TemperState::render(App& app) {

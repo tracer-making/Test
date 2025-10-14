@@ -29,6 +29,9 @@ private:
 	Button* atkButton_ = nullptr;
 	Button* hpButton_ = nullptr;
 	int screenW_ = 1280, screenH_ = 720;
+	
+	// 状态切换
+	bool pendingGoMapExplore_ = false;  // 返回地图探索
 
 	std::vector<SDL_Rect> cardRects_;
 	int selectedIndex_ = -1;

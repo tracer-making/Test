@@ -2,6 +2,7 @@
 
 #include "../core/State.h"
 #include "../ui/Button.h"
+#include "../core/MapStore.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <vector>
@@ -29,6 +30,17 @@ private:
     std::vector<Button*> difficultyButtons_;
     Button* backToTestButton_ = nullptr;
     bool pendingGoTest_ = false;
+    
+    // 状态切换
+    bool pendingGoBattle_ = false;
+    bool pendingGoBarter_ = false;
+    bool pendingGoEngrave_ = false;
+    bool pendingGoHeritage_ = false;
+    bool pendingGoInkShop_ = false;
+    bool pendingGoMemoryRepair_ = false;
+    bool pendingGoRelicPickup_ = false;
+    bool pendingGoSeeker_ = false;
+    bool pendingGoTemper_ = false;
     
     // 字体
     _TTF_Font* font_ = nullptr;
@@ -63,6 +75,7 @@ private:
     
     // 地图选择
     int currentMapLayer_ = 1;        // 当前选择的地图层（1-4）
+    static bool s_mapGenerated_;     // 静态标志，跟踪地图是否已经生成
     
     // 地图生成
     int maxNodesPerLayer_ = 3;       // 复杂度：每层最多节点数（1-4）
@@ -107,6 +120,7 @@ private:
     void updateAccessibleNodes();
     bool isNodeAccessible(int nodeIndex);
     void movePlayerToNode(int nodeIndex);
+    void startMoveAnimation(int targetNodeIndex);
     
     // 坐标转换
     SDL_Point gridToScreen(int gridX, int gridY) const;
@@ -136,4 +150,13 @@ private:
     // 仅影响显示的偏移（不改变逻辑坐标）
     std::vector<SDL_Point> nodeDisplayOffset_; // 按全局索引存储额外偏移
     void buildDisplayOffsets();
+
+    // 移动动画
+    bool isMoving_ = false;
+    int moveFromNode_ = -1;
+    int moveToNode_ = -1;
+    float moveT_ = 0.0f;
+    float moveDuration_ = 0.5f; // 秒
+    SDL_FPoint moveStartPos_{0.f, 0.f};
+    SDL_FPoint moveEndPos_{0.f, 0.f};
 };

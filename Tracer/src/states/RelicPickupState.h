@@ -25,6 +25,9 @@ private:
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
 	int screenW_ = 1280, screenH_ = 720;
+	
+	// 状态切换
+	bool pendingGoMapExplore_ = false;  // 返回地图探索
 
 	std::vector<std::string> ownedRelics_;
 	std::string message_;
