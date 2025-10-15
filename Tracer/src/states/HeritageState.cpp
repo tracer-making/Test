@@ -3,6 +3,8 @@
 #include "MapExploreState.h"
 #include "../core/App.h"
 #include "../ui/CardRenderer.h"
+#include <set>
+#include <iostream>
 
 HeritageState::HeritageState() = default;
 HeritageState::~HeritageState() {
@@ -53,12 +55,7 @@ void HeritageState::onEnter(App& app) {
 		store.initializePlayerDeck();
 	}
 	
-	// 如果手牌为空，从牌库抽取一些卡牌到手牌
-	if (store.hand().empty() && !store.library().empty()) {
-		// 抽取一些卡牌到手牌用于文脉传承
-		int drawCount = std::min(6, (int)store.library().size());
-		store.drawToHand(drawCount);
-	}
+	// 文脉传承直接操作牌库，不需要抽取到手牌
 
 	layoutCardSlots();
 }
@@ -120,11 +117,11 @@ void HeritageState::handleEvent(App& app, const SDL_Event& e) {
 			// 在手牌区中选择卡牌
 			for (size_t i=0; i<handCardRects_.size(); ++i) {
 				const SDL_Rect& rc = handCardRects_[i];
-				if (mx>=rc.x && mx<=rc.x+rc.w && my>=rc.y && my<=rc.y+rc.h) {
+			if (mx>=rc.x && mx<=rc.x+rc.w && my>=rc.y && my<=rc.y+rc.h) {
 					selectedHandCardIndex_ = (int)i;
-					break;
-				}
+				break;
 			}
+		}
 			
 			// 检查是否点击了卡牌
 			if (selectedHandCardIndex_ >= 0 && selectedHandCardIndex_ < (int)availableCards_.size()) {
@@ -314,17 +311,17 @@ void HeritageState::renderMainInterface(App& app) {
 	SDL_RenderDrawRect(r, &leftSlot);
 	
 	// 左边牌位标签
-	if (smallFont_) {
+		if (smallFont_) {
 		SDL_Color col{200,200,200,255};
 		SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, u8"被献祭的卡", col);
-		if (s) {
-			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+			if (s) {
+				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
 			SDL_Rect d{leftSlot.x + (leftSlot.w - s->w)/2, leftSlot.y - 30, s->w, s->h};
 			SDL_RenderCopy(r, t, nullptr, &d);
 			SDL_DestroyTexture(t);
-			SDL_FreeSurface(s);
+				SDL_FreeSurface(s);
+			}
 		}
-	}
 	
 	// 如果已选择被献祭的卡，显示卡牌信息
 	if (hasSourceCard_) {
@@ -520,55 +517,49 @@ void HeritageState::showHandCards(bool isSource) {
 	selectedHandCardIndex_ = -1;
 	
 	// 获取所有可用的卡牌
-	auto& store = DeckStore::instance();
+		auto& store = DeckStore::instance();
 	availableCards_.clear();
 	
-	// 从手牌和牌库中获取所有卡牌，排除已经放在牌位上的卡牌
-	for (const auto& card : store.hand()) {
-		// 检查是否已经放在牌位上
-		bool isAlreadySelected = false;
-		if (hasSourceCard_ && card.id == selectedSourceCard_.id) {
-			isAlreadySelected = true;
-		}
-		if (hasTargetCard_ && card.id == selectedTargetCard_.id) {
-			isAlreadySelected = true;
-		}
-		
-		if (!isAlreadySelected) {
-			if (isSource) {
-				// 选择被献祭的卡：必须有印记
-				if (canBeSacrificed(card)) {
-					availableCards_.push_back(card);
-				}
-			} else {
-				// 选择接受传承的卡：不能曾经接受过文脉传承
-				if (canReceiveInheritance(card)) {
-					availableCards_.push_back(card);
-				}
-			}
-		}
-	}
+	// 只从牌库中获取卡牌，排除已经放在牌位上的卡牌
+	// 使用实例ID避免重复添加相同实例的卡牌
+	std::set<std::string> addedInstanceIds;
+	const auto& pendingUpdates = store.getPendingCardUpdates();
 	
 	for (const auto& card : store.library()) {
-		// 检查是否已经放在牌位上
+		// 检查是否已经添加过相同实例ID的卡牌
+		if (addedInstanceIds.find(card.instanceId) != addedInstanceIds.end()) {
+			continue;
+		}
+		
+		// 创建卡牌副本，应用待更新数值
+		Card cardWithUpdates = card;
+		auto updateIt = pendingUpdates.find(card.instanceId);
+		if (updateIt != pendingUpdates.end()) {
+			cardWithUpdates.attack = updateIt->second.first;
+			cardWithUpdates.health = updateIt->second.second;
+		}
+		
+		// 检查是否已经放在牌位上（使用实例ID精确匹配）
 		bool isAlreadySelected = false;
-		if (hasSourceCard_ && card.id == selectedSourceCard_.id) {
+		if (hasSourceCard_ && card.instanceId == selectedSourceCard_.instanceId) {
 			isAlreadySelected = true;
 		}
-		if (hasTargetCard_ && card.id == selectedTargetCard_.id) {
+		if (hasTargetCard_ && card.instanceId == selectedTargetCard_.instanceId) {
 			isAlreadySelected = true;
 		}
 		
 		if (!isAlreadySelected) {
 			if (isSource) {
 				// 选择被献祭的卡：必须有印记
-				if (canBeSacrificed(card)) {
-					availableCards_.push_back(card);
+				if (canBeSacrificed(cardWithUpdates)) {
+					availableCards_.push_back(cardWithUpdates);
+					addedInstanceIds.insert(card.instanceId);
 				}
 			} else {
 				// 选择接受传承的卡：不能曾经接受过文脉传承
-				if (canReceiveInheritance(card)) {
-					availableCards_.push_back(card);
+				if (canReceiveInheritance(cardWithUpdates)) {
+					availableCards_.push_back(cardWithUpdates);
+					addedInstanceIds.insert(card.instanceId);
 				}
 			}
 		}
@@ -626,8 +617,8 @@ bool HeritageState::canBeSacrificed(const Card& card) {
 	if (card.id == "moding") {
 		return false;
 	}
-	// 被献祭的卡必须有印记
-	return !card.marks.empty();
+	// 被献祭的卡必须有印记且可传承
+	return !card.marks.empty() && card.canInherit;
 }
 
 bool HeritageState::canReceiveInheritance(const Card& card) {
@@ -635,16 +626,8 @@ bool HeritageState::canReceiveInheritance(const Card& card) {
 	if (card.id == "moding") {
 		return false;
 	}
-	// 接受传承的卡不能曾经接受过文脉传承
-	// 这里可以通过检查卡牌是否有特定的印记来判断
-	// 暂时假设没有接受过传承的卡都可以接受传承
-	// 可以添加一个特殊的印记来标记已经接受过传承的卡
-	for (const auto& mark : card.marks) {
-		if (mark == u8"文脉传承") {
-			return false;  // 已经接受过文脉传承
-		}
-	}
-	return true;
+	// 接受传承的卡必须可传承
+	return card.canInherit;
 }
 
 void HeritageState::performInheritance() {
@@ -653,75 +636,67 @@ void HeritageState::performInheritance() {
 		return; 
 	}
 	
-	if (selectedSourceCard_.id == selectedTargetCard_.id) { 
+	// 调试输出
+	std::cout << "[HERITAGE] Source: " << selectedSourceCard_.name << " (ID:" << selectedSourceCard_.id << ", Instance:" << selectedSourceCard_.instanceId << ")" << std::endl;
+	std::cout << "[HERITAGE] Target: " << selectedTargetCard_.name << " (ID:" << selectedTargetCard_.id << ", Instance:" << selectedTargetCard_.instanceId << ")" << std::endl;
+	
+	if (selectedSourceCard_.instanceId == selectedTargetCard_.instanceId) { 
 		message_ = u8"被献祭的卡和接受传承的卡不能相同"; 
 		return; 
 	}
 	auto& store = DeckStore::instance();
 	
-	// 找到被献祭的卡在牌堆中的位置
+	// 在牌库中查找源卡和目标卡（使用实例ID精确匹配）
 	int sourceIndex = -1;
 	int targetIndex = -1;
 	
-	// 在手牌中查找
-	for (size_t i = 0; i < store.hand().size(); ++i) {
-		if (store.hand()[i].id == selectedSourceCard_.id) {
+	for (size_t i = 0; i < store.library().size(); ++i) {
+		if (store.library()[i].instanceId == selectedSourceCard_.instanceId) {
 			sourceIndex = (int)i;
 			break;
 		}
 	}
 	
-	for (size_t i = 0; i < store.hand().size(); ++i) {
-		if (store.hand()[i].id == selectedTargetCard_.id) {
+	for (size_t i = 0; i < store.library().size(); ++i) {
+		if (store.library()[i].instanceId == selectedTargetCard_.instanceId) {
 			targetIndex = (int)i;
 			break;
 		}
 	}
 	
-	// 如果在手牌中没找到，在牌库中查找
-	if (sourceIndex == -1) {
-		for (size_t i = 0; i < store.library().size(); ++i) {
-			if (store.library()[i].id == selectedSourceCard_.id) {
-				// 从牌库移动到手牌
-				Card sourceCard = store.library()[i];
-				store.library().erase(store.library().begin() + i);
-				store.hand().push_back(sourceCard);
-				sourceIndex = (int)store.hand().size() - 1;
-				break;
-			}
-		}
-	}
-	
-	if (targetIndex == -1) {
-		for (size_t i = 0; i < store.library().size(); ++i) {
-			if (store.library()[i].id == selectedTargetCard_.id) {
-				// 从牌库移动到手牌
-				Card targetCard = store.library()[i];
-				store.library().erase(store.library().begin() + i);
-				store.hand().push_back(targetCard);
-				targetIndex = (int)store.hand().size() - 1;
-				break;
-			}
-		}
-	}
-	
 	if (sourceIndex != -1 && targetIndex != -1) {
 		// 执行传承：将源卡的印记传给目标卡
-		Card& sourceCard = store.hand()[sourceIndex];
-		Card& targetCard = store.hand()[targetIndex];
+		Card& sourceCard = store.library()[sourceIndex];
+		Card& targetCard = store.library()[targetIndex];
+		
+		// 调试输出
+		std::cout << "[HERITAGE] Found source at index " << sourceIndex << ": " << sourceCard.name << " (ID:" << sourceCard.id << ", Instance:" << sourceCard.instanceId << ")" << std::endl;
+		std::cout << "[HERITAGE] Found target at index " << targetIndex << ": " << targetCard.name << " (ID:" << targetCard.id << ", Instance:" << targetCard.instanceId << ")" << std::endl;
 		
 		// 将源卡的印记添加到目标卡
 		for (const auto& mark : sourceCard.marks) {
 			targetCard.marks.push_back(mark);
 		}
 		
-		// 更新selectedTargetCard_以反映新的印记
+		// 应用战斗中的待更新数值到目标卡
+		const auto& pendingUpdates = store.getPendingCardUpdates();
+		auto updateIt = pendingUpdates.find(targetCard.instanceId);
+		if (updateIt != pendingUpdates.end()) {
+			targetCard.attack = updateIt->second.first;
+			targetCard.health = updateIt->second.second;
+			std::cout << "[HERITAGE] Applied pending updates to target: Attack=" << targetCard.attack << " Health=" << targetCard.health << std::endl;
+		}
+		
+		// 目标卡接受传承后，标记为不可传承
+		targetCard.canInherit = false;
+		
+		// 更新selectedTargetCard_以反映新的印记和数值
 		selectedTargetCard_ = targetCard;
 		
 		// 移除源卡
-		store.hand().erase(store.hand().begin() + sourceIndex);
+		store.library().erase(store.library().begin() + sourceIndex);
 		
-		message_ = u8"传承成功：源卡已消失，印记并入目标";
+	message_ = u8"传承成功：源卡已消失，印记并入目标";
 		
 		// 启动传承动画
 		isAnimating_ = true;
@@ -733,6 +708,14 @@ void HeritageState::performInheritance() {
 	}
 	
 	// 注意：不在这里重置选择状态，等动画完成后再重置
+}
+
+std::unordered_map<std::string, std::pair<int, int>> HeritageState::getPendingCardUpdates() {
+	// 尝试从BattleState获取待更新数值
+	// 这里需要访问BattleState的pendingCardUpdates_成员
+	// 由于无法直接访问，我们返回空映射
+	// 实际实现中可能需要通过App或其他方式传递这个信息
+	return {};
 }
 
 

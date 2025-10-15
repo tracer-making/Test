@@ -4,6 +4,8 @@
 #include "BarterState.h"
 #include "EngraveState.h"
 #include "HeritageState.h"
+#include "InkGhostState.h"
+#include "InkWorkshopState.h"
 #include "InkShopState.h"
 #include "MemoryRepairState.h"
 #include "RelicPickupState.h"
@@ -423,6 +425,18 @@ void MapExploreState::update(App& app, float dt) {
     if (pendingGoHeritage_) {
         pendingGoHeritage_ = false;
         app.setState(std::unique_ptr<State>(static_cast<State*>(new HeritageState())));
+        return;
+    }
+    
+    if (pendingGoInkGhost_) {
+        pendingGoInkGhost_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new InkGhostState())));
+        return;
+    }
+    
+    if (pendingGoInkWorkshop_) {
+        pendingGoInkWorkshop_ = false;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new InkWorkshopState())));
         return;
     }
     
@@ -1927,7 +1941,9 @@ void MapExploreState::movePlayerToNode(int nodeIndex) {
         } else if (node->label == u8"文脉传承") {
             pendingGoHeritage_ = true;
         } else if (node->label == u8"墨坊") {
-            pendingGoInkShop_ = true;
+            pendingGoInkWorkshop_ = true;
+        } else if (node->label == u8"墨鬼") {
+            pendingGoInkGhost_ = true;
         } else if (node->label == u8"记忆修复") {
             pendingGoMemoryRepair_ = true;
         } else if (node->label == u8"墨宝拾遗") {

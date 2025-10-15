@@ -1,4 +1,5 @@
 #include "BattleState.h"
+#include "../core/EngraveStore.h"
 #include "TestState.h"
 #include "MapExploreState.h"
 #include "../core/App.h"
@@ -9,6 +10,8 @@
 
 #include <SDL_ttf.h>
 #include <cmath>
+#include <cstdlib>
+#include <ctime>
 
 // 可获得的道具列表定义
 const std::vector<std::string> BattleState::AVAILABLE_ITEMS = {
@@ -20,6 +23,7 @@ const std::vector<std::string> BattleState::AVAILABLE_ITEMS = {
 #include <algorithm>
 #include <sstream>
 #include <string>
+#include "../core/WenMaiStore.h"
 
 BattleState::BattleState() = default;
 
@@ -87,7 +91,28 @@ void BattleState::onEnter(App& app) {
 }
 
 void BattleState::onExit(App& app) {
+	// 更新牌库中卡牌的数值变化（如蛇自环的永久加成）
+	auto& store = DeckStore::instance();
+	for (const auto& update : pendingCardUpdates_) {
+		const std::string& instanceId = update.first;
+		int newAttack = update.second.first;
+		int newHealth = update.second.second;
+		
+		for (auto& card : store.library()) {
+			if (card.instanceId == instanceId) {
+				std::cout << "[BATTLE] Updating library card on exit: " << card.name << " (ID:" << card.id << ", Instance:" << card.instanceId << ") Attack:" << card.attack << "->" << newAttack << " Health:" << card.health << "->" << newHealth << std::endl;
+				card.attack = newAttack;
+				card.health = newHealth;
+				break;
+			}
+		}
+	}
+	
+	// 清理待更新记录
+	pendingCardUpdates_.clear();
+	
 	// 清理资源
+	// 注意：不重置全局牌库，因为战斗只是使用牌库，不应该修改它
 }
 
 void BattleState::handleEvent(App& app, const SDL_Event& e) {
@@ -101,25 +126,26 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			godMode_ = !godMode_;
 				// 进入/退出上帝模式时不再输出到状态消息，由渲染侧显示帮助
 		}
-		else if (e.key.keysym.sym == SDLK_h && godMode_) {
+        else if (e.key.keysym.sym == SDLK_h && godMode_) {
             // H键：锁定玩家本体血量与墨尺计数
             lockPlayerHealth_ = !lockPlayerHealth_;
-			if (lockPlayerHealth_) {
+            if (lockPlayerHealth_) {
                 lockedPlayerHealthValue_ = playerHealth_;
                 lockedMeterNetValue_ = meterNet_;
                 lockedMeterDisplayPos_ = meterDisplayPos_;
+                lockedMeterActual_ = meterActualPos_;
                 lockedMeterTarget_ = meterTargetPos_;
 				// 不输出状态消息
-			} else {
+            } else {
 				// 不输出状态消息
-			}
+            }
         }
-		else if (e.key.keysym.sym == SDLK_j && godMode_) {
+        else if (e.key.keysym.sym == SDLK_j && godMode_) {
             // J键：魂骨+1
             boneCount_ += 1;
 			// 不输出状态消息
         }
-		else if (e.key.keysym.sym == SDLK_a && godMode_) {
+        else if (e.key.keysym.sym == SDLK_a && godMode_) {
             // A键在悬停位置生成狼戎酋首
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
@@ -179,7 +205,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				// 不输出状态消息
 			}
 		}
-		else if (e.key.keysym.sym == SDLK_d && godMode_) {
+        else if (e.key.keysym.sym == SDLK_d && godMode_) {
             // D键在悬停位置生成铁兽夹
 			if (hoveredBattlefieldIndex_ >= 0 && hoveredBattlefieldIndex_ < TOTAL_BATTLEFIELD_SLOTS) {
 				int row = hoveredBattlefieldIndex_ / BATTLEFIELD_COLS;
@@ -326,7 +352,6 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		}
 	}
-
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mouseX = e.button.x;
 		int mouseY = e.button.y;
@@ -403,9 +428,12 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 							statusMessage_ = std::string("上帝生成：") + selectedCard.name;
 						} else {
 							// 默认行为：加入手牌
-							handCards_.push_back(selectedCard);
+							Card card = selectedCard;
+							// 意境系统：应用已组合的意境效果到卡牌
+							EngraveStore::instance().applyToCard(card);
+							handCards_.push_back(card);
 							layoutHandCards();
-							statusMessage_ = std::string("检索：获得手牌 ") + selectedCard.name;
+							statusMessage_ = std::string("检索：获得手牌 ") + card.name;
 						}
 					}
 					
@@ -446,6 +474,8 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			else if (inkPileCount_ > 0) {
 				Card inkCard = CardDB::instance().make("moding");
 				if (!inkCard.id.empty()) {
+					// 意境系统：应用已组合的意境效果到卡牌
+					EngraveStore::instance().applyToCard(inkCard);
 					// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
 					applyRandomMarkEffect(inkCard);
 					handCards_.push_back(inkCard);
@@ -482,22 +512,26 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				statusMessage_ = "本回合已抽过牌！";
 			}
 			else {
-				// 从全局牌堆中抽取一张牌
-				auto& store = DeckStore::instance();
-				if (!store.library().empty()) {
-					// 从牌库顶部抽牌
-					Card newCard = store.library()[0];
+				// 从战斗牌堆中随机抽取一张牌
+				if (!battleDeck_.empty()) {
+					// 随机选择一张牌
+					int randomIndex = rand() % battleDeck_.size();
+					Card newCard = battleDeck_[randomIndex];
+					// 从战斗牌堆中移除
+					battleDeck_.erase(battleDeck_.begin() + randomIndex);
+					// 应用意境刻画（根据卡的category给予绑定的印记）
+					EngraveStore::instance().applyToCard(newCard);
 					// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
 					applyRandomMarkEffect(newCard);
 					handCards_.push_back(newCard);
+					auto& store = DeckStore::instance();
 					store.hand().push_back(newCard);
-					store.library().erase(store.library().begin());
 					hasDrawnThisTurn_ = true;
 					mustDrawThisTurn_ = false; // 抽牌后取消强制抽牌要求
 					layoutHandCards();
 					statusMessage_ = "从玩家牌堆抽到：" + newCard.name;
 				} else {
-					statusMessage_ = "玩家牌堆已空！";
+				statusMessage_ = "玩家牌堆已空！";
 				}
 			}
 		}
@@ -550,7 +584,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 					return;
 				}
 				selectedHandCard_ = static_cast<int>(i);
-				
+
 				// 检查是否有消耗骨头词条
 				bool hasBoneCost = false;
 				for (const auto& mark : handCards_[i].marks) {
@@ -644,11 +678,12 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 							// 手牌获得一张狼皮
 							Card langpiCard = CardDB::instance().make("langpi");
 							if (langpiCard.id != "unknown") {
+								EngraveStore::instance().applyToCard(langpiCard);
 								handCards_.push_back(langpiCard);
 								layoutHandCards();
-								statusMessage_ = u8"吞墨毫摧毁了 " + battlefield_[i].card.name + "！获得狼皮！";
+								statusMessage_ = u8"吞墨毫摧毁了 " + battlefield_[i].card.name + u8"！获得狼皮！";
 							} else {
-								statusMessage_ = u8"吞墨毫摧毁了 " + battlefield_[i].card.name + "！但无法获得狼皮！";
+								statusMessage_ = u8"吞墨毫摧毁了 " + battlefield_[i].card.name + u8"！但无法获得狼皮！";
 							}
 						} else {
 							statusMessage_ = u8"吞墨毫只能选择敌人第二行的卡牌！";
@@ -749,7 +784,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
                                             // 生生不息：不死亡，但依然产生魂骨
                                             boneCount_++;
                                             statusMessage_ = "生生不息！获得魂骨！当前魂骨数量: " + std::to_string(boneCount_);
-                                            // 若同时带有“形态转换”，在此分支中进行形态变换
+                                            // 若同时带有"形态转换"，在此分支中进行形态变换
                                             if (hasMorph) {
                                                 std::string currentId = battlefield_[j].card.id;
                                                 std::string nextId;
@@ -975,7 +1010,6 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 
 	}
 }
-
 void BattleState::update(App& app, float dt) {
 
 	// 处理状态转换
@@ -1081,6 +1115,10 @@ void BattleState::update(App& app, float dt) {
 					}
 					fengyaShanAirstrikeSlots_.clear();
 					
+					// 敌方回合结束，进行胜负判定
+					checkGameOver();
+					if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
+					
 					currentPhase_ = GamePhase::PlayerTurn;
 					// 重置本回合献祭次数
 					sacrificeCountThisTurn_ = 0;
@@ -1156,14 +1194,18 @@ void BattleState::update(App& app, float dt) {
 						if (scheduleTurnStartGrowth()) return;
 						if (mustDrawThisTurn_) statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始 - 必须先抽牌！"; else statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
 					} else {
+						// 玩家回合结束，进行胜负判定
+						checkGameOver();
+						if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
+						
 						// 正常进入敌方回合
-						currentPhase_ = GamePhase::EnemyTurn;
-						currentTurn_++; // 增加回合数
-						hasDrawnThisTurn_ = false; // 重置抽牌状态
-						mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-						std::cout << "2" << std::endl;
-						// 延迟执行敌人回合
-						enemyTurn();
+					currentPhase_ = GamePhase::EnemyTurn;
+					currentTurn_++; // 增加回合数
+					hasDrawnThisTurn_ = false; // 重置抽牌状态
+					mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+					std::cout << "2" << std::endl;
+					// 延迟执行敌人回合
+					enemyTurn();
 					}
 				}
 			}
@@ -1229,8 +1271,10 @@ void BattleState::update(App& app, float dt) {
 				meterNet_ += deltaTicks;
 				// 上限不再截断，以便记录超出；仍保留下限-5
 				if (meterNet_ < -5) meterNet_ = -5;
+				
+				// 更新显示值（实际值已在攻击时更新）
+				meterTargetPos_ = std::min(5, meterActualPos_);
 				meterStartPos_ = meterDisplayPos_;
-				meterTargetPos_ = meterNet_;
 				meterAnimTime_ = 0.0f;
 				isMeterAnimating_ = true;
 				lastPlayerDamage_ = playerSegmentDamage;
@@ -1267,8 +1311,10 @@ void BattleState::update(App& app, float dt) {
 				meterNet_ += deltaTicks;
 				// 上限不再截断，以便记录超出；仍保留下限-5
 				if (meterNet_ < -5) meterNet_ = -5;
+				
+				// 更新显示值（实际值已在攻击时更新）
+				meterTargetPos_ = std::min(5, meterActualPos_);
 				meterStartPos_ = meterDisplayPos_;
-				meterTargetPos_ = meterNet_;
 				meterAnimTime_ = 0.0f;
 				isMeterAnimating_ = true;
 				lastEnemyDamage_ = enemySegmentDamage;
@@ -1322,6 +1368,11 @@ void BattleState::update(App& app, float dt) {
                     // 如果没有可以移动的卡牌，直接回到玩家回合
                     // 掘墓人：敌方回合结束时统计敌方单位
                     grantGravediggerBones(true);
+                    
+                    // 敌方回合结束，进行胜负判定
+                    checkGameOver();
+                    if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
+                    
                     currentPhase_ = GamePhase::PlayerTurn;
                     // 切回玩家回合：先结算我方回合开始成长（若有成长则先返回，动画完毕后继续）
                     if (scheduleTurnStartGrowth()) return;
@@ -1464,13 +1515,20 @@ void BattleState::update(App& app, float dt) {
 			if (battlefield_[i].isPlayer) {
 				const Card& deadCard = battlefield_[i].card;
 				if (hasMark(deadCard, std::string(u8"不死印记"))) {
-					Card fresh = CardDB::instance().make(deadCard.id);
+					Card fresh = deadCard; // 直接复制原卡，保持实例ID
 					if (!fresh.id.empty()) {
 						// 螣蛇自环：每次死亡永久+1/+1（以卡面基础数值为基准）
 						if (hasMark(deadCard, std::string(u8"每次死亡数值+1")) || deadCard.id == std::string("tengshe_zihuan")) {
 							fresh.attack = deadCard.attack + 1;
 							fresh.health = deadCard.health + 1;
+							
+							std::cout << "[BATTLE] Tengshe died: " << deadCard.name << " (ID:" << deadCard.id << ", Instance:" << deadCard.instanceId << ") Attack:" << deadCard.attack << "->" << fresh.attack << " Health:" << deadCard.health << "->" << fresh.health << std::endl;
+							
+							// 记录需要更新的卡牌信息，等退出战斗时再更新牌库
+							pendingCardUpdates_[deadCard.instanceId] = {fresh.attack, fresh.health};
 						}
+						// 意境系统：应用已组合的意境效果到卡牌
+						EngraveStore::instance().applyToCard(fresh);
 						handCards_.push_back(fresh);
 						// 立刻更新手牌布局以立即渲染
 						layoutHandCards();
@@ -1513,7 +1571,7 @@ void BattleState::update(App& app, float dt) {
 
             // 如果不是生生不息卡牌在献祭时死亡，且不是因移动死亡，则获得魂骨
             if (!(wasSacrificed && hasImmortal) && !isMovedToDeath) {
-				boneCount_++;
+                boneCount_++;
                 // 骨王：死亡时额外获得3根骨头（总计4根）
                 if (hasMark(battlefield_[i].card, std::string(u8"骨王"))) {
                     boneCount_ += 3;
@@ -1597,8 +1655,7 @@ void BattleState::update(App& app, float dt) {
 		}
 	}
 
-	// 检查游戏结束
-	checkGameOver();
+	// 游戏结束判定已移至回合结束时进行
 
     // 墨尺指针动画插值（若锁定则保持不变）
     if (isMeterAnimating_) {
@@ -1616,12 +1673,12 @@ void BattleState::update(App& app, float dt) {
             // 锁定：强制还原
             meterNet_ = lockedMeterNetValue_;
             meterDisplayPos_ = lockedMeterDisplayPos_;
+            meterActualPos_ = lockedMeterActual_;
             meterTargetPos_ = lockedMeterTarget_;
             isMeterAnimating_ = false;
         }
     }
 }
-
 void BattleState::render(App& app) {
 	SDL_Renderer* renderer = app.getRenderer();
 
@@ -1636,6 +1693,9 @@ void BattleState::render(App& app) {
 	renderBattlefield(app);
 	renderHandCards(app);
 	renderUI(app);
+	
+	// 渲染已组合意境提示
+	renderEngravingHints(app);
 	
 	// 检索状态：渲染牌堆/全卡库卡牌选择界面
 	if (isSearchingDeck_) {
@@ -1668,32 +1728,40 @@ void BattleState::initializeBattle() {
 
 	// 开局抽牌：1张墨锭 + 3张玩家牌
 	handCards_.clear();
+	battleDeck_.clear();
+
+	// 初始化随机数种子
+	srand(static_cast<unsigned int>(time(nullptr)));
 
 	// 使用全局牌堆，但维护本地手牌副本
 	auto& store = DeckStore::instance();
 
-	// 同步全局手牌到本地手牌
-	handCards_ = store.hand();
+	// 将全局牌库复制到战斗牌堆
+	battleDeck_ = store.library();
 
-	// 如果本地手牌为空，初始化手牌
-	if (handCards_.empty()) {
-		// 抽1张墨锭（必须是墨锭）
-		Card inkCard = CardDB::instance().make("moding");
-		if (!inkCard.id.empty()) {
-			handCards_.push_back(inkCard);
-			store.hand().push_back(inkCard);
-		}
+	// 每次进入战斗都重新抽取手牌，不保留之前的手牌
+	// 抽1张墨锭（必须是墨锭）
+	Card inkCard = CardDB::instance().make("moding");
+	if (!inkCard.id.empty()) {
+		handCards_.push_back(inkCard);
+		store.hand().push_back(inkCard);
+	}
 
-		// 抽3张玩家牌（从全局牌堆中抽取）
-		for (int i = 0; i < 3 && !store.library().empty(); ++i) {
-			Card card = store.library()[0];
-			// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
-			applyRandomMarkEffect(card);
-			handCards_.push_back(card);
-			store.hand().push_back(card);
-			// 从牌库中移除已抽取的卡牌
-			store.library().erase(store.library().begin());
-		}
+	// 抽3张玩家牌（从战斗牌堆中随机抽取并移除）
+	for (int i = 0; i < 3 && !battleDeck_.empty(); ++i) {
+		// 随机选择一张牌
+		int randomIndex = rand() % battleDeck_.size();
+		Card card = battleDeck_[randomIndex];
+		// 从战斗牌堆中移除
+		battleDeck_.erase(battleDeck_.begin() + randomIndex);
+		
+		// 意境系统：应用已组合的意境效果到卡牌
+		EngraveStore::instance().applyToCard(card);
+		
+		// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
+		applyRandomMarkEffect(card);
+		handCards_.push_back(card);
+		store.hand().push_back(card);
 	}
 
 	// 调试信息：确认手牌数量
@@ -1990,7 +2058,8 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 			copyCard.marks.erase(it);
 		}
 		
-		// 添加到手牌
+		// 添加到手牌（应用意境）
+		EngraveStore::instance().applyToCard(copyCard);
 		handCards_.push_back(copyCard);
 		layoutHandCards();
 		statusMessage_ = std::string("丰产之巢：获得手牌 ") + copyCard.name;
@@ -2103,13 +2172,13 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 void BattleState::endTurn() {
 	if (currentPhase_ != GamePhase::PlayerTurn) return;
 
-		// 收集所有可以攻击的我方卡牌（从左到右）
-		attackingCards_.clear();
-		for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
-			int playerIndex = 2 * BATTLEFIELD_COLS + col; // 第三行
-			if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer) {
+	// 收集所有可以攻击的我方卡牌（从左到右）
+	attackingCards_.clear();
+	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+		int playerIndex = 2 * BATTLEFIELD_COLS + col; // 第三行
+		if (battlefield_[playerIndex].isAlive && battlefield_[playerIndex].isPlayer) {
 				// 使用临时攻击力判断资格（受对位"臭臭/令人生厌"影响）
-				int displayAtk = getDisplayAttackForIndex(playerIndex);
+			int displayAtk = getDisplayAttackForIndex(playerIndex);
 				
 				// 对于多向攻击，检查是否至少有一个方向可以攻击
 				BattleState::AttackType attackType = getCardAttackType(battlefield_[playerIndex].card);
@@ -2130,10 +2199,10 @@ void BattleState::endTurn() {
 				}
 				
 				if (canAttack) {
-					attackingCards_.push_back(playerIndex);
-				}
+			attackingCards_.push_back(playerIndex);
 			}
 		}
+	}
 
 	if (!attackingCards_.empty()) {
 		// 记录敌方血量基准，用于计算本段我方造成伤害
@@ -2170,14 +2239,18 @@ void BattleState::endTurn() {
 				statusMessage_ = "第 " + std::to_string(currentTurn_) + " 回合开始";
 			}
 		} else {
+			// 玩家回合结束，进行胜负判定
+			checkGameOver();
+			if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
+			
 			// 正常进入敌方回合
-			currentPhase_ = GamePhase::EnemyTurn;
-			currentTurn_++; // 增加回合数
-			hasDrawnThisTurn_ = false; // 重置抽牌状态
-			mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-			std::cout << "1" << std::endl;
-			// 延迟执行敌人回合
-			enemyTurn();
+		currentPhase_ = GamePhase::EnemyTurn;
+		currentTurn_++; // 增加回合数
+		hasDrawnThisTurn_ = false; // 重置抽牌状态
+		mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+		std::cout << "1" << std::endl;
+		// 延迟执行敌人回合
+		enemyTurn();
 		}
 	}
 }
@@ -2220,7 +2293,7 @@ void BattleState::enemyTurn() {
 			}
 			
 			if (canAttack) {
-				attackingCards_.push_back(enemyIndex);
+			attackingCards_.push_back(enemyIndex);
 			}
 		}
 	}
@@ -2237,7 +2310,7 @@ void BattleState::enemyTurn() {
 		statusMessage_ = "敌方开始攻击！";
 	}
 	else {
-	// 没有可攻击的敌方卡牌，直接回到玩家回合
+		// 没有可攻击的敌方卡牌，直接回到玩家回合
 	
 	// 清理风雅扇的空袭效果（一回合后失效）
 	for (int slot : fengyaShanAirstrikeSlots_) {
@@ -2254,7 +2327,7 @@ void BattleState::enemyTurn() {
 	}
 	fengyaShanAirstrikeSlots_.clear();
 	
-	currentPhase_ = GamePhase::PlayerTurn;
+		currentPhase_ = GamePhase::PlayerTurn;
 	// 重置本回合献祭次数
 	sacrificeCountThisTurn_ = 0;
 		// 回合开始：抽牌提示前先成长。若有成长，先return，update中落位后再显示提示。
@@ -2267,7 +2340,6 @@ void BattleState::enemyTurn() {
 		}
 	}
 }
-
 // 护主：敌方攻击前（敌人前进与成长完成后），我方护主补位到对位
 void BattleState::applyGuardianForEnemyAttack() {
 	// 敌方攻击行：第2行（row=1），我方防守行：第3行（row=2）
@@ -2277,7 +2349,7 @@ void BattleState::applyGuardianForEnemyAttack() {
 
 		// 条件：敌方对位有敌人卡，且我方对位为空
 		if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer && !battlefield_[playerIndex].isAlive) {
-			// 在我方防守行中寻找任意带“护主”的卡
+			// 在我方防守行中寻找任意带"护主"的卡
 			int candidateIndex = -1;
 			for (int searchCol = 0; searchCol < BATTLEFIELD_COLS; ++searchCol) {
 				int idx = 2 * BATTLEFIELD_COLS + searchCol;
@@ -2309,7 +2381,7 @@ void BattleState::applyGuardianForPlayerPlay(int justPlacedIndex) {
 
 	// 条件：我方对位存在玩家卡，且敌方对位为空
 	if (battlefield_[justPlacedIndex].isAlive && battlefield_[justPlacedIndex].isPlayer && !battlefield_[enemyIndex].isAlive) {
-		// 在敌方防守行中寻找任意带“护主”的卡
+		// 在敌方防守行中寻找任意带"护主"的卡
 		int candidateIndex = -1;
 		for (int searchCol = 0; searchCol < BATTLEFIELD_COLS; ++searchCol) {
 			int idx = 1 * BATTLEFIELD_COLS + searchCol;
@@ -2399,7 +2471,7 @@ void BattleState::executeEnemyAdvance() {
 					battlefield_[step.toIndex].placedTurn = currentTurn_;
 					battlefield_[step.toIndex].oneTurnGrowthApplied = false;
 
-					// 敌方“滋生寄生虫”进入第二行：若我方对位为空，生成单位（10%玄乌之卵，否则破碎的卵）
+					// 敌方"滋生寄生虫"进入第二行：若我方对位为空，生成单位（10%玄乌之卵，否则破碎的卵）
 					const auto& advCard = battlefield_[step.toIndex].card;
 					if (hasMark(advCard, std::string(u8"滋生寄生虫"))) {
 						int col = step.toIndex % BATTLEFIELD_COLS;
@@ -2420,9 +2492,9 @@ void BattleState::executeEnemyAdvance() {
 					}
 				}
 
-                // 敌人推进：原位置被清空（是“移动离开”，非死亡，不加骨），但也不应该触发死亡逻辑
-                battlefield_[step.fromIndex].isAlive = false;
-                battlefield_[step.fromIndex].health = 0;
+                // 敌人推进：原位置被清空（是"移动离开"，非死亡，不加骨），但也不应该触发死亡逻辑
+				battlefield_[step.fromIndex].isAlive = false;
+				battlefield_[step.fromIndex].health = 0;
                 battlefield_[step.fromIndex].isMovedToDeath = true;
 			}
 		}
@@ -2431,15 +2503,29 @@ void BattleState::executeEnemyAdvance() {
 }
 
 void BattleState::checkGameOver() {
-	// 新失败条件：墨尺点数 >= 5 立即失败，并记录超出点数
-	if (meterTargetPos_ >= 5 || meterNet_ >= 5) {
-		// 以更精确的累计值作为基准
-		int current = std::max(meterTargetPos_, meterNet_);
-		meterOvershoot_ = current - 5; // 记录多余点数
-		currentPhase_ = GamePhase::GameOver;
-		statusMessage_ = "游戏失败！（墨尺达上限" + std::to_string(current) + ", 超出" + std::to_string(meterOvershoot_) + ")";
-		return;
-	}
+    // 调试日志：检查墨尺数值
+    std::cout << "[METER] check actualPos=" << meterActualPos_ << " displayPos=" << meterTargetPos_ << std::endl;
+
+    // 胜利：实际墨尺 >= 5
+    if (meterActualPos_ >= 5) {
+        int wenmaiGained = meterActualPos_ - 5;
+        currentPhase_ = GamePhase::GameOver;
+        if (wenmaiGained > 0) {
+            // 添加文脉到全局存储
+            WenMaiStore::instance().add(wenmaiGained);
+            statusMessage_ = "胜利！获得 " + std::to_string(wenmaiGained) + " 文脉！";
+        } else {
+            statusMessage_ = "胜利！";
+        }
+        return;
+    }
+
+    // 失败：实际墨尺 <= -5
+    if (meterActualPos_ <= -5) {
+        currentPhase_ = GamePhase::GameOver;
+        statusMessage_ = "游戏失败！";
+        return;
+    }
 
 	if (playerHealth_ <= 0) {
 		currentPhase_ = GamePhase::GameOver;
@@ -2665,7 +2751,7 @@ void BattleState::renderBattlefield(App& app) {
 				tempCard.health = bfCard.health;
 				if (isFuhunsuoMovingThis) {
 					// 缚魂锁动画期间，使用目标卡牌的攻击力（已经是玩家控制）
-					tempCard.attack = getDisplayAttackForIndex(i);
+				tempCard.attack = getDisplayAttackForIndex(i);
 				} else {
 					tempCard.attack = getDisplayAttackForIndex(i);
 				}
@@ -2880,9 +2966,6 @@ void BattleState::renderBattlefield(App& app) {
 			}
 		}
 	}
-
-
-
 	// 被推动卡牌动画渲染
 	if (isPushedAnimating_ && !pushedCardIndices_.empty()) {
 		for (size_t i = 0; i < pushedCardIndices_.size(); ++i) {
@@ -3356,7 +3439,7 @@ void BattleState::applyRandomMarkEffect(Card& card) {
 	}
 }
 
-// 计算用于展示的攻击力（受对位“臭臭/令人生厌”临时影响）
+// 计算用于展示的攻击力（受对位"臭臭/令人生厌"临时影响）
 int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
 	if (battlefieldIndex < 0 || battlefieldIndex >= TOTAL_BATTLEFIELD_SLOTS) return 0;
 	const auto& self = battlefield_[battlefieldIndex];
@@ -3374,8 +3457,8 @@ int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
 		if (opp.isAlive) {
 			// 磐石之身印记：免疫臭臭和令人生厌效果
 			if (!hasMark(self.card, std::string(u8"磐石之身"))) {
-				if (hasMark(opp.card, std::string(u8"臭臭"))) display -= 1;
-				if (hasMark(opp.card, std::string(u8"令人生厌"))) display += 1;
+			if (hasMark(opp.card, std::string(u8"臭臭"))) display -= 1;
+			if (hasMark(opp.card, std::string(u8"令人生厌"))) display += 1;
 			}
 		}
 	}
@@ -3417,7 +3500,7 @@ int BattleState::getDisplayAttackForIndex(int battlefieldIndex) const {
 		display += sacrificeCountThisTurn_;
 	}
 
-	// 蚂蚁印记：攻击力等于同侧场上所有带“蚂蚁”印记的存活单位数量
+	// 蚂蚁印记：攻击力等于同侧场上所有带"蚂蚁"印记的存活单位数量
 	if (hasMark(self.card, std::string(u8"蚂蚁"))) {
 		int antCount = 0;
 		for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
@@ -3516,7 +3599,6 @@ void BattleState::executeSpecialAttack(int attackerIndex, int targetCol, bool is
 		break;
 	}
 }
-
 // 设置双向攻击目标
 void BattleState::setupDiagonalTargets(int attackerIndex, int targetCol, bool isPlayerAttacking) {
 	int targetCount = 0;
@@ -3528,7 +3610,7 @@ void BattleState::setupDiagonalTargets(int attackerIndex, int targetCol, bool is
 			(2 * BATTLEFIELD_COLS + (targetCol - 1));
 		
 		if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-			specialAttackTargets_[targetCount++] = leftTargetIndex;
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
 		}
 	}
 
@@ -3539,7 +3621,7 @@ void BattleState::setupDiagonalTargets(int attackerIndex, int targetCol, bool is
 			(2 * BATTLEFIELD_COLS + (targetCol + 1));
 		
 		if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-			specialAttackTargets_[targetCount++] = rightTargetIndex;
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
 		}
 	}
 }
@@ -3557,7 +3639,7 @@ void BattleState::setupTripleTargets(int attackerIndex, int targetCol, bool isPl
 			(2 * BATTLEFIELD_COLS + (targetCol - 1));
 		
 		if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-			specialAttackTargets_[targetCount++] = leftTargetIndex;
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
 		}
 	}
 
@@ -3567,7 +3649,7 @@ void BattleState::setupTripleTargets(int attackerIndex, int targetCol, bool isPl
 		(2 * BATTLEFIELD_COLS + targetCol);
 	
 	if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-		specialAttackTargets_[targetCount++] = frontTargetIndex;
+	specialAttackTargets_[targetCount++] = frontTargetIndex;
 	}
 
 	// 3. 右斜对位
@@ -3577,7 +3659,7 @@ void BattleState::setupTripleTargets(int attackerIndex, int targetCol, bool isPl
 			(2 * BATTLEFIELD_COLS + (targetCol + 1));
 		
 		if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-			specialAttackTargets_[targetCount++] = rightTargetIndex;
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
 		}
 	}
 }
@@ -3589,9 +3671,9 @@ void BattleState::setupTwiceTargets(int attackerIndex, int targetCol, bool isPla
 		(2 * BATTLEFIELD_COLS + targetCol);
 
 	if (targetIndex >= 0 && targetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-		// 同一个目标攻击两次
-		specialAttackTargets_[0] = targetIndex;
-		specialAttackTargets_[1] = targetIndex;
+	// 同一个目标攻击两次
+	specialAttackTargets_[0] = targetIndex;
+	specialAttackTargets_[1] = targetIndex;
 	}
 }
 
@@ -3606,7 +3688,7 @@ void BattleState::setupDoubleTwiceTargets(int attackerIndex, int targetCol, bool
 			(2 * BATTLEFIELD_COLS + (targetCol - 1));
 		
 		if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-			specialAttackTargets_[targetCount++] = leftTargetIndex;
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
 		}
 	}
 
@@ -3617,8 +3699,8 @@ void BattleState::setupDoubleTwiceTargets(int attackerIndex, int targetCol, bool
 			(2 * BATTLEFIELD_COLS + (targetCol + 1));
 		
 		if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-			specialAttackTargets_[targetCount++] = rightTargetIndex;
-		}
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
+	}
 	}
 
 	// 对位攻击两次
@@ -3646,7 +3728,7 @@ void BattleState::setupTripleTwiceTargets(int attackerIndex, int targetCol, bool
 			(2 * BATTLEFIELD_COLS + (targetCol - 1));
 		
 		if (leftTargetIndex >= 0 && leftTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-			specialAttackTargets_[targetCount++] = leftTargetIndex;
+		specialAttackTargets_[targetCount++] = leftTargetIndex;
 		}
 	}
 
@@ -3656,8 +3738,8 @@ void BattleState::setupTripleTwiceTargets(int attackerIndex, int targetCol, bool
 		(2 * BATTLEFIELD_COLS + targetCol);
 	
 	if (frontTargetIndex >= 0 && frontTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-		specialAttackTargets_[targetCount++] = frontTargetIndex;
-		specialAttackTargets_[targetCount++] = frontTargetIndex;
+	specialAttackTargets_[targetCount++] = frontTargetIndex;
+	specialAttackTargets_[targetCount++] = frontTargetIndex;
 	}
 
 	// 3. 右斜对位攻击一次
@@ -3667,7 +3749,7 @@ void BattleState::setupTripleTwiceTargets(int attackerIndex, int targetCol, bool
 			(2 * BATTLEFIELD_COLS + (targetCol + 1));
 		
 		if (rightTargetIndex >= 0 && rightTargetIndex < TOTAL_BATTLEFIELD_SLOTS) {
-			specialAttackTargets_[targetCount++] = rightTargetIndex;
+		specialAttackTargets_[targetCount++] = rightTargetIndex;
 		}
 	}
 }
@@ -3876,18 +3958,31 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		
 		// 如果守护者移动了，继续攻击流程；否则攻击本体
 		if (!guardianMoved) {
-			// 目标已死亡，攻击敌方本体
-			if (attacker.isPlayer) {
-				enemyHealth_ -= damage;
+		// 目标已死亡，攻击敌方本体
+		if (attacker.isPlayer) {
+                // 扣除敌方血量，并按溢出计入文脉
+                int before = enemyHealth_;
+                enemyHealth_ -= damage;
 				if (enemyHealth_ < 0) enemyHealth_ = 0;
-			}
-			else {
-				if (!lockPlayerHealth_) {
-					playerHealth_ -= damage;
-					if (playerHealth_ < 0) playerHealth_ = 0;
-				}
-			}
-			return;
+				
+				// 更新墨尺：直接增加伤害值
+				meterActualPos_ += damage;
+				
+				// 显示值锁定在5，但实际值继续累加
+				meterTargetPos_ = std::min(5, meterActualPos_);
+				meterStartPos_ = meterDisplayPos_;
+				isMeterAnimating_ = true;
+				meterAnimTime_ = 0.0f;
+				
+				std::cout << "[METER] afterHit actualPos=" << meterActualPos_ << " displayPos=" << meterTargetPos_ << std::endl;
+		}
+		else {
+            if (!lockPlayerHealth_) {
+                playerHealth_ -= damage;
+                if (playerHealth_ < 0) playerHealth_ = 0;
+            }
+		}
+		return;
 		}
 		// 守护者移动了，继续执行攻击流程，让攻击对守护者造成伤害
 	}
@@ -3900,8 +3995,22 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	if (target.isDiving) {
 		// 目标潜水，攻击直接打到本体
 		if (attacker.isPlayer) {
-			enemyHealth_ -= damage;
+            {
+                int before = enemyHealth_;
+                enemyHealth_ -= damage;
+            }
 			if (enemyHealth_ < 0) enemyHealth_ = 0;
+			
+			// 更新墨尺：直接增加伤害值
+			meterActualPos_ += damage;
+			
+			// 显示值锁定在5，但实际值继续累加
+			meterTargetPos_ = std::min(5, meterActualPos_);
+			meterStartPos_ = meterDisplayPos_;
+			isMeterAnimating_ = true;
+			meterAnimTime_ = 0.0f;
+			
+			std::cout << "[METER] afterHit actualPos=" << meterActualPos_ << " displayPos=" << meterTargetPos_ << std::endl;
 		}
 		else {
             if (!lockPlayerHealth_) {
@@ -3916,10 +4025,24 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	if (hasAirStrike) {
 		bool targetHasHighJump = hasMark(target.card, u8"高跳");
 		if (!targetHasHighJump) {
-			// 空袭攻击非高跳目标，直接攻击本体
-			if (attacker.isPlayer) {
-				enemyHealth_ -= damage;
+		// 空袭攻击非高跳目标，直接攻击本体
+		if (attacker.isPlayer) {
+                {
+                    int before = enemyHealth_;
+                    enemyHealth_ -= damage;
+                }
 				if (enemyHealth_ < 0) enemyHealth_ = 0;
+				
+				// 更新墨尺：直接增加伤害值
+				meterActualPos_ += damage;
+				
+				// 显示值锁定在5，但实际值继续累加
+				meterTargetPos_ = std::min(5, meterActualPos_);
+				meterStartPos_ = meterDisplayPos_;
+				isMeterAnimating_ = true;
+				meterAnimTime_ = 0.0f;
+				
+				std::cout << "[METER] afterHit actualPos=" << meterActualPos_ << " displayPos=" << meterTargetPos_ << std::endl;
 			}
 			else {
                 if (!lockPlayerHealth_) {
@@ -3968,7 +4091,7 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	// 磐石之身印记：免疫死神之触效果
 	if (battlefield_[targetIndex].isAlive && hasMark(attacker.card, std::string(u8"死神之触"))) {
 		if (!hasMark(battlefield_[targetIndex].card, std::string(u8"磐石之身"))) {
-			battlefield_[targetIndex].health = 0;
+		battlefield_[targetIndex].health = 0;
 		}
 	}
 
@@ -3979,8 +4102,8 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		
 		// 只有在没有正在播放死亡动画时才设置新的死亡动画
 		if (!isDestroyAnimating_) {
-			isDestroyAnimating_ = true;
-			destroyAnimTime_ = 0.0f;
+		isDestroyAnimating_ = true;
+		destroyAnimTime_ = 0.0f;
 		}
 
 		// 嗜血狂热印记：攻击者每杀死一个造物，攻击力+1
@@ -3995,6 +4118,7 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		if (battlefield_[targetIndex].isPlayer && hasMark(battlefield_[targetIndex].card, std::string(u8"内心之蜂"))) {
 			Card bee = CardDB::instance().make("yunchuang_fengshi");
 			if (!bee.id.empty()) {
+				EngraveStore::instance().applyToCard(bee);
 				handCards_.push_back(bee);
 				layoutHandCards();
 				statusMessage_ = std::string("内心之蜂：获得手牌 ") + bee.name;
@@ -4024,6 +4148,7 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 				if (opposeWillDie) {
 					Card wolfSkin = CardDB::instance().make("langpi");
 					if (!wolfSkin.id.empty()) {
+						EngraveStore::instance().applyToCard(wolfSkin);
 						handCards_.push_back(wolfSkin);
 						layoutHandCards();
 						statusMessage_ = std::string("铁兽夹：获得狼皮！");
@@ -4051,6 +4176,7 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
             if (hasMark(battlefield_[targetIndex].card, std::string(u8"内心之蜂"))) {
                 Card bee = CardDB::instance().make("yunchuang_fengshi");
                 if (!bee.id.empty()) {
+                    EngraveStore::instance().applyToCard(bee);
                     handCards_.push_back(bee);
                     layoutHandCards();
                     statusMessage_ = std::string("内心之蜂：获得手牌 ") + bee.name;
@@ -4149,8 +4275,6 @@ void BattleState::renderHandCards(App& app) {
 		CardRenderer::renderCard(app, card, scaledRect, cardNameFont_, cardStatFont_, selected);
 	}
 }
-
-
 void BattleState::renderUI(App& app) {
 	SDL_Renderer* r = app.getRenderer();
 
@@ -4221,6 +4345,37 @@ void BattleState::renderUI(App& app) {
 	SDL_RenderDrawLine(r, pointerX - 5, inkRulerRect_.y + 60, pointerX + 5, inkRulerRect_.y + 60);
 	SDL_RenderDrawLine(r, pointerX - 4, inkRulerRect_.y + 65, pointerX + 4, inkRulerRect_.y + 65);
 	SDL_RenderDrawLine(r, pointerX - 3, inkRulerRect_.y + 70, pointerX + 3, inkRulerRect_.y + 70);
+
+	// 绘制文脉圆形图案（墨尺上方）
+	int wenmaiOverflow = std::max(0, meterActualPos_ - 5);
+	if (wenmaiOverflow > 0) {
+		SDL_SetRenderDrawColor(r, 255, 215, 0, 255); // 金色圆形
+		int circleRadius = 8;
+		int circleSpacing = 20;
+		int startX = inkRulerRect_.x + 20;
+		int circleY = inkRulerRect_.y - 30;
+		
+		for (int i = 0; i < wenmaiOverflow; ++i) {
+			int circleX = startX + i * circleSpacing;
+			// 绘制实心圆形
+			for (int dy = -circleRadius; dy <= circleRadius; ++dy) {
+				for (int dx = -circleRadius; dx <= circleRadius; ++dx) {
+					if (dx * dx + dy * dy <= circleRadius * circleRadius) {
+						SDL_RenderDrawPoint(r, circleX + dx, circleY + dy);
+					}
+				}
+			}
+			// 绘制圆形边框
+			SDL_SetRenderDrawColor(r, 255, 255, 255, 255); // 白色边框
+			for (int angle = 0; angle < 360; angle += 2) {
+				float rad = angle * 3.14159f / 180.0f;
+				int px = circleX + static_cast<int>(circleRadius * cosf(rad));
+				int py = circleY + static_cast<int>(circleRadius * sinf(rad));
+				SDL_RenderDrawPoint(r, px, py);
+			}
+			SDL_SetRenderDrawColor(r, 255, 215, 0, 255); // 恢复金色
+		}
+	}
 
 	// 绘制砚台（左侧，横着放，在墨尺下面）
 	SDL_SetRenderDrawColor(r, 35, 35, 35, 200);
@@ -4432,7 +4587,7 @@ void BattleState::renderUI(App& app) {
         }
     }
 
-    // 绘制玩家牌堆（右下角）
+	// 绘制玩家牌堆（右下角）
 	SDL_SetRenderDrawColor(r, 40, 40, 40, 200);
 	SDL_RenderFillRect(r, &playerPileRect_);
 	SDL_SetRenderDrawColor(r, 75, 75, 75, 255);
@@ -4493,8 +4648,7 @@ void BattleState::renderUI(App& app) {
 			SDL_FreeSurface(s3);
 		}
 
-		auto& store = DeckStore::instance();
-		std::string playerCountText = "x" + std::to_string(store.library().size());
+		std::string playerCountText = "x" + std::to_string(battleDeck_.size());
 		SDL_Surface* s4 = TTF_RenderUTF8_Blended(infoFont_, playerCountText.c_str(), textColor);
 		if (s4) {
 			SDL_Texture* t4 = SDL_CreateTextureFromSurface(r, s4);
@@ -4659,7 +4813,7 @@ void BattleState::renderUI(App& app) {
 	if (godMode_) {
 		TTF_Font* helpFont = cardStatFont_ ? cardStatFont_ : (infoFont_ ? infoFont_ : enemyFont_);
 		if (helpFont) {
-			SDL_Color godModeColor{ 255, 255, 0, 255 }; // 黄色
+		SDL_Color godModeColor{ 255, 255, 0, 255 }; // 黄色
 			const char* lines[] = {
 				u8"上帝模式：",
 				u8"H：锁血/锁墨尺",
@@ -4720,7 +4874,7 @@ void BattleState::renderUI(App& app) {
 	if (hoveredItemIndex_ >= 0 && hoveredItemIndex_ < static_cast<int>(playerItems_.size()) && enemyFont_) {
 		const Item& it = playerItems_[hoveredItemIndex_];
 		std::string tip = it.name + "：" + it.description;
-		// 将UTF-8字符串每18个“字符”分行（按UTF-8首字节计数）
+		// 将UTF-8字符串每18个"字符"分行（按UTF-8首字节计数）
 		auto wrapUtf8 = [](const std::string& s, int maxChars) {
 			std::vector<std::string> lines; lines.reserve((int)s.size() / (maxChars*2) + 1);
 			int count = 0; size_t start = 0; size_t i = 0; 
@@ -4779,7 +4933,6 @@ void BattleState::renderUI(App& app) {
 		for (SDL_Surface* s : surfaces) if (s) SDL_FreeSurface(s);
 	}
 }
-
 // 冲刺能手相关方法实现
 void BattleState::startRushing(int cardIndex) {
 	if (cardIndex < 0 || cardIndex >= TOTAL_BATTLEFIELD_SLOTS) {
@@ -5321,6 +5474,10 @@ void BattleState::onMovementComplete() {
             }
             fengyaShanAirstrikeSlots_.clear();
             
+            // 敌方回合结束，进行胜负判定
+            checkGameOver();
+            if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
+            
 			currentPhase_ = GamePhase::PlayerTurn;
 			// 重置本回合献祭次数
 			sacrificeCountThisTurn_ = 0;
@@ -5332,6 +5489,10 @@ void BattleState::onMovementComplete() {
 			}
 		}
 		else if (currentPhase_ == GamePhase::PlayerTurn) {
+			// 玩家回合结束，进行胜负判定
+			checkGameOver();
+			if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
+			
 			currentPhase_ = GamePhase::EnemyTurn;
 			currentTurn_++; // 有移动时，从玩家回合切到敌方回合也需要递增回合数
 			hasDrawnThisTurn_ = false; // 重置抽牌状态
@@ -5415,7 +5576,6 @@ bool BattleState::scheduleTurnStartGrowth() {
 	}
 	return false;
 }
-
 bool BattleState::scheduleEnemyPreAttackGrowth() {
 	pendingGrowth_.clear();
 	for (int row = 1; row < 2; ++row) { // 仅第二行（敌方攻击行）
@@ -5690,8 +5850,11 @@ void BattleState::useItem(const std::string& itemId) {
 			enemyHealth_ -= 1;
 			if (enemyHealth_ < 0) enemyHealth_ = 0;
 			
-				// 在墨尺上显示伤害（不截断，以便记录超出）
-				meterTargetPos_ += 1;
+			// 更新墨尺：直接增加伤害值
+			meterActualPos_ += 1;
+			
+			// 显示值锁定在5，但实际值继续累加
+			meterTargetPos_ = std::min(5, meterActualPos_);
 			
 			// 启动墨尺指针动画
 			isMeterAnimating_ = true;
@@ -5853,7 +6016,7 @@ void BattleState::useItem(const std::string& itemId) {
 					if (battlefield_[index].isAlive && !battlefield_[index].isPlayer) {
 						// 清空敌方卡牌的所有印记
 						if (!battlefield_[index].card.marks.empty()) {
-							removedMarksCount += battlefield_[index].card.marks.size();
+							removedMarksCount += static_cast<int>(battlefield_[index].card.marks.size());
 							battlefield_[index].card.marks.clear();
 						}
 					}
@@ -5868,6 +6031,7 @@ void BattleState::useItem(const std::string& itemId) {
 		if (removeItem(itemId, 1)) {
 			Card xuanmuCard = CardDB::instance().make("xuanmu");
 			if (xuanmuCard.id != "unknown") {
+				EngraveStore::instance().applyToCard(xuanmuCard);
 				handCards_.push_back(xuanmuCard);
 				layoutHandCards();
 				statusMessage_ = u8"玄牧瓶生效！获得玄牧！";
@@ -5910,6 +6074,54 @@ void BattleState::initializeItems() {
 	// 暂时为空，道具会在获得时动态创建
 }
 
+void BattleState::renderEngravingHints(App& app) {
+	SDL_Renderer* r = app.getRenderer();
+	
+	// 获取已组合的意境
+	auto& store = EngraveStore::instance();
+	const auto& bindings = store.bindings();
+	
+	if (bindings.empty()) return;
+	
+	// 在右侧显示已组合意境
+	int startX = screenW_ - 200;
+	int startY = 100;
+	int lineHeight = 25;
+	
+	if (infoFont_) {
+		SDL_Color titleColor{255, 255, 100, 255}; // 金黄色标题
+		SDL_Surface* titleSurface = TTF_RenderUTF8_Blended(infoFont_, u8"已组合意境", titleColor);
+		if (titleSurface) {
+			SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(r, titleSurface);
+			SDL_Rect titleRect{startX, startY, titleSurface->w, titleSurface->h};
+			SDL_RenderCopy(r, titleTexture, nullptr, &titleRect);
+			SDL_DestroyTexture(titleTexture);
+			SDL_FreeSurface(titleSurface);
+			startY += titleSurface->h + 10;
+		}
+	}
+	
+	// 显示每个组合
+	SDL_Color textColor{200, 200, 200, 255};
+	for (const auto& kv : bindings) {
+		const std::string& category = kv.first;
+		const auto& marks = kv.second;
+		
+		for (const auto& mark : marks) {
+			std::string hintText = category + " + " + mark;
+			SDL_Surface* s = TTF_RenderUTF8_Blended(infoFont_, hintText.c_str(), textColor);
+			if (s) {
+				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+				SDL_Rect d{startX, startY, s->w, s->h};
+				SDL_RenderCopy(r, t, nullptr, &d);
+				SDL_DestroyTexture(t);
+				SDL_FreeSurface(s);
+				startY += lineHeight;
+			}
+		}
+	}
+}
+
 // 缚魂锁移动动画更新
 void BattleState::updateFuhunsuoAnimation(float dt) {
 	if (!isFuhunsuoAnimating_) return;
@@ -5925,5 +6137,3 @@ void BattleState::updateFuhunsuoAnimation(float dt) {
 		fuhunsuoToIndex_ = -1;
 	}
 }
-
-

@@ -22,7 +22,14 @@ const Card* CardDB::find(const std::string& id) const {
 Card CardDB::make(const std::string& id) const {
 	auto it = idToProto_.find(id);
 	if (it == idToProto_.end()) return Card{};
-	return it->second;
+	
+	Card card = it->second;
+	
+	// 生成简单的数字实例ID
+	static int cardCounter = 0;
+	card.instanceId = std::to_string(cardCounter++);
+	
+	return card;
 }
 
 std::vector<std::string> CardDB::allIds() const {
@@ -130,6 +137,9 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"huansha_xisheng", u8"浣沙溪生", 1, u8"其他", 1, 1, "face_huansha", {u8"拾荒者"}}; registerCard(c);
 	c = Card{"xuanhuan", u8"玄獾", 5, u8"其他", 1, 3, "face_xuanhuan", {u8"嗜血狂热", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"langpi", u8"狼皮", 0, u8"其他", 0, 2, "face_langpi", {}}; registerCard(c);
+	c = Card{"jinang_mao", u8"金羊皮", 0, u8"其他", 0, 3, "face_jinang", {}}; registerCard(c);
+	c = Card{"tuopi_mao", u8"兔皮", 0, u8"其他", 0, 1, "face_tuopi", {}}; registerCard(c);
+
 	// 磐石之身测试卡牌
 	c = Card{"panshi", u8"磐石", 0, u8"其他", 0, 5, "face_panshi", {u8"磐石之身"}}; registerCard(c);
 	

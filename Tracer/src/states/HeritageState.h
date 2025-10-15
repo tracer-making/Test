@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include "../core/Deck.h"
+#include <unordered_map>
 
 class HeritageState : public State {
 public:
@@ -86,6 +87,9 @@ private:
 	void renderHandCardArea(App& app);
 	void renderCardInSlot(App& app, const SDL_Rect& slot, const Card& card);
 	void layoutGrid();
+	
+	// 获取战斗中的待更新数值
+	std::unordered_map<std::string, std::pair<int, int>> getPendingCardUpdates();
 };
 
 

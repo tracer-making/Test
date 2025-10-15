@@ -41,6 +41,8 @@ private:
     bool pendingGoRelicPickup_ = false;
     bool pendingGoSeeker_ = false;
     bool pendingGoTemper_ = false;
+    bool pendingGoInkGhost_ = false;
+    bool pendingGoInkWorkshop_ = false;
     
     // 字体
     _TTF_Font* font_ = nullptr;

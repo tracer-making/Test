@@ -146,6 +146,8 @@
     <ClCompile Include="src\states\BattleState.cpp" />
     <ClCompile Include="src\states\HeritageState.cpp" />
     <ClCompile Include="src\states\EngraveState.cpp" />
+    <ClCompile Include="src\states\InkGhostState.cpp" />
+    <ClCompile Include="src\states\InkWorkshopState.cpp" />
     <ClCompile Include="src\states\InkShopState.cpp" />
     <ClCompile Include="src\states\MemoryRepairState.cpp" />
     <ClCompile Include="src\states\RelicPickupState.cpp" />
@@ -172,6 +174,8 @@
     <ClInclude Include="src\states\DeckState.h" />
     <ClInclude Include="src\states\HeritageState.h" />
     <ClInclude Include="src\states\EngraveState.h" />
+    <ClInclude Include="src\states\InkGhostState.h" />
+    <ClInclude Include="src\states\InkWorkshopState.h" />
     <ClInclude Include="src\states\InkShopState.h" />
     <ClInclude Include="src\states\MemoryRepairState.h" />
     <ClInclude Include="src\states\RelicPickupState.h" />

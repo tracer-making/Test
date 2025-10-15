@@ -5,6 +5,8 @@
 #include "DeckState.h"
 #include "HeritageState.h"
 #include "EngraveState.h"
+#include "InkGhostState.h"
+#include "InkWorkshopState.h"
 #include "InkShopState.h"
 #include "MemoryRepairState.h"
 #include "RelicPickupState.h"
@@ -170,6 +172,7 @@ void TestState::handleEvent(App& app, const SDL_Event& e) {
 					case 2: pendingTarget_ = 2; break; // 地图
 					case 3: pendingTarget_ = 3; break; // 文脉传承
 					case 4: pendingTarget_ = 4; break; // 意境刻画
+					case 5: pendingTarget_ = 5; break; // 墨鬼
 					case 16: pendingTarget_ = 16; break; // 牌库
 					case 6: pendingTarget_ = 6; break; // 墨坊
 					case 7: pendingTarget_ = 7; break; // 记忆修复
@@ -206,13 +209,20 @@ void TestState::update(App& app, float dt) {
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
 			break;
 		case 3:
+			// 在进入文脉传承前，将战斗中的待更新数值传递给DeckStore
+			// 这里需要从BattleState获取pendingCardUpdates_，但由于无法直接访问，
+			// 我们暂时传递空映射，实际实现中可能需要通过App或其他方式传递
+			DeckStore::instance().setPendingCardUpdates({});
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new HeritageState())));
 			break;
 		case 4:
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new EngraveState())));
 			break;
+		case 5:
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new InkGhostState())));
+			break;
 		case 6:
-			app.setState(std::unique_ptr<State>(static_cast<State*>(new InkShopState())));
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new InkWorkshopState())));
 			break;
 		case 7:
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new MemoryRepairState())));

@@ -12,6 +12,8 @@ struct Card {
 	int health = 0;            // 生命值
 	std::string face;          // 牌面（资源ID/图片路径/样式名）
 	std::vector<std::string> marks; // 印记
+	bool canInherit = true;    // 是否可传承（接受过传承的卡变为false）
+	std::string instanceId;    // 实例唯一ID（用于区分同名卡牌）
 	
 	// 默认构造函数
 	Card() = default;

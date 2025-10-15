@@ -8,6 +8,7 @@
 #include <SDL.h>
 #include <vector>
 #include <array>
+#include <unordered_map>
 #include <iostream>
 
 class BattleState : public State {
@@ -40,6 +41,7 @@ private:
 	int lockedPlayerHealthValue_ = 0;
 	int lockedMeterNetValue_ = 0;
 	float lockedMeterDisplayPos_ = 0.0f;
+	int lockedMeterActual_ = 0;
 	int lockedMeterTarget_ = 0;
 
 	// 战场区域 (3x4网格)
@@ -66,6 +68,9 @@ private:
 	std::vector<Card> handCards_;
 	std::vector<SDL_Rect> handCardRects_;
 	int selectedHandCard_ = -1;
+	
+	// 战斗牌堆（从全局牌库复制，战斗内独立管理）
+	std::vector<Card> battleDeck_;
 
 	// 墨锭牌堆和玩家牌堆
 	SDL_Rect inkPileRect_;      // 墨锭牌堆
@@ -322,7 +327,8 @@ private:
 	int meterNet_ = 0;                  // 净伤平衡：玩家伤害累加，敌人伤害扣减（用于抵消），单位=刻度，范围最终夹在-5..5
 
 	// 墨尺指针动画
-	int meterTargetPos_ = 0;            // 目标刻度（-5..5）
+	int meterActualPos_ = 0;            // 实际刻度（无限制，用于计算）
+	int meterTargetPos_ = 0;            // 显示目标刻度（-5..5）
 	float meterDisplayPos_ = 0.0f;       // 当前显示刻度（可为小数，用于插值）
 	float meterAnimTime_ = 0.0f;         // 动画计时
 	float meterAnimDuration_ = 0.35f;    // 动画时长（秒）
@@ -428,6 +434,7 @@ private:
 	void renderHandCards(App& app);
 	void renderUI(App& app);
 	void renderDeckSelection(App& app);
+	void renderEngravingHints(App& app);
 
 	// 移动卡牌队列处理方法
 	void processNextMovement();
@@ -482,5 +489,8 @@ private:
 	bool scheduleEnemyPreAttackGrowth();
 	// 标志：本次成长用于敌人攻击前
 	bool growthForEnemyAttack_ = false;
+	
+	// 待更新的卡牌信息（实例ID -> {攻击力, 生命值}）
+	std::unordered_map<std::string, std::pair<int, int>> pendingCardUpdates_;
 
 };

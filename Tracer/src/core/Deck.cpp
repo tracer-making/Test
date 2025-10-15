@@ -1,5 +1,6 @@
 #include "Deck.h"
 #include "Cards.h"
+#include "EngraveStore.h"
 #include <algorithm>
 
 DeckStore& DeckStore::instance() {
@@ -18,17 +19,34 @@ void DeckStore::clearAll() {
 
 void DeckStore::addToLibrary(const Card& c) { library_.push_back(c); }
 
+void DeckStore::addCardToHand(const Card& c) { 
+	Card card = c;
+	// 意境系统：应用已组合的意境效果到卡牌
+	EngraveStore::instance().applyToCard(card);
+	hand_.push_back(card); 
+}
+
 void DeckStore::drawToHand(int n) {
 	while (n-- > 0 && !library_.empty()) {
-		hand_.push_back(library_.back());
+		Card card = library_.back();
 		library_.pop_back();
+		
+		// 意境系统：应用已组合的意境效果到卡牌
+		EngraveStore::instance().applyToCard(card);
+		
+		hand_.push_back(card);
 	}
 }
 
 void DeckStore::drawFromInkPile(int n) {
 	while (n-- > 0 && !inkPile_.empty()) {
-		hand_.push_back(inkPile_.back());
+		Card card = inkPile_.back();
 		inkPile_.pop_back();
+		
+		// 意境系统：应用已组合的意境效果到卡牌
+		EngraveStore::instance().applyToCard(card);
+		
+		hand_.push_back(card);
 	}
 }
 
@@ -72,6 +90,9 @@ void DeckStore::initializePlayerDeck() {
 	for (const auto& cardId : initialCardIds) {
 		Card card = CardDB::instance().make(cardId);
 		if (!card.id.empty()) {
+			// 为牌库中的卡牌生成简单的数字实例ID
+			static int cardCounter = 0;
+			card.instanceId = std::to_string(cardCounter++);
 			addToLibrary(card);
 		}
 	}
@@ -80,11 +101,22 @@ void DeckStore::initializePlayerDeck() {
 	for (int i = 0; i < 10; ++i) {
 		Card inkCard = CardDB::instance().make("moding");
 		if (!inkCard.id.empty()) {
+			// 为墨锭生成简单的数字实例ID
+			static int cardCounter = 0;
+			inkCard.instanceId = std::to_string(cardCounter++);
 			inkPile_.push_back(inkCard);
 		}
 	}
 	
 	// 注意：不抽取手牌，让各个功能界面根据需要自行处理
+}
+
+void DeckStore::setPendingCardUpdates(const std::unordered_map<std::string, std::pair<int, int>>& updates) {
+	pendingCardUpdates_ = updates;
+}
+
+const std::unordered_map<std::string, std::pair<int, int>>& DeckStore::getPendingCardUpdates() const {
+	return pendingCardUpdates_;
 }
 
 
