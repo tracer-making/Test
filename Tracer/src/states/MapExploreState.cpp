@@ -1,3 +1,4 @@
+#include "MemoryRepairState.h"
 #include "MapExploreState.h"
 #include "TestState.h"
 #include "BattleState.h"
@@ -7,7 +8,6 @@
 #include "InkGhostState.h"
 #include "InkWorkshopState.h"
 #include "InkShopState.h"
-#include "MemoryRepairState.h"
 #include "RelicPickupState.h"
 #include "SeekerState.h"
 #include "TemperState.h"
