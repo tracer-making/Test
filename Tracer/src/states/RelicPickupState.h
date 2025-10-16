@@ -25,15 +25,33 @@ private:
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
 	int screenW_ = 1280, screenH_ = 720;
+	static constexpr int MAX_ITEMS = 3;
 	
 	// 状态切换
 	bool pendingGoMapExplore_ = false;  // 返回地图探索
 
-	std::vector<std::string> ownedRelics_;
+	struct Item { std::string id; std::string name; std::string description; };
+	std::vector<Item> playerItems_;               // 模拟玩家已有道具（最多3件）
+	struct ItemCandidate { Item item; SDL_Rect rect{0,0,0,0}; bool hovered=false; bool picked=false; };
+	std::vector<ItemCandidate> candidates_;       // 本次可拾取的候选道具
+	bool spawnCard_ = false;                      // 是否改为生成书林署丞
+	SDL_Rect cardRect_{0,0,0,0};                 // 书林署丞位置
 	std::string message_;
+	
+	// 拾取动画
+	struct PickupAnim {
+		bool active = false;
+		float time = 0.0f;
+		float duration = 0.8f;
+		SDL_Rect rect{0,0,0,0};
+		std::string itemName;
+	};
+	PickupAnim pickupAnim_;
+	
 	bool pendingBackToTest_ = false;
 
-	void ensureThreeRelics();
+	void setupPickupContent();
+	void layoutCandidates();
 };
 
 

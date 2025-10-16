@@ -4,6 +4,7 @@
 #include "MapExploreState.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
+#include "../core/ItemStore.h"
 
 #include "../core/Cards.h"
 #include <SDL.h>
@@ -19,6 +20,10 @@ const std::vector<std::string> BattleState::AVAILABLE_ITEMS = {
 	"duanyinjian", "tunmohao", "fuhunsuo", "wuzitianshu", "xuanmuping",
 	"tianjiluopan", "sanguiping"
 };
+
+const std::vector<std::string>& BattleState::getAvailableItems() {
+    return AVAILABLE_ITEMS;
+}
 
 #include <algorithm>
 #include <sstream>
@@ -110,6 +115,15 @@ void BattleState::onExit(App& app) {
 	
 	// 清理待更新记录
 	pendingCardUpdates_.clear();
+	
+	// 同步战斗界面的道具变化到全局ItemStore
+	auto& globalStore = ItemStore::instance();
+	globalStore.clear(); // 清空全局存储
+	for (const auto& item : playerItems_) {
+		if (item.count > 0) {
+			globalStore.addItem(item.id, item.name, item.description, item.count);
+		}
+	}
 	
 	// 清理资源
 	// 注意：不重置全局牌库，因为战斗只是使用牌库，不应该修改它
@@ -1802,11 +1816,15 @@ void BattleState::initializeBattle() {
 	isPlayerAttacking_ = true;
 	hasAttacked_ = false;
 	
-	// 初始化道具系统
+	// 初始化道具系统（不再固定补充，改为从全局ItemStore同步）
 	playerItems_.clear();
-	addItem("fuhunsuo", 1);  // 缚魂锁
-	addItem("yinyang_pei", 1);  // 阴阳佩
-	addItem("mobao_ping", 1);  // 墨宝瓶
+	// 从全局ItemStore同步道具到战斗界面
+	auto& globalItems = ItemStore::instance().items();
+	for (const auto& item : globalItems) {
+		if (item.count > 0) {
+			playerItems_.push_back(Item{item.id, item.name, item.description, item.count});
+		}
+	}
 }
 
 void BattleState::layoutUI() {

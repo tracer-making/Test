@@ -1,5 +1,7 @@
 #include "MemoryRepairState.h"
 #include "MapExploreState.h"
+#include "BattleState.h"
+#include "../core/ItemStore.h"
 #include "TestState.h"
 #include "BattleState.h"
 #include "BarterState.h"
@@ -36,6 +38,30 @@ MapExploreState::~MapExploreState() {
 }
 
 void MapExploreState::onEnter(App& app) {
+    // 首次进入地图：将全局道具补足至3件（使用战斗界面的道具池），并删除战斗内的补充逻辑
+    static bool firstEnter = true;
+    if (firstEnter) {
+        firstEnter = false;
+        auto& store = ItemStore::instance();
+        // 开局固定三件：缚魂锁、墨宝瓶、阴阳佩
+        auto prettyName = [](const std::string& id) -> std::string {
+            if (id == "yinyang_pei" || id == "yinyangpei") return u8"阴阳佩";
+            if (id == "mobao_ping") return u8"墨宝瓶";
+            if (id == "fuhunsuo") return u8"缚魂锁";
+            return id;
+        };
+        auto prettyDesc = [](const std::string& id) -> std::string {
+            if (id == "yinyang_pei" || id == "yinyangpei") return u8"平衡墨尺偏移";
+            if (id == "mobao_ping") return u8"存放溢出的墨量";
+            if (id == "fuhunsuo") return u8"拖拽移动敌方单位";
+            return u8"神秘道具";
+        };
+        // 清空并设定固定三件
+        store.clear();
+        store.addItem("fuhunsuo", prettyName("fuhunsuo"), prettyDesc("fuhunsuo"), 1);
+        store.addItem("mobao_ping", prettyName("mobao_ping"), prettyDesc("mobao_ping"), 1);
+        store.addItem("yinyang_pei", prettyName("yinyang_pei"), prettyDesc("yinyang_pei"), 1);
+    }
     // 初始化玩家牌堆（如果还没有初始化）
     auto& store = DeckStore::instance();
     if (store.library().empty() && store.hand().empty()) {

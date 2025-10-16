@@ -22,6 +22,9 @@ public:
 	void update(App& app, float dt) override;
 	void render(App& app) override;
 
+	// 公共访问：可获得的道具列表
+	static const std::vector<std::string>& getAvailableItems();
+
 private:
 	// 游戏状态
 	enum class GamePhase {

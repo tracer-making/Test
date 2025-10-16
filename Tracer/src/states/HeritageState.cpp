@@ -673,9 +673,22 @@ void HeritageState::performInheritance() {
 		std::cout << "[HERITAGE] Found source at index " << sourceIndex << ": " << sourceCard.name << " (ID:" << sourceCard.id << ", Instance:" << sourceCard.instanceId << ")" << std::endl;
 		std::cout << "[HERITAGE] Found target at index " << targetIndex << ": " << targetCard.name << " (ID:" << targetCard.id << ", Instance:" << targetCard.instanceId << ")" << std::endl;
 		
-		// 将源卡的印记添加到目标卡
+		// 将源卡的印记添加到目标卡（排除不可传承的印记，并避免重复）
+		static const std::set<std::string> kNonInheritableMarks = {
+			u8"消耗骨头", u8"每次死亡数值+1", u8"全物种", u8"蚂蚁类", u8"手牌数",
+			u8"镜像", u8"铃铛距离", u8"半根骨头", u8"献祭之血", u8"蚂蚁"
+		};
 		for (const auto& mark : sourceCard.marks) {
-			targetCard.marks.push_back(mark);
+			if (kNonInheritableMarks.find(mark) != kNonInheritableMarks.end()) {
+				continue; // 跳过不可传承的印记
+			}
+			bool alreadyHas = false;
+			for (const auto& m : targetCard.marks) {
+				if (m == mark) { alreadyHas = true; break; }
+			}
+			if (!alreadyHas) {
+				targetCard.marks.push_back(mark);
+			}
 		}
 		
 		// 应用战斗中的待更新数值到目标卡

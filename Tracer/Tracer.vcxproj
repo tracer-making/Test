@@ -139,6 +139,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\core\App.cpp" />
+    <ClCompile Include="src\core\ItemStore.cpp" />
     <ClCompile Include="src\core\Deck.cpp" />
     <ClCompile Include="src\core\Cards.cpp" />
     <ClCompile Include="src\ui\Button.cpp" />
@@ -164,6 +165,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\App.h" />
+    <ClInclude Include="src\core\ItemStore.h" />
     <ClInclude Include="src\core\Card.h" />
     <ClInclude Include="src\core\Deck.h" />
     <ClInclude Include="src\core\Cards.h" />
