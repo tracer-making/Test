@@ -2,6 +2,7 @@
 #include "TestState.h"
 #include "../core/App.h"
 #include "../ui/CardRenderer.h"
+#include "../core/Deck.h"
 #include <cmath>
 
 DeckState::DeckState() = default;
@@ -41,8 +42,7 @@ void DeckState::onEnter(App& app) {
 		});
 	}
 
-	buildDemoDeck();
-	layoutSlider();
+	buildGlobalDeck();
 	layoutGrid();
 
 	// 生成水墨背景点阵
@@ -59,21 +59,6 @@ void DeckState::onExit(App& app) {}
 
 void DeckState::handleEvent(App& app, const SDL_Event& e) {
 	if (backButton_) backButton_->handleEvent(e);
-
-	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-		int mx=e.button.x, my=e.button.y;
-		
-		if (mx>=sliderTrack_.x && mx<=sliderTrack_.x+sliderTrack_.w && my>=sliderTrack_.y-6 && my<=sliderTrack_.y+sliderTrack_.h+6) {
-			sliderDragging_ = true;
-			updateSliderFromMouse(mx);
-		}
-	}
-	else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-		sliderDragging_ = false;
-	}
-	else if (e.type == SDL_MOUSEMOTION && sliderDragging_) {
-		updateSliderFromMouse(e.motion.x);
-	}
 }
 
 void DeckState::update(App& app, float dt) {}
@@ -97,19 +82,6 @@ void DeckState::render(App& app) {
 
 	if (backButton_) backButton_->render(r);
 
-	// 渲染滑动条
-	SDL_SetRenderDrawColor(r, 100,130,180,180);
-	SDL_RenderFillRect(r, &sliderTrack_);
-	SDL_SetRenderDrawColor(r, 180,210,255,230);
-	SDL_RenderFillRect(r, &sliderThumb_);
-	// 数字显示
-	if (smallFont_) {
-		std::string label = std::string("数量:") + std::to_string(numCards_);
-		SDL_Color col{200,220,250,255};
-		SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, label.c_str(), col);
-		if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r, s); SDL_Rect dst{ sliderTrack_.x, sliderTrack_.y- s->h - 6, s->w, s->h }; SDL_RenderCopy(r,t,nullptr,&dst); SDL_DestroyTexture(t); SDL_FreeSurface(s);} 
-	}
-
 	// 绘制卡牌网格（统一水墨风格）
 	for (const auto& c : cards_) {
 		// 将CardView转换为Card结构以使用CardRenderer
@@ -123,13 +95,35 @@ void DeckState::render(App& app) {
 		
 		CardRenderer::renderCard(app, card, c.rect, nameFont_, statFont_, false);
 	}
+	
+	// 显示牌库总数信息
+	if (smallFont_) {
+		auto& globalLibrary = DeckStore::instance().library();
+		std::string countText = u8"牌库总数: " + std::to_string(globalLibrary.size());
+		SDL_Color col{200,220,250,255};
+		SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, countText.c_str(), col);
+		if (s) { 
+			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s); 
+			SDL_Rect dst{ screenW_ - s->w - 20, 20, s->w, s->h }; 
+			SDL_RenderCopy(r, t, nullptr, &dst); 
+			SDL_DestroyTexture(t); 
+			SDL_FreeSurface(s);
+		} 
+	}
 }
 
-void DeckState::buildDemoDeck() {
+void DeckState::buildGlobalDeck() {
 	cards_.clear();
-	int n = SDL_clamp(numCards_, minCards_, maxCards_);
-	for (int i=0;i<n;++i) {
-		CardView cv; cv.name = "卡牌" + std::to_string(i+1); cv.attack = 1 + (i%5); cv.health = 3 + (i%4);
+	
+	// 从全局牌库获取所有卡牌
+	auto& globalLibrary = DeckStore::instance().library();
+	
+	for (const auto& card : globalLibrary) {
+		CardView cv;
+		cv.name = card.name;
+		cv.attack = card.attack;
+		cv.health = card.health;
+		cv.marks = card.marks;
 		cards_.push_back(cv);
 	}
 }
@@ -146,49 +140,19 @@ void DeckState::layoutGrid() {
 	int availableW = SDL_max(200, screenW_ - marginX * 2);
 	int availableH = SDL_max(160, screenH_ - topY - bottomMargin);
 
-	// 目标比例（更小的卡，约 2:3）
-	const float aspect = 2.0f / 3.0f; // w:h
-	int bestCols = 1;
-	int bestCardW = 0;
-	int bestCardH = 0;
-	int bestRows = n;
-	int gap = 12; // 小间距
-
-	int maxTryCols = SDL_min(n, 10); // 不必超过10列
-	for (int cols = maxTryCols; cols >= 1; --cols) {
-		int rows = (n + cols - 1) / cols;
-		// 根据宽度估算卡片宽度
-		int cardW = (availableW - (cols - 1) * gap) / cols;
-		if (cardW <= 20) continue; // 太小直接跳过
-		int cardH = (int)(cardW / aspect);
-		// 检查高度是否可容纳
-		int totalH = rows * cardH + (rows - 1) * gap;
-		if (totalH <= availableH) {
-			// 选择卡片更大的方案
-			if (cardW > bestCardW) {
-				bestCardW = cardW;
-				bestCardH = cardH;
-				bestCols = cols;
-				bestRows = rows;
-			}
-		}
-	}
-
-	// 如果仍未找到合适布局，强制缩放以高度优先适配
-	if (bestCardW == 0) {
-		int cols = SDL_min(n, SDL_max(1, availableW / 80)); // 预估列宽80
-		cols = SDL_max(1, cols);
-		int rows = (n + cols - 1) / cols;
-		int cardW = (availableW - (cols - 1) * gap) / cols;
-		int cardH = (int)(cardW / aspect);
-		int totalH = rows * cardH + (rows - 1) * gap;
-		if (totalH > availableH) {
-			float scale = (float)availableH / (float)totalH;
-			cardW = SDL_max(24, (int)(cardW * scale));
-			cardH = SDL_max(36, (int)(cardH * scale));
-		}
-		bestCols = cols; bestRows = rows; bestCardW = cardW; bestCardH = cardH;
-	}
+	// 固定卡牌大小
+	const int fixedCardW = 120;  // 固定宽度
+	const int fixedCardH = 180; // 固定高度（保持2:3比例）
+	int gap = 8; // 小间距
+	
+	// 计算能容纳多少列
+	int maxCols = (availableW + gap) / (fixedCardW + gap);
+	maxCols = SDL_max(1, maxCols);
+	
+	int bestCols = SDL_min(n, maxCols);
+	int bestRows = (n + bestCols - 1) / bestCols;
+	int bestCardW = fixedCardW;
+	int bestCardH = fixedCardH;
 
 	int totalW = bestCols * bestCardW + (bestCols - 1) * gap;
 	int startX = (screenW_ - totalW) / 2;
@@ -202,37 +166,5 @@ void DeckState::layoutGrid() {
 	}
 }
 
-void DeckState::layoutSlider() {
-	int trackW = SDL_max(200, screenW_ - 2*220);
-	int trackH = 6;
-	int trackX = (screenW_ - trackW) / 2;
-	int trackY = 110;
-	sliderTrack_ = { trackX, trackY, trackW, trackH };
-	// 拇指大小
-	int thumbW = 14, thumbH = 24;
-	// 位置根据 numCards_ 映射
-	float t = float(SDL_clamp(numCards_, minCards_, maxCards_) - minCards_) / float(maxCards_ - minCards_);
-	int thumbX = trackX + int(t * trackW) - thumbW/2;
-	int thumbY = trackY + trackH/2 - thumbH/2;
-	sliderThumb_ = { thumbX, thumbY, thumbW, thumbH };
-}
-
-void DeckState::updateSliderFromMouse(int mx) {
-	int clampedX = SDL_clamp(mx, sliderTrack_.x, sliderTrack_.x + sliderTrack_.w);
-	float t = float(clampedX - sliderTrack_.x) / float(sliderTrack_.w);
-	int value = minCards_ + int(t * float(maxCards_ - minCards_) + 0.5f);
-	value = SDL_clamp(value, minCards_, maxCards_);
-	if (value != numCards_) {
-		numCards_ = value;
-		buildDemoDeck();
-		layoutGrid();
-	}
-	// 更新thumb位置
-	int thumbW = sliderThumb_.w;
-	int thumbH = sliderThumb_.h;
-	int thumbX = sliderTrack_.x + int(float(numCards_-minCards_) / float(maxCards_-minCards_) * sliderTrack_.w) - thumbW/2;
-	int thumbY = sliderTrack_.y + sliderTrack_.h/2 - thumbH/2;
-	sliderThumb_ = { thumbX, thumbY, thumbW, thumbH };
-}
 
 

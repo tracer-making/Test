@@ -155,6 +155,7 @@
     <ClCompile Include="src\states\TemperState.cpp" />
     <ClCompile Include="src\states\SeekerState.cpp" />
     <ClCompile Include="src\states\BurnState.cpp" />
+    <ClCompile Include="src\states\CombineState.cpp" />
     <ClCompile Include="src\states\BarterState.cpp" />
     <ClCompile Include="src\states\CardBrowserState.cpp" />
     <ClCompile Include="src\states\DeckState.cpp" />
@@ -184,6 +185,7 @@
     <ClInclude Include="src\states\TemperState.h" />
     <ClInclude Include="src\states\SeekerState.h" />
     <ClInclude Include="src\states\BurnState.h" />
+    <ClInclude Include="src\states\CombineState.h" />
     <ClInclude Include="src\states\BarterState.h" />
     <ClInclude Include="src\states\CardBrowserState.h" />
     <ClInclude Include="src\states\TestState.h" />

@@ -80,9 +80,11 @@ void DeckStore::initializePlayerDeck() {
 	// 使用战斗界面中的初始牌堆：两张书林署丞 + 一张守宫 + 一张刀笔吏 + 一张蛇自环
 	std::vector<std::string> initialCardIds = {
 		"shulin_shucheng",  // 书林署丞
-		"shulin_shucheng",  // 书林署丞
+		
 		"shougong",         // 守宫
+		
 		"daobi_li",         // 刀笔吏
+		
 		"tengshe_zihuan"    // 蛇自环
 	};
 	

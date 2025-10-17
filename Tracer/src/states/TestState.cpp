@@ -14,6 +14,7 @@
 #include "SeekerState.h"
 #include "BurnState.h"
 #include "BarterState.h"
+#include "CombineState.h"
 #include "CardBrowserState.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
@@ -245,9 +246,9 @@ void TestState::update(App& app, float dt) {
 		case 13:
 			// 文心试炼 - 暂未实现
 			break;
-		case 14:
-			// 合卷 - 暂未实现
-			break;
+        case 14:
+            app.setState(std::unique_ptr<State>(static_cast<State*>(new CombineState())));
+            break;
 		case 15:
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new CardBrowserState())));
 			break;

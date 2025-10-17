@@ -5,6 +5,7 @@
 #include "../core/App.h"
 #include "../core/Deck.h"
 #include "../core/ItemStore.h"
+#include "../core/ItemStore.h"
 
 #include "../core/Cards.h"
 #include <SDL.h>
@@ -73,8 +74,10 @@ void BattleState::onEnter(App& app) {
 	infoFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 18);
 	enemyFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 48);  // 敌人区域使用更大字体
 
-	// 初始化战斗
-	initializeBattle();
+    // 初始化战斗
+    initializeBattle();
+    // 焚书增益：初始魂骨+extraInitialBones
+    boneCount_ += ItemStore::instance().extraInitialBones;
 
 	// 布局UI
 	layoutUI();

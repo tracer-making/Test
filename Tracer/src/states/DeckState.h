@@ -41,19 +41,10 @@ private:
 	// 背景水墨点阵
 	std::vector<std::pair<int,int>> bgDots_;
 
-	// 动态数量调节（滑动条）
-	int numCards_ = 12; // 3..20
-	int minCards_ = 3;
-	int maxCards_ = 20;
-	SDL_Rect sliderTrack_{0,0,0,0};
-	SDL_Rect sliderThumb_{0,0,0,0};
-	bool sliderDragging_ = false;
 
 
-	void buildDemoDeck();
+	void buildGlobalDeck();
 	void layoutGrid();
-	void layoutSlider();
-	void updateSliderFromMouse(int mx);
 };
 
 

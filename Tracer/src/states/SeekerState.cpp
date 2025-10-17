@@ -1,12 +1,11 @@
 #include "SeekerState.h"
-#include "TestState.h"
 #include "MapExploreState.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
+#include "../core/Cards.h"
 #include "../ui/CardRenderer.h"
-#include <SDL.h>
-#include <SDL_ttf.h>
-#include <sstream>
+#include <algorithm>
+#include <random>
 
 SeekerState::SeekerState() = default;
 
@@ -17,99 +16,38 @@ SeekerState::~SeekerState() {
 	if (statFont_) TTF_CloseFont(statFont_);
 	if (titleTex_) SDL_DestroyTexture(titleTex_);
 	if (backButton_) delete backButton_;
-	if (confirmButton_) delete confirmButton_;
 }
 
 void SeekerState::onEnter(App& app) {
-	SDL_Log("SeekerState::onEnter - Start");
-	
-	// 设置窗口尺寸（适中尺寸）
-	screenW_ = 1600;
-	screenH_ = 1000;
-	SDL_SetWindowSize(app.getWindow(), screenW_, screenH_);
-	SDL_Log("Screen size: %d x %d", screenW_, screenH_);
-
-	// 加载字体（与牌库界面保持一致）
-	titleFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 64);
+	// 屏幕与字体
+	screenW_ = 1600; screenH_ = 1000; SDL_SetWindowSize(app.getWindow(), screenW_, screenH_);
+	titleFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 48);
 	smallFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 16);
-	nameFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 22);
-	statFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 24);
-	if (!titleFont_ || !smallFont_ || !nameFont_ || !statFont_) {
-		SDL_Log("TTF_OpenFont failed: %s", TTF_GetError());
-		return;
-	}
+	nameFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 20);
+	statFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 18);
+	if (titleFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, u8"寻物人", col); if (s) { titleTex_ = SDL_CreateTextureFromSurface(app.getRenderer(), s); SDL_FreeSurface(s);} }
 
-	// 创建标题纹理
-	SDL_Color titleCol{ 200, 230, 255, 255 };
-	SDL_Surface* ts = TTF_RenderUTF8_Blended(titleFont_, u8"寻物人", titleCol);
-	if (ts) {
-		titleTex_ = SDL_CreateTextureFromSurface(app.getRenderer(), ts);
-		SDL_FreeSurface(ts);
-	}
+	backButton_ = new Button(); if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回地图"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; }); }
 
-	// 创建返回按钮
-	backButton_ = new Button();
-	if (backButton_) {
-		SDL_Rect backRect{ 20, 20, 60, 40 };
-		backButton_->setRect(backRect);
-		backButton_->setText(u8"返回");
-		if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
-		backButton_->setOnClick([this]() {
-			pendingGoMapExplore_ = true;
-		});
-	}
-
-	// 创建确认按钮
-	confirmButton_ = new Button();
-	if (confirmButton_) {
-		SDL_Rect confirmRect{ screenW_ / 2 - 50, screenH_ - 80, 100, 40 };
-		confirmButton_->setRect(confirmRect);
-		confirmButton_->setText(u8"破壁");
-		if (smallFont_) confirmButton_->setFont(smallFont_, app.getRenderer());
-		confirmButton_->setOnClick([this]() {
-			if (selectedIndex_ >= 0 && selectedIndex_ < (int)artifacts_.size()) {
-				auto& a = artifacts_[selectedIndex_];
-				if (!a.revealed) {
-					a.revealed = true;
-					// 根据稀有度显示不同奖励文本
-					if (a.rarity >= 2) {
-						message_ = u8"破壁成功！获得传奇之墨/传奇卡！";
-					} else if (a.rarity == 1) {
-						message_ = u8"破壁成功！获得稀有奖励！";
-					} else {
-						message_ = u8"破壁成功！获得普通奖励！";
-					}
-					if (!a.rewardText.empty()) message_ += (u8" " + a.rewardText);
-				}
-			} else {
-				message_ = u8"请先选择一件文物！";
-			}
-		});
-	}
-
-	// 生成未知文物并布局
-	generateArtifacts();
-	layoutArtifactsGrid();
-	
-	SDL_Log("SeekerState::onEnter - Complete");
+	buildEntries();
+	layoutEntries();
 }
 
-void SeekerState::onExit(App& app) {
-	SDL_Log("SeekerState::onExit");
-}
+void SeekerState::onExit(App& app) {}
 
 void SeekerState::handleEvent(App& app, const SDL_Event& e) {
 	if (backButton_) backButton_->handleEvent(e);
-	if (confirmButton_) confirmButton_->handleEvent(e);
-
-	// 处理文物选择
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-		int mx = e.button.x, my = e.button.y;
-		for (size_t i = 0; i < artifacts_.size(); ++i) {
-			const SDL_Rect& rect = artifacts_[i].rect;
-			if (mx >= rect.x && mx <= rect.x + rect.w && my >= rect.y && my <= rect.y + rect.h) {
-				selectedIndex_ = (int)i;
-				message_ = u8"已选择：未知文物";
+		int mx=e.button.x, my=e.button.y;
+		for (auto& en : entries_) {
+			if (mx>=en.rect.x && mx<=en.rect.x+en.rect.w && my>=en.rect.y && my<=en.rect.y+en.rect.h) {
+                if (!en.revealed && !animActive_) {
+                    en.revealed = true;
+                    // 加入全局牌库
+                    DeckStore::instance().addToLibrary(en.card);
+                    // 启动获取动画
+                    animActive_ = true; animTime_ = 0.0f; animRect_ = en.rect; pickedIndex_ = (int)(&en - &entries_[0]);
+                }
 				break;
 			}
 		}
@@ -117,184 +55,96 @@ void SeekerState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void SeekerState::update(App& app, float dt) {
-	if (pendingBackToTest_) {
-		pendingBackToTest_ = false;
-		// 返回到测试界面
-		app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
-	}
-	if (pendingGoMapExplore_) {
-		pendingGoMapExplore_ = false;
-		// 返回到地图探索界面
-		app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
-	}
+    if (animActive_) {
+        animTime_ += dt;
+        if (animTime_ >= animDuration_) { animActive_ = false; pendingGoMapExplore_ = true; }
+    }
+    if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); }
 }
 
 void SeekerState::render(App& app) {
-	SDL_Renderer* r = app.getRenderer();
-	
-	// 水墨风格背景（与牌库界面一致）
-	SDL_SetRenderDrawColor(r, 20, 24, 34, 255);
-	SDL_RenderClear(r);
-	
-	// 水墨背景点
-	SDL_SetRenderDrawColor(r, 80, 70, 60, 60);
-	srand(4242); // 固定种子确保一致性
-	for (int i = 0; i < 400; ++i) {
-		int x = rand() % screenW_;
-		int y = rand() % screenH_;
-		SDL_RenderDrawPoint(r, x, y);
-	}
+	SDL_Renderer* r = app.getRenderer(); SDL_SetRenderDrawColor(r, 18,22,32,255); SDL_RenderClear(r);
+	if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect d{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r,titleTex_,nullptr,&d); }
+	if (backButton_) backButton_->render(r);
 
-	// 渲染标题
-	if (titleTex_) {
-		int titleW, titleH;
-		SDL_QueryTexture(titleTex_, nullptr, nullptr, &titleW, &titleH);
-		SDL_Rect dst{ screenW_ / 2 - titleW / 2, 80, titleW, titleH };
-		SDL_RenderCopy(r, titleTex_, nullptr, &dst);
-	}
-
-	// 渲染说明文字
-	if (smallFont_) {
-		SDL_Color textCol{ 200, 200, 200, 255 };
-		SDL_Surface* textSurf = TTF_RenderUTF8_Blended(smallFont_, 
-			u8"从三件未知文物中选择其一进行破壁，揭示并获得对应奖励", textCol);
-		if (textSurf) {
-			SDL_Texture* textTex = SDL_CreateTextureFromSurface(r, textSurf);
-			SDL_Rect textRect{ screenW_ / 2 - textSurf->w / 2, 150, textSurf->w, textSurf->h };
-			SDL_RenderCopy(r, textTex, nullptr, &textRect);
-			SDL_DestroyTexture(textTex);
-			SDL_FreeSurface(textSurf);
-		}
-	}
-
-	// 渲染三件未知文物（统一水墨卡面样式）
-	for (size_t i = 0; i < artifacts_.size(); ++i) {
-		SDL_Rect rect = artifacts_[i].rect;
-		const bool isSelected = (selectedIndex_ == (int)i);
-		const bool revealed = artifacts_[i].revealed;
-
-		// 选中高亮
-		if (isSelected) {
-			SDL_SetRenderDrawColor(r, 255, 215, 0, 200);
-			SDL_Rect highlightRect{ rect.x - 3, rect.y - 3, rect.w + 6, rect.h + 6 };
-			SDL_RenderFillRect(r, &highlightRect);
-		}
-
-		// 将文物转换为Card结构以使用CardRenderer
-		Card card;
-		card.name = revealed ? artifacts_[i].title : std::string(u8"未知文物");
-		card.attack = 0; // 文物无攻击力
-		card.health = 0; // 文物无生命值
-		card.category = "文物"; // 文物分类
-		card.sacrificeCost = 0; // 文物无献祭消耗
-		
-		// 根据稀有度添加印记
-		if (revealed) {
-			if (artifacts_[i].rarity >= 2) {
-				card.marks.push_back("传奇");
-			} else if (artifacts_[i].rarity == 1) {
-				card.marks.push_back("稀有");
+	for (const auto& en : entries_) {
+		if (en.revealed) {
+			// 金羊皮淡金色渲染，参考墨坊
+			if (en.card.id == "jinang_mao") {
+				// 直接复用自定义金色渲染逻辑（内联一份简版以避免状态依赖）
+				SDL_Renderer* r2 = app.getRenderer();
+				SDL_SetRenderDrawColor(r2, 255, 235, 150, 255);
+				SDL_RenderFillRect(r2, &en.rect);
+				SDL_SetRenderDrawColor(r2, 255, 245, 180, 255);
+				SDL_RenderDrawRect(r2, &en.rect);
+				SDL_SetRenderDrawColor(r2, 255, 240, 160, 255);
+				SDL_Rect inner{ en.rect.x+2,en.rect.y+2,en.rect.w-4,en.rect.h-4 }; SDL_RenderDrawRect(r2, &inner);
+				if (nameFont_) { SDL_Color nameCol{160,100,60,255}; SDL_Surface* s = TTF_RenderUTF8_Blended(nameFont_, en.card.name.c_str(), nameCol); if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r2,s); int dh=SDL_max(12,(int)(en.rect.h*0.16f)); float sc=(float)dh/(float)s->h; int sw=(int)(s->w*sc); SDL_Rect nd{ en.rect.x+(en.rect.w-sw)/2, en.rect.y+(int)(en.rect.h*0.04f), sw, dh }; SDL_RenderCopy(r2,t,nullptr,&nd); SDL_DestroyTexture(t); SDL_FreeSurface(s);} }
+				if (statFont_) { SDL_Color stCol{160,100,60,255}; int dh=SDL_max(12,(int)(en.rect.h*0.18f)); int mg=SDL_max(6,(int)(en.rect.h*0.035f)); std::string atk=std::to_string(en.card.attack), hp=std::to_string(en.card.health);
+					SDL_Surface* sa=TTF_RenderUTF8_Blended(statFont_, atk.c_str(), stCol); if (sa){ SDL_Texture* ta=SDL_CreateTextureFromSurface(r2,sa); float sc=(float)dh/(float)sa->h; int sw=(int)(sa->w*sc); SDL_Rect ad{ en.rect.x+mg, en.rect.y+en.rect.h-dh-mg, sw, dh }; SDL_RenderCopy(r2,ta,nullptr,&ad); SDL_DestroyTexture(ta); SDL_FreeSurface(sa);} 
+					SDL_Surface* sh=TTF_RenderUTF8_Blended(statFont_, hp.c_str(), stCol); if (sh){ SDL_Texture* th=SDL_CreateTextureFromSurface(r2,sh); float sc=(float)dh/(float)sh->h; int sw=(int)(sh->w*sc); SDL_Rect hd{ en.rect.x+en.rect.w-sw-mg, en.rect.y+en.rect.h-dh-mg, sw, dh }; SDL_RenderCopy(r2,th,nullptr,&hd); SDL_DestroyTexture(th); SDL_FreeSurface(sh);} }
 			} else {
-				card.marks.push_back("普通");
+				CardRenderer::renderCard(app, en.card, en.rect, nameFont_, statFont_, false);
 			}
 		} else {
-			card.marks.push_back("未知");
+			// 牌背：简单底板
+			SDL_SetRenderDrawColor(r, 235,230,220,230); SDL_RenderFillRect(r, &en.rect);
+			SDL_SetRenderDrawColor(r, 60,50,40,220); SDL_RenderDrawRect(r, &en.rect);
+			if (smallFont_) { SDL_Color col{90,80,70,200}; SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, u8"未知", col); if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r,s); SDL_Rect d{ en.rect.x + (en.rect.w - s->w)/2, en.rect.y + en.rect.h/2 - s->h/2, s->w, s->h }; SDL_RenderCopy(r,t,nullptr,&d); SDL_DestroyTexture(t); SDL_FreeSurface(s);} }
 		}
-		
-		CardRenderer::renderCard(app, card, rect, nameFont_, statFont_, isSelected);
+	}
 
-		// 中间区域：未知遮罩/图案 或 揭示后的奖励描述
-		if (smallFont_) {
-			if (!revealed) {
-				SDL_Color col{80, 70, 60, 200};
-				SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, u8"破壁以见真", col);
-				if (s) {
-					SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
-					SDL_Rect dst{ rect.x + (rect.w - s->w)/2, rect.y + rect.h/2 - s->h/2, s->w, s->h };
-					SDL_RenderCopy(r, t, nullptr, &dst);
-					SDL_DestroyTexture(t);
-					SDL_FreeSurface(s);
-				}
-			} else {
-				SDL_Color col{120, 30, 30, 230};
-				std::string text = artifacts_[i].rewardText.empty() ? std::string(u8"获得奖励！") : artifacts_[i].rewardText;
-				SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, text.c_str(), col);
-				if (s) {
-					SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
-					SDL_Rect dst{ rect.x + (rect.w - s->w)/2, rect.y + rect.h/2 - s->h/2, s->w, s->h };
-					SDL_RenderCopy(r, t, nullptr, &dst);
-					SDL_DestroyTexture(t);
-					SDL_FreeSurface(s);
-				}
+    // 获取动画：上移+淡出
+    if (animActive_) {
+        float p = animTime_ / animDuration_;
+        float alpha = 1.0f - p;
+        SDL_Rect rct = animRect_;
+        rct.y -= (int)(120 * p);
+        SDL_SetRenderDrawColor(r, 255, 255, 180, (Uint8)(220 * alpha));
+        SDL_RenderFillRect(r, &rct);
+        SDL_SetRenderDrawColor(r, 240, 240, 240, (Uint8)(255 * alpha));
+        SDL_RenderDrawRect(r, &rct);
+    }
+
+	if (!message_.empty() && smallFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended_Wrapped(smallFont_, message_.c_str(), col, screenW_-40); if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r,s); SDL_Rect d{20, screenH_-s->h-20, s->w, s->h}; SDL_RenderCopy(r,t,nullptr,&d); SDL_DestroyTexture(t); SDL_FreeSurface(s);} }
+}
+
+void SeekerState::buildEntries() {
+	entries_.clear(); entries_.resize(3);
+	// 随机一个位置放金羊毛
+	std::random_device rd; std::mt19937 g(rd()); std::uniform_int_distribution<int> pick(0,2); int goldIx = pick(g);
+	for (int i=0;i<3;++i) {
+		if (i == goldIx) {
+			entries_[i].card = CardDB::instance().make("jinang_mao");
+		} else {
+			// 全牌库随机一张
+			auto all = CardDB::instance().allIds();
+			if (!all.empty()) {
+				std::shuffle(all.begin(), all.end(), g);
+				entries_[i].card = CardDB::instance().make(all.front());
+			}
+			// 附加两个印记（复用战斗界面的随机印记候选池）
+			std::vector<std::string> availableMarks = {
+				u8"空袭", u8"水袭", u8"高跳", u8"护主", u8"领袖力量", u8"掘墓人",
+				u8"双重攻击", u8"双向攻击", u8"三向攻击", u8"冲刺能手", u8"蛮力冲撞",
+				u8"生生不息", u8"形态转换", u8"不死印记", u8"消耗骨头", u8"优质祭品",
+				u8"内心之蜂", u8"滋生寄生虫", u8"断尾求生", u8"反伤", u8"死神之触",
+				u8"令人生厌", u8"臭臭", u8"蚁后", u8"一口之量", u8"坚硬之躯",
+				u8"兔窝", u8"筑坝师", u8"检索", u8"磐石之身",  u8"道具商"
+			};
+			std::uniform_int_distribution<int> mi(0, (int)availableMarks.size()-1);
+			int added = 0; int guard = 0;
+			while (added < 2 && guard < 20) {
+				++guard;
+				std::string mk = availableMarks[mi(g)];
+				bool dup=false; for (const auto& m : entries_[i].card.marks) if (m==mk) { dup=true; break; }
+				if (!dup) { entries_[i].card.marks.push_back(mk); ++added; }
 			}
 		}
 	}
-
-	// 渲染消息
-	if (!message_.empty() && smallFont_) {
-		SDL_Color msgCol{ 255, 255, 0, 255 };
-		SDL_Surface* msgSurf = TTF_RenderUTF8_Blended(smallFont_, message_.c_str(), msgCol);
-		if (msgSurf) {
-			SDL_Texture* msgTex = SDL_CreateTextureFromSurface(r, msgSurf);
-			SDL_Rect msgRect{ screenW_ / 2 - msgSurf->w / 2, screenH_ - 150, msgSurf->w, msgSurf->h };
-			SDL_RenderCopy(r, msgTex, nullptr, &msgRect);
-			SDL_DestroyTexture(msgTex);
-			SDL_FreeSurface(msgSurf);
-		}
-	}
-
-	// 渲染按钮
-	if (backButton_) backButton_->render(r);
-	if (confirmButton_) confirmButton_->render(r);
 }
 
-void SeekerState::generateArtifacts() {
-	artifacts_.clear();
-	// 简单权重：普通 65%，稀有 28%，传奇 7%
-	auto rollRarity = [](){ int r = rand()%100; if (r<7) return 2; if (r<35) return 1; return 0; };
-	const char* titles[3] = { "远古碎片", "封泥残章", "秘宝匣" };
-	const char* rareLabel[3] = { "普通", "稀有", "传奇" };
-	for (int i=0;i<3;++i) {
-		Artifact a;
-		a.rarity = rollRarity();
-		a.title = std::string(titles[i]) + std::string(" (") + rareLabel[a.rarity] + ")";
-		switch (a.rarity) {
-			case 2: a.rewardText = u8"获得传奇之墨或传奇卡"; break;
-			case 1: a.rewardText = u8"获得稀有之墨或稀有卡"; break;
-			default: a.rewardText = u8"获得普通之墨或普通卡"; break;
-		}
-		artifacts_.push_back(a);
-	}
-}
-
-void SeekerState::layoutArtifactsGrid() {
-	int n = (int)artifacts_.size();
-	if (n<=0) return;
-	// 布局与牌库风格一致，3列1行优先
-	int marginX = 40;
-	int topY = 200;
-	int bottomMargin = 100;
-	int availableW = SDL_max(200, screenW_ - marginX * 2);
-	int availableH = SDL_max(160, screenH_ - topY - bottomMargin);
-	const float aspect = 2.0f/3.0f;
-	int cols = SDL_min(3, n);
-	int rows = (n + cols - 1) / cols;
-	int gap = 18;
-	int cardW = (availableW - (cols - 1) * gap) / cols;
-	int cardH = (int)(cardW / aspect);
-	int totalH = rows * cardH + (rows - 1) * gap;
-	if (totalH > availableH) {
-		float scale = (float)availableH / (float)totalH;
-		cardW = SDL_max(24, (int)(cardW * scale));
-		cardH = SDL_max(36, (int)(cardH * scale));
-	}
-	int totalW = cols * cardW + (cols - 1) * gap;
-	int startX = (screenW_ - totalW) / 2;
-	int startY = topY + (availableH - (rows * cardH + (rows - 1) * gap)) / 2;
-	startY = SDL_max(topY, startY);
-	for (int i=0;i<n;++i) {
-		int r = i / cols;
-		int c = i % cols;
-		artifacts_[i].rect = { startX + c * (cardW + gap), startY + r * (cardH + gap), cardW, cardH };
-	}
+void SeekerState::layoutEntries() {
+	int w = 150, h = 210, gap = 30; int totalW = 3*w + 2*gap; int x0 = (screenW_-totalW)/2; int y = (screenH_-h)/2;
+	for (int i=0;i<3;++i) entries_[i].rect = { x0 + i*(w+gap), y, w, h };
 }

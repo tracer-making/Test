@@ -25,14 +25,25 @@ private:
 	_TTF_Font* nameFont_  = nullptr;
 	_TTF_Font* statFont_  = nullptr;
 	SDL_Texture* titleTex_ = nullptr;
-	Button* backButton_ = nullptr;
-	Button* burnButton_ = nullptr;
+    Button* backButton_ = nullptr;
+    Button* burnButton_ = nullptr;
 	int screenW_ = 1600, screenH_ = 1000;
 	std::string message_;
-	bool pendingBackToTest_ = false;
+    bool pendingGoMapExplore_ = false;
 
-	std::vector<SDL_Rect> cardRects_;
-	int selectedIndex_ = -1; // index in library
+    // 中央牌位与选择
+    SDL_Rect slotRect_{0,0,0,0};
+    bool selecting_ = false;
+    std::vector<int> libIndices_;
+    std::vector<SDL_Rect> libRects_;
+    int selectedLibIndex_ = -1; // index in libIndices_
 
-	void layoutGridFromLibrary();
+    // 动画
+    bool animActive_ = false;
+    float animTime_ = 0.0f;
+    float animDuration_ = 0.8f;
+    SDL_Rect animRect_{0,0,0,0};
+
+    void layoutUI();
+    void buildSelectionGrid();
 };

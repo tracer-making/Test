@@ -26,6 +26,9 @@ public:
 	int getItemCount(const std::string& id) const;
 	void clear();
 
+    // 全局战斗增益
+    int extraInitialBones = 0; // 进入战斗时额外+骨头
+
 private:
 	ItemStore() = default;
 	std::vector<Item> items_;

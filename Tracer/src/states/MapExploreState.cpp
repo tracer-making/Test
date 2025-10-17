@@ -7,6 +7,7 @@
 #include "BarterState.h"
 #include "EngraveState.h"
 #include "HeritageState.h"
+#include "CombineState.h"
 #include "InkGhostState.h"
 #include "InkWorkshopState.h"
 #include "InkShopState.h"
@@ -493,6 +494,11 @@ void MapExploreState::update(App& app, float dt) {
     if (pendingGoTemper_) {
         pendingGoTemper_ = false;
         app.setState(std::unique_ptr<State>(static_cast<State*>(new TemperState())));
+        // 新增：合卷入口（可根据你的地图节点绑定按键/区域触发）
+        // 这里示例：按键'H'进入合卷（请替换为你的真实事件逻辑）
+        if (false) {
+            app.setState(std::unique_ptr<State>(static_cast<State*>(new CombineState())));
+        }
         return;
     }
 }
