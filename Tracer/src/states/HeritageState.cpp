@@ -617,8 +617,20 @@ bool HeritageState::canBeSacrificed(const Card& card) {
 	if (card.id == "moding") {
 		return false;
 	}
-	// 被献祭的卡必须有印记且可传承
-	return !card.marks.empty() && card.canInherit;
+    // 仅包含以下禁用印记时，不能被献祭
+    static const std::set<std::string> kForbiddenOnlyMarks = {
+        u8"消耗骨头", u8"每次死亡数值+1", u8"全物种", u8"蚂蚁类", u8"手牌数",
+        u8"镜像", u8"铃铛距离", u8"半根骨头", u8"献祭之血", u8"蚂蚁"
+    };
+    if (!card.marks.empty()) {
+        bool allForbidden = true;
+        for (const auto& m : card.marks) {
+            if (kForbiddenOnlyMarks.find(m) == kForbiddenOnlyMarks.end()) { allForbidden = false; break; }
+        }
+        if (allForbidden) return false;
+    }
+    // 被献祭的卡必须有印记且可传承
+    return !card.marks.empty() && card.canInherit;
 }
 
 bool HeritageState::canReceiveInheritance(const Card& card) {
