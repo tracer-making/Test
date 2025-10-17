@@ -52,10 +52,13 @@ void BurnState::onEnter(App& app) {
                 if (li >= 0 && li < (int)lib.size()) {
                     // 动画并删除
                     animActive_ = true; animTime_ = 0.0f; animRect_ = slotRect_;
-                    // 记录全局增益：基础+1；若有“优质祭品”则+4
+                    // 记录全局增益：基础+1；若焚毁“玄牡(xuanmu)”则+8
                     const Card& destroyed = lib[li];
-                    bool premium = false; for (const auto& m : destroyed.marks) { if (m == std::string(u8"优质祭品")) { premium = true; break; } }
-                    ItemStore::instance().extraInitialBones += premium ? 4 : 1;
+                    if (destroyed.id == std::string("xuanmu")) {
+                        ItemStore::instance().extraInitialBones += 8;
+                    } else {
+                        ItemStore::instance().extraInitialBones += 1;
+                    }
                     lib.erase(lib.begin() + li);
                     // 清空牌位选择，刷新索引，避免渲染残留
                     selectedLibIndex_ = -1;

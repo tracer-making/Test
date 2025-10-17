@@ -16,6 +16,7 @@
 #include "BarterState.h"
 #include "CombineState.h"
 #include "CardBrowserState.h"
+#include "WenxinTrialState.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
 #include <SDL.h>
@@ -244,7 +245,7 @@ void TestState::update(App& app, float dt) {
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new BurnState())));
 			break;
 		case 13:
-			// 文心试炼 - 暂未实现
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new WenxinTrialState())));
 			break;
         case 14:
             app.setState(std::unique_ptr<State>(static_cast<State*>(new CombineState())));

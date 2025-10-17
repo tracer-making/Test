@@ -162,6 +162,7 @@
     <ClCompile Include="src\states\MainMenuState.cpp" />
     <ClCompile Include="src\states\TestState.cpp" />
     <ClCompile Include="src\states\MapExploreState.cpp" />
+    <ClCompile Include="src\states\WenxinTrialState.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -190,6 +191,7 @@
     <ClInclude Include="src\states\CardBrowserState.h" />
     <ClInclude Include="src\states\TestState.h" />
     <ClInclude Include="src\states\MapExploreState.h" />
+    <ClInclude Include="src\states\WenxinTrialState.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -127,7 +127,7 @@ void SeekerState::buildEntries() {
 			std::vector<std::string> availableMarks = {
 				u8"空袭", u8"水袭", u8"高跳", u8"护主", u8"领袖力量", u8"掘墓人",
 				u8"双重攻击", u8"双向攻击", u8"三向攻击", u8"冲刺能手", u8"蛮力冲撞",
-				u8"生生不息", u8"形态转换", u8"不死印记", u8"消耗骨头", u8"优质祭品",
+				u8"生生不息",  u8"不死印记", u8"优质祭品",
 				u8"内心之蜂", u8"滋生寄生虫", u8"断尾求生", u8"反伤", u8"死神之触",
 				u8"令人生厌", u8"臭臭", u8"蚁后", u8"一口之量", u8"坚硬之躯",
 				u8"兔窝", u8"筑坝师", u8"检索", u8"磐石之身",  u8"道具商"
@@ -141,6 +141,9 @@ void SeekerState::buildEntries() {
 				if (!dup) { entries_[i].card.marks.push_back(mk); ++added; }
 			}
 		}
+		
+		// 设置所有卡牌为不可传承
+		entries_[i].card.canInherit = false;
 	}
 }
 

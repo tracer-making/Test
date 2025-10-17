@@ -2,49 +2,74 @@
 
 #include "../core/State.h"
 #include "../ui/Button.h"
-#include "../core/Deck.h"
+#include "../core/Card.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include <string>
 #include <vector>
+#include <string>
 
 class BarterState : public State {
 public:
-	BarterState();
-	~BarterState();
+    BarterState();
+    ~BarterState();
 
-	void onEnter(App& app) override;
-	void onExit(App& app) override;
-	void handleEvent(App& app, const SDL_Event& e) override;
-	void update(App& app, float dt) override;
-	void render(App& app) override;
+    void onEnter(App& app) override;
+    void onExit(App& app) override;
+    void handleEvent(App& app, const SDL_Event& e) override;
+    void update(App& app, float dt) override;
+    void render(App& app) override;
 
 private:
-	_TTF_Font* titleFont_ = nullptr;
-	_TTF_Font* smallFont_ = nullptr;
-	_TTF_Font* nameFont_  = nullptr;
-	_TTF_Font* statFont_  = nullptr;
-	SDL_Texture* titleTex_ = nullptr;
-	Button* backButton_ = nullptr;
-	Button* confirmButton_ = nullptr;
-	int screenW_ = 1600, screenH_ = 1000;
-	
-	// 状态切换
-	bool pendingGoMapExplore_ = false;  // 返回地图探索
-	std::string message_;
-	bool pendingBackToTest_ = false;
+    _TTF_Font* titleFont_ = nullptr;
+    _TTF_Font* smallFont_ = nullptr;
+    SDL_Texture* titleTex_ = nullptr;
+    Button* backButton_ = nullptr;
+    int screenW_ = 1600, screenH_ = 1000;
 
-	// 左侧：牌库卡选择
-	std::vector<SDL_Rect> libraryRects_;
-	int selectedLibraryIndex_ = -1;
-	// 右侧：三选一报价
-	struct Offer { Card card; SDL_Rect rect{0,0,0,0}; };
-	std::vector<Offer> offers_;
-	int selectedOfferIndex_ = -1;
+    // 状态切换
+    bool pendingGoMapExplore_ = false;  // 返回地图探索
 
-	void ensureDemoLibraryIfEmpty();
-	void layoutGrids();
-	void generateOffers();
+    std::string message_;
+    bool hasFur_ = false;
+    
+    // 交易界面相关
+    enum class TradeType {
+        None,
+        RabbitFur,    // 兔皮交易
+        WolfFur,      // 狼皮交易
+        GoldenFur     // 金羊皮交易
+    };
+    TradeType currentTradeType_ = TradeType::None;
+    
+    // 左侧：玩家毛皮卡牌
+    struct PlayerFurCard {
+        Card card;
+        SDL_Rect rect{0,0,0,0};
+        bool selected = false;
+    };
+    std::vector<PlayerFurCard> playerFurCards_;
+    
+    // 右侧：随机交易卡牌
+    struct TradeCard {
+        Card card;
+        SDL_Rect rect{0,0,0,0};
+        bool selected = false;
+    };
+    std::vector<TradeCard> tradeCards_;
+    
+    // 动画相关
+    bool animActive_ = false;
+    float animTime_ = 0.0f;
+    float animDuration_ = 1.0f;
+    int animatingTradeCard_ = -1;
+    int animatingPlayerCard_ = -1;
+
+    void checkFurCards();
+    bool hasFurCards();
+    void startTrade(TradeType type);
+    void buildPlayerFurCards();
+    void buildTradeCards();
+    void layoutCards();
+    void performTrade(int tradeCardIndex);
+    void nextTradeType();
 };
-
-

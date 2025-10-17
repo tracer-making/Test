@@ -14,6 +14,7 @@
 #include "RelicPickupState.h"
 #include "SeekerState.h"
 #include "TemperState.h"
+#include "WenxinTrialState.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
 #include "../ui/Button.h"
@@ -316,6 +317,12 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         return;
     }
     
+    // 处理文心试炼（T键）
+    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_t) {
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new WenxinTrialState())));
+        return;
+    }
+    
     // 处理重新生成地图（R键）
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_r) {
         generateLayeredMap();
@@ -496,9 +503,6 @@ void MapExploreState::update(App& app, float dt) {
         app.setState(std::unique_ptr<State>(static_cast<State*>(new TemperState())));
         // 新增：合卷入口（可根据你的地图节点绑定按键/区域触发）
         // 这里示例：按键'H'进入合卷（请替换为你的真实事件逻辑）
-        if (false) {
-            app.setState(std::unique_ptr<State>(static_cast<State*>(new CombineState())));
-        }
         return;
     }
 }

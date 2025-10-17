@@ -1,10 +1,6 @@
 #include "Button.h"
 #include <SDL.h>
-#if __has_include(<SDL2/SDL_ttf.h>)
-#include <SDL2/SDL_ttf.h>
-#else
 #include <SDL_ttf.h>
-#endif
 
 Button::Button() = default;
 
