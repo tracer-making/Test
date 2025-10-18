@@ -81,7 +81,7 @@ private:
     
     // 地图生成
     int maxNodesPerLayer_ = 3;       // 复杂度：每层最多节点数（1-4）
-    void generateLayeredMap();
+    void generateLayeredMap(bool shouldBuildOffsets = true);
     void generateMapForLayer(int layer);
     void generateFirstLayerPattern(std::mt19937& gen);
     void generateSecondThirdLayerPattern(std::mt19937& gen);
@@ -116,6 +116,7 @@ private:
     void renderMap(SDL_Renderer* renderer);
     void renderNode(SDL_Renderer* renderer, const MapNode& node, int index);
     void renderConnection(SDL_Renderer* renderer, int fromGlobalIndex, int toGlobalIndex);
+    void renderGodModeIndicator(SDL_Renderer* renderer);
     
     // 玩家移动相关
     void initializePlayer();
@@ -132,12 +133,19 @@ private:
     int mapOffsetX_ = 80;
     int mapOffsetY_ = 960;
     int scrollY_ = 0;               // 垂直滚动（像素）
-    int maxScrollY_ = 100;            // 向下滚动的最大值（像素）
-    int maxScrollYCap_ = 2000;        // 向下滚动的上限（可配置，单位像素）
+    int maxScrollY_ = 2500;            // 向下滚动的最大值（像素）
+    int maxScrollYCap_ = 2500;        // 向下滚动的上限（可配置，单位像素）
     int minWorldY_ = 0;             // 地图最小Y（世界坐标）
     int maxWorldY_ = 0;             // 地图最大Y（世界坐标）
     int visibleRowCount_ = 5;       // 屏幕最多显示的行数（用于滚动步长）
     int scrollStep_ = 80;           // 滚动步长（像素）
+    
+    // 上帝模式
+    bool godMode_ = false;          // 上帝模式开关
+    
+    // 地图滚动控制
+    static bool s_firstMapEnter_;   // 是否第一次进入地图
+    
 
     // 工具：将节点世界坐标转换为屏幕坐标（应用偏移与滚动）
     inline void nodeToScreenXY(const MapNode& node, int& sx, int& sy) const {

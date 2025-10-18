@@ -8,8 +8,8 @@
 BarterState::BarterState() = default;
 
 BarterState::~BarterState() {
-    if (titleFont_) TTF_CloseFont(titleFont_);
-    if (smallFont_) TTF_CloseFont(smallFont_);
+	if (titleFont_) TTF_CloseFont(titleFont_);
+	if (smallFont_) TTF_CloseFont(smallFont_);
     if (titleTex_) SDL_DestroyTexture(titleTex_);
     if (backButton_) delete backButton_;
 }
@@ -110,14 +110,24 @@ void BarterState::buildTradeCards() {
     
     switch (currentTradeType_) {
         case TradeType::RabbitFur:
-            // 兔皮：2行4列共8个牌位，从所有牌库中随机选择
+            // 兔皮：2行4列共8个牌位，从所有可获取的牌库中随机选择
             tradeCards_.resize(8);
             {
                 auto allCardIds = CardDB::instance().allIds();
-                std::shuffle(allCardIds.begin(), allCardIds.end(), g);
+                std::vector<std::string> obtainableIds;
                 
-                for (int i = 0; i < 8 && i < (int)allCardIds.size(); ++i) {
-                    tradeCards_[i].card = CardDB::instance().make(allCardIds[i]);
+                // 过滤出可获取的卡牌
+                for (const auto& id : allCardIds) {
+                    Card c = CardDB::instance().make(id);
+                    if (c.obtainable) {
+                        obtainableIds.push_back(id);
+                    }
+                }
+                
+                std::shuffle(obtainableIds.begin(), obtainableIds.end(), g);
+                
+                for (int i = 0; i < 8 && i < (int)obtainableIds.size(); ++i) {
+                    tradeCards_[i].card = CardDB::instance().make(obtainableIds[i]);
                 }
             }
             break;
@@ -127,7 +137,17 @@ void BarterState::buildTradeCards() {
             tradeCards_.resize(8);
             {
                 auto allCardIds = CardDB::instance().allIds();
-                std::shuffle(allCardIds.begin(), allCardIds.end(), g);
+                std::vector<std::string> obtainableIds;
+                
+                // 过滤出可获取的卡牌
+                for (const auto& id : allCardIds) {
+                    Card c = CardDB::instance().make(id);
+                    if (c.obtainable) {
+                        obtainableIds.push_back(id);
+                    }
+                }
+                
+                std::shuffle(obtainableIds.begin(), obtainableIds.end(), g);
                 
                 // 可添加的印记池
                 std::vector<std::string> availableMarks = {
@@ -139,8 +159,8 @@ void BarterState::buildTradeCards() {
                     u8"兔窝", u8"筑坝师", u8"检索", u8"磐石之身", u8"道具商"
                 };
                 
-                for (int i = 0; i < 8 && i < (int)allCardIds.size(); ++i) {
-                    tradeCards_[i].card = CardDB::instance().make(allCardIds[i]);
+                for (int i = 0; i < 8 && i < (int)obtainableIds.size(); ++i) {
+                    tradeCards_[i].card = CardDB::instance().make(obtainableIds[i]);
                     
                     // 随机添加1~2个印记
                     std::uniform_int_distribution<int> markCount(1, 2);
@@ -335,7 +355,8 @@ void BarterState::nextTradeType() {
 }
 
 void BarterState::handleEvent(App& app, const SDL_Event& e) {
-    if (backButton_) backButton_->handleEvent(e);
+	// 处理按钮事件（只在上帝模式下）
+	if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
     
     // 如果没有毛皮，任何按键都可以返回地图
     if (!hasFur_ && e.type == SDL_KEYDOWN) {
@@ -359,8 +380,8 @@ void BarterState::handleEvent(App& app, const SDL_Event& e) {
     if (pendingGoMapExplore_) {
         if (e.type == SDL_KEYDOWN) {
             app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
-        }
-    }
+		}
+	}
 }
 
 void BarterState::update(App& app, float dt) {
@@ -394,8 +415,8 @@ void BarterState::render(App& app) {
         SDL_RenderCopy(app.getRenderer(), titleTex_, nullptr, &titleRect);
     }
     
-    // 渲染返回按钮
-    if (backButton_) backButton_->render(app.getRenderer());
+    // 渲染返回按钮（只在上帝模式下显示）
+    if (backButton_ && App::isGodMode()) backButton_->render(app.getRenderer());
     
     if (hasFur_ && currentTradeType_ != TradeType::None) {
         // 渲染左侧玩家毛皮卡牌

@@ -1,6 +1,8 @@
 #include "MainMenuState.h"
 #include "BattleState.h"
 #include "TestState.h" // Added include
+#include "MapExploreState.h"
+#include "DeckSelectState.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
 #include <SDL.h>
@@ -57,13 +59,13 @@ void MainMenuState::onEnter(App& app) {
 		if (smallFont_) buttons_[i]->setFont(smallFont_, app.getRenderer());
 	}
 	
-	// 测试按钮（右上角）
-	int testButtonSize = 40;
-	SDL_Rect testButtonRect { screenW_ - testButtonSize - 20, 20, testButtonSize, testButtonSize };
-	buttons_[4]->setRect(testButtonRect);
-	buttons_[4]->setText(u8"T");
+	// 上帝模式切换/功能测试按钮（右上角）
+	int godModeButtonSize = 40;
+	SDL_Rect godModeButtonRect { screenW_ - godModeButtonSize - 20, 20, godModeButtonSize, godModeButtonSize };
+	buttons_[4]->setRect(godModeButtonRect);
+	buttons_[4]->setText(u8"G"); // 默认显示G（上帝模式切换）
 	if (smallFont_) buttons_[4]->setFont(smallFont_, app.getRenderer());
-	// 不设置按钮回调，在handleEvent中直接处理（与开始游戏按钮一致）
+	// 不设置按钮回调，在handleEvent中直接处理
 
 	// 不设置按钮回调，在handleEvent中直接处理
 	buttons_[1]->setOnClick([]() { SDL_Log("Settings clicked"); });
@@ -122,6 +124,15 @@ void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
 	// 处理按钮事件
 	for (auto* b : buttons_) if (b) b->handleEvent(e);
 
+	// 处理键盘事件
+	if (e.type == SDL_KEYDOWN) {
+		if (e.key.keysym.sym == SDLK_t) {
+			// T键切换上帝模式
+			App::toggleGodMode();
+			SDL_Log("上帝模式: %s", App::isGodMode() ? "开启" : "关闭");
+		}
+	}
+
 	// 特殊处理开始游戏按钮（避免lambda生命周期问题）
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx = e.button.x, my = e.button.y;
@@ -129,14 +140,16 @@ void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
 			const SDL_Rect& rect = buttons_[0]->getRect();
 			if (mx >= rect.x && mx <= rect.x + rect.w &&
 				my >= rect.y && my <= rect.y + rect.h) {
-				app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState())));
+				// 进入牌组选择界面
+				app.setState(std::unique_ptr<State>(static_cast<State*>(new DeckSelectState())));
 			}
 		}
-		// 处理测试按钮点击
-		if (buttons_[4]) {
+		// 处理上帝模式切换/功能测试按钮点击
+		if (buttons_[4] && App::isGodMode()) {
 			const SDL_Rect& rect = buttons_[4]->getRect();
 			if (mx >= rect.x && mx <= rect.x + rect.w &&
 				my >= rect.y && my <= rect.y + rect.h) {
+				// 上帝模式下：进入功能测试
 				app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
 			}
 		}
@@ -144,6 +157,13 @@ void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void MainMenuState::update(App& app, float dt) {
+	// 处理状态切换
+	if (pendingGoMapExplore_) {
+		pendingGoMapExplore_ = false;
+		app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+		return;
+	}
+
 	const char* charSet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()[]{}|;:,.<>?";
 	int charSetSize = static_cast<int>(strlen(charSet));
 
@@ -358,6 +378,20 @@ void MainMenuState::render(App& app) {
 	// 按钮及其装饰花纹
 	for (size_t i = 0; i < buttons_.size(); ++i) {
 		if (buttons_[i]) {
+			// 上帝模式按钮只在按T键后才显示
+			if (i == 4 && !App::isGodMode()) {
+				continue;
+			}
+			
+			// 动态更新按钮文本
+			if (i == 4) {
+				if (App::isGodMode()) {
+					buttons_[4]->setText(u8"T"); // 上帝模式下显示T（测试）
+				} else {
+					buttons_[4]->setText(u8"G"); // 非上帝模式下显示G（上帝模式切换）
+				}
+			}
+			
 			buttons_[i]->render(r);
 
 			// 每个按钮的侧边装饰（科技感增强）

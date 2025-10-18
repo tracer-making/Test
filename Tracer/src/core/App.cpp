@@ -10,6 +10,11 @@
 #include "Cards.h"
 #include "Deck.h"
 
+// 定义静态成员变量
+bool App::godMode_ = false;
+bool App::temperBlessing_ = false;
+std::string App::selectedInitialDeck_ = "";
+
 App::App() = default;
 App::~App() { shutdown(); }
 

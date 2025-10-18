@@ -163,6 +163,8 @@
     <ClCompile Include="src\states\TestState.cpp" />
     <ClCompile Include="src\states\MapExploreState.cpp" />
     <ClCompile Include="src\states\WenxinTrialState.cpp" />
+    <ClCompile Include="src\states\DeckViewState.cpp" />
+    <ClCompile Include="src\states\DeckSelectState.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -192,6 +194,8 @@
     <ClInclude Include="src\states\TestState.h" />
     <ClInclude Include="src\states\MapExploreState.h" />
     <ClInclude Include="src\states\WenxinTrialState.h" />
+    <ClInclude Include="src\states\DeckViewState.h" />
+    <ClInclude Include="src\states\DeckSelectState.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

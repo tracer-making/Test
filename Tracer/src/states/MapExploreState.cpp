@@ -15,6 +15,7 @@
 #include "SeekerState.h"
 #include "TemperState.h"
 #include "WenxinTrialState.h"
+#include "DeckViewState.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
 #include "../ui/Button.h"
@@ -30,6 +31,7 @@
 
 // 静态成员变量定义（仅控制首次自动生成）
 bool MapExploreState::s_mapGenerated_ = false;
+bool MapExploreState::s_firstMapEnter_ = false;
 
 MapExploreState::MapExploreState() = default;
 MapExploreState::~MapExploreState() {
@@ -98,7 +100,7 @@ void MapExploreState::onEnter(App& app) {
     // 只在第一次进入时生成地图；否则从全局MapStore恢复
     auto& ms = MapStore::instance();
     if (!s_mapGenerated_ || !ms.hasMap()) {
-    generateLayeredMap();
+        generateLayeredMap(true); // 第一次生成，需要构建偏移
         s_mapGenerated_ = true;
         // 将本地数据写入全局
         ms.layerNodes().clear();
@@ -106,10 +108,17 @@ void MapExploreState::onEnter(App& app) {
         for (size_t i = 0; i < layerNodes_.size(); ++i) {
             ms.layerNodes()[i].clear();
             ms.layerNodes()[i].reserve(layerNodes_[i].size());
-            for (const auto& n : layerNodes_[i]) {
+            for (size_t j = 0; j < layerNodes_[i].size(); ++j) {
+                const auto& n = layerNodes_[i][j];
                 MapStore::MapNodeData d;
                 d.layer = n.layer; d.x = n.x; d.y = n.y; d.size = n.size; d.label = n.label;
                 d.visited = n.visited; d.accessible = n.accessible; d.connections = n.connections;
+                // 保存随机位移数据
+                int globalIdx = getGlobalNodeIndex(static_cast<int>(i), static_cast<int>(j));
+                if (globalIdx >= 0 && globalIdx < static_cast<int>(nodeDisplayOffset_.size())) {
+                    d.displayOffsetX = nodeDisplayOffset_[globalIdx].x;
+                    d.displayOffsetY = nodeDisplayOffset_[globalIdx].y;
+                }
                 switch (n.type) {
                 case MapNode::NodeType::START: d.type = MapStore::MapNodeData::NodeType::START; break;
                 case MapNode::NodeType::NORMAL: d.type = MapStore::MapNodeData::NodeType::NORMAL; break;
@@ -132,13 +141,31 @@ void MapExploreState::onEnter(App& app) {
         // 从全局读回
         layerNodes_.clear();
         layerNodes_.resize(ms.layerNodes().size());
+        
+        // 先初始化nodeDisplayOffset_数组
+        int totalNodes = 0;
+        for (const auto& layer : ms.layerNodes()) {
+            totalNodes += static_cast<int>(layer.size());
+        }
+        nodeDisplayOffset_.clear();
+        nodeDisplayOffset_.resize(totalNodes, SDL_Point{0, 0});
+        
+        // 使用简单的计数器来恢复随机位移
+        int globalOffsetIndex = 0;
         for (size_t i = 0; i < ms.layerNodes().size(); ++i) {
             layerNodes_[i].clear();
             layerNodes_[i].reserve(ms.layerNodes()[i].size());
-            for (const auto& d : ms.layerNodes()[i]) {
+            for (size_t j = 0; j < ms.layerNodes()[i].size(); ++j) {
+                const auto& d = ms.layerNodes()[i][j];
                 MapNode n;
                 n.layer = d.layer; n.x = d.x; n.y = d.y; n.size = d.size; n.label = d.label;
                 n.visited = d.visited; n.accessible = d.accessible; n.connections = d.connections;
+                // 恢复随机位移数据
+                if (globalOffsetIndex < static_cast<int>(nodeDisplayOffset_.size())) {
+                    nodeDisplayOffset_[globalOffsetIndex].x = d.displayOffsetX;
+                    nodeDisplayOffset_[globalOffsetIndex].y = d.displayOffsetY;
+                    globalOffsetIndex++;
+                }
                 switch (d.type) {
                 case MapStore::MapNodeData::NodeType::START: n.type = MapNode::NodeType::START; break;
                 case MapStore::MapNodeData::NodeType::NORMAL: n.type = MapNode::NodeType::NORMAL; break;
@@ -175,7 +202,7 @@ void MapExploreState::onEnter(App& app) {
             regenerateButton_->setFont(smallFont_, app.getRenderer());
         }
         regenerateButton_->setOnClick([this]() {
-            generateLayeredMap();
+            generateLayeredMap(true); // 重新生成，需要构建偏移
             s_mapGenerated_ = true; // 确保标志被设置
             // 更新全局
             auto& ms = MapStore::instance();
@@ -292,6 +319,30 @@ void MapExploreState::onEnter(App& app) {
     }
     // 进入时更新滚动边界
     updateScrollBounds();
+    
+    // 从MapStore加载scrollY_值
+    scrollY_ = ms.scrollY();
+    
+    // 第一次进入地图时scrollY_=0，之后每次进入向上移动200像素
+    SDL_Log("Before scroll logic: s_firstMapEnter_=%s, scrollY_=%d", s_firstMapEnter_ ? "true" : "false", scrollY_);
+    
+    if (!s_firstMapEnter_) {
+        s_firstMapEnter_ = true;
+        scrollY_ = 0;  // 第一次进入地图，设置为0
+        SDL_Log("First map enter: scrollY_ set to 0");
+    } else {
+        int oldScrollY = scrollY_;
+        scrollY_ += 200;  // 后续进入地图，向上移动200像素
+        SDL_Log("Subsequent map enter: scrollY_ %d -> %d", oldScrollY, scrollY_);
+    }
+    
+    if (scrollY_ < 0) scrollY_ = 0;
+    if (scrollY_ > maxScrollY_) scrollY_ = maxScrollY_;
+    
+    // 保存scrollY_值到MapStore
+    ms.scrollY() = scrollY_;
+    
+    SDL_Log("Final map scroll position: scrollY_=%d, maxScrollY_=%d", scrollY_, maxScrollY_);
 }
 
 void MapExploreState::onExit(App& app) {
@@ -317,15 +368,22 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         return;
     }
     
-    // 处理文心试炼（T键）
+    // 处理上帝模式切换（T键）
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_t) {
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new WenxinTrialState())));
+        godMode_ = !godMode_;
+        SDL_Log("God mode %s", godMode_ ? "enabled" : "disabled");
+        return;
+    }
+    
+    // 处理牌库查看（W键）
+    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_w) {
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new DeckViewState())));
         return;
     }
     
     // 处理重新生成地图（R键）
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_r) {
-        generateLayeredMap();
+        generateLayeredMap(true); // 重新生成，需要构建偏移
         s_mapGenerated_ = true; // 确保标志被设置
         // 更新全局
         auto& ms = MapStore::instance();
@@ -334,10 +392,17 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         for (size_t i = 0; i < layerNodes_.size(); ++i) {
             ms.layerNodes()[i].clear();
             ms.layerNodes()[i].reserve(layerNodes_[i].size());
-            for (const auto& n : layerNodes_[i]) {
+            for (size_t j = 0; j < layerNodes_[i].size(); ++j) {
+                const auto& n = layerNodes_[i][j];
                 MapStore::MapNodeData d;
                 d.layer = n.layer; d.x = n.x; d.y = n.y; d.size = n.size; d.label = n.label;
                 d.visited = n.visited; d.accessible = n.accessible; d.connections = n.connections;
+                // 保存随机位移数据
+                int globalIdx = getGlobalNodeIndex(static_cast<int>(i), static_cast<int>(j));
+                if (globalIdx >= 0 && globalIdx < static_cast<int>(nodeDisplayOffset_.size())) {
+                    d.displayOffsetX = nodeDisplayOffset_[globalIdx].x;
+                    d.displayOffsetY = nodeDisplayOffset_[globalIdx].y;
+                }
                 switch (n.type) {
                 case MapNode::NodeType::START: d.type = MapStore::MapNodeData::NodeType::START; break;
                 case MapNode::NodeType::NORMAL: d.type = MapStore::MapNodeData::NodeType::NORMAL; break;
@@ -369,14 +434,19 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
     }
     if (backToTestButton_) backToTestButton_->handleEvent(e);
 
-    // 滚轮滚动地图
-    if (e.type == SDL_MOUSEWHEEL) {
+    // 滚轮滚动地图（仅在上帝模式下生效）
+    if (e.type == SDL_MOUSEWHEEL && godMode_) {
         // 定义：scrollY_ = 0 表示顶部对齐；scrollY_ 增大表示向下滚动
         // 期望行为：鼠标向上滚，地图向上移动 ⇒ scrollY_ 减小；
         // SDL 中 e.wheel.y>0 表示向上滚，因此使用相反方向：scrollY_ -= e.wheel.y * scrollStep_
+        int oldScrollY = scrollY_;
         scrollY_ += e.wheel.y * scrollStep_;
         if (scrollY_ < 0) scrollY_ = 0;              // 向上极限
         if (scrollY_ > maxScrollY_) scrollY_ = maxScrollY_; // 向下极限
+        
+        // 输出滚轮移动信息
+        SDL_Log("Wheel scroll: wheel.y=%d, oldScrollY=%d, newScrollY=%d, maxScrollY=%d", 
+                e.wheel.y, oldScrollY, scrollY_, maxScrollY_);
     }
 
     // 处理鼠标点击到节点
@@ -528,6 +598,11 @@ void MapExploreState::render(App& app) {
             // 如果按钮渲染失败，忽略错误
         }
     }
+    
+    // 渲染上帝模式提示
+    if (godMode_) {
+        renderGodModeIndicator(r);
+    }
     // 渲染复杂度按钮
     for (auto* b : difficultyButtons_) {
         if (!b) continue;
@@ -553,9 +628,36 @@ void MapExploreState::renderTitle(SDL_Renderer* renderer) {
     }
 }
 
-void MapExploreState::generateLayeredMap() {
+void MapExploreState::renderGodModeIndicator(SDL_Renderer* renderer) {
+    // 在屏幕右上角显示上帝模式指示器
+    SDL_Rect indicatorRect = {
+        screenW_ - 200,
+        20,
+        180,
+        30
+    };
+    
+    // 绘制半透明背景
+    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 128); // 黄色半透明
+    SDL_RenderFillRect(renderer, &indicatorRect);
+    
+    // 绘制边框
+    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255); // 黄色
+    SDL_RenderDrawRect(renderer, &indicatorRect);
+    
+    // 这里可以添加文字渲染，但需要字体支持
+    // 暂时用简单的视觉指示器
+}
+
+
+void MapExploreState::generateLayeredMap(bool shouldBuildOffsets) {
     SDL_Log("Generating map for layer %d", currentMapLayer_);
     generateMapForLayer(currentMapLayer_);
+    
+    // 根据参数决定是否构建显示偏移
+    if (shouldBuildOffsets) {
+        buildDisplayOffsets();
+    }
 }
 
 void MapExploreState::generateMapForLayer(int layer) {
@@ -597,7 +699,7 @@ void MapExploreState::generateMapForLayer(int layer) {
     }
     
     // 3. 构建仅用于显示的偏移（不改变逻辑坐标/连接）
-    buildDisplayOffsets();
+    // 注意：现在由generateLayeredMap()的shouldBuildOffsets参数控制
 
     // 4. 为每一行节点分配不重复的事件标签（仅显示用）
     assignRowEventLabels();
@@ -635,7 +737,7 @@ void MapExploreState::generateMapForLayer(int layer) {
 }
 
 void MapExploreState::generateFirstLayerPattern(std::mt19937& gen) {
-    // 第一层：第一步必定是以物易物(1)，然后按23123123122模式
+    // 第一层：第一行必定是"以物易物"且只有1个节点，然后按23123123122模式
     std::vector<int> pattern = {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 2}; // 12个节点类型
     
     // 使用世界坐标：起点y=0，向上为负，每行固定间距（进一步加大垂直间距）
@@ -647,14 +749,20 @@ void MapExploreState::generateFirstLayerPattern(std::mt19937& gen) {
     int currentY = -rowSpacing; // 第一行在y=-rowSpacing
     
     for (size_t i = 0; i < pattern.size(); ++i) {
-        int roll = nodeCountDist(gen);
         int nodeCount;
-        if (roll <= 3) {
-            nodeCount = 1; // 概率 3/10
-        } else if (roll <= 7) {
-            nodeCount = 2; // 概率 4/10
+        
+        // 第一行（索引0）必定只有1个节点
+        if (i == 0) {
+            nodeCount = 1;
         } else {
-            nodeCount = 3; // 概率 3/10
+            int roll = nodeCountDist(gen);
+            if (roll <= 3) {
+                nodeCount = 1; // 概率 3/10
+            } else if (roll <= 7) {
+                nodeCount = 2; // 概率 4/10
+            } else {
+                nodeCount = 3; // 概率 3/10
+            }
         }
         
         // 为这个类型生成1-3个节点
@@ -1437,7 +1545,7 @@ void MapExploreState::validateAndTrimPaths() {
     // 检查从起点到BOSS点是否存在至少一条完整路径
     if (!hasPathFromStartToBoss()) {
         SDL_Log("Warning: No path from start to boss found, regenerating...");
-        generateLayeredMap(); // 重新生成
+        generateLayeredMap(true); // 重新生成，需要构建偏移
         s_mapGenerated_ = true; // 确保标志被设置
         return;
     }
@@ -1445,7 +1553,7 @@ void MapExploreState::validateAndTrimPaths() {
     // 检查从起点延伸的每一条路径都能到达BOSS
     if (!allPathsFromStartReachBoss()) {
         SDL_Log("Warning: Not all paths from start reach boss, regenerating...");
-        generateLayeredMap(); // 重新生成
+        generateLayeredMap(true); // 重新生成，需要构建偏移
         s_mapGenerated_ = true; // 确保标志被设置
         return;
     }
@@ -1677,6 +1785,9 @@ void MapExploreState::assignRowEventLabels() {
         if (idxs.empty()) continue;
         MapNode::NodeType rowType = nodes[idxs[0]].type;
 
+        // 特殊处理：第一层的第一行必定是"以物易物"
+        bool isFirstLayerFirstRow = (currentMapLayer_ == 1 && kv.first == -220); // 第一行的Y坐标是-220
+        
         // 根据当前地图层和节点类型构建可用事件池
         std::vector<std::string> availableEvents;
         const std::vector<EventWithWeight>* eventList = nullptr;
@@ -1689,21 +1800,26 @@ void MapExploreState::assignRowEventLabels() {
         }
         
         if (eventList) {
-            for (const auto& event : *eventList) {
-                // 如果是第一层，只允许 allowedInFirstLayer 为 true 的事件
-                if (currentMapLayer_ == 1 && !event.allowedInFirstLayer) {
-                    continue;
-                }
-                
-                // 检查是否已经使用过（只限制"以物易物"和"墨坊"每层最多1个）
-                if ((event.name == u8"以物易物" || event.name == u8"墨坊") && 
-                    usedEvents.find(event.name) != usedEvents.end()) {
-                    continue;
-                }
-                
-                // 根据权重添加事件到池中
-                for (int i = 0; i < event.weight; ++i) {
-                    availableEvents.push_back(event.name);
+            // 特殊处理：第一层第一行强制分配"以物易物"
+            if (isFirstLayerFirstRow) {
+                availableEvents.push_back(u8"以物易物");
+            } else {
+                for (const auto& event : *eventList) {
+                    // 如果是第一层，只允许 allowedInFirstLayer 为 true 的事件
+                    if (currentMapLayer_ == 1 && !event.allowedInFirstLayer) {
+                        continue;
+                    }
+                    
+                    // 检查是否已经使用过（只限制"以物易物"和"墨坊"每层最多1个）
+                    if ((event.name == u8"以物易物" || event.name == u8"墨坊") && 
+                        usedEvents.find(event.name) != usedEvents.end()) {
+                        continue;
+                    }
+                    
+                    // 根据权重添加事件到池中
+                    for (int i = 0; i < event.weight; ++i) {
+                        availableEvents.push_back(event.name);
+                    }
                 }
             }
         }
@@ -1805,40 +1921,26 @@ void MapExploreState::buildDisplayOffsets() {
     std::uniform_int_distribution<int> jx(-40, 40);
     std::uniform_int_distribution<int> jy(-20, 20);
 
-    // 处理中间层（layer 1）
-    if (layerNodes_.size() > 1) {
-        std::map<int, std::vector<int>> rows; // y -> local idx list
-        for (size_t i = 0; i < layerNodes_[1].size(); ++i) {
-            rows[layerNodes_[1][i].y].push_back(static_cast<int>(i));
-        }
-        for (auto& kv : rows) {
-            auto& idxs = kv.second;
-            // 基于排序的等分布局参考x
-            std::vector<int> xs; xs.reserve(idxs.size());
-            for (int idx : idxs) xs.push_back(layerNodes_[1][idx].x);
-            std::sort(xs.begin(), xs.end());
-            for (int idx : idxs) {
-                int g = getGlobalNodeIndex(1, idx);
-                if (g != -1 && g < static_cast<int>(nodeDisplayOffset_.size())) {
+    // 为所有层（除了起点和终点）的节点添加随机位移
+    for (int layer = 0; layer <= numLayers_; ++layer) {
+        if (layerNodes_.size() <= layer) continue;
+        
+        for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
+            int g = getGlobalNodeIndex(layer, static_cast<int>(i));
+            if (g != -1 && g < static_cast<int>(nodeDisplayOffset_.size())) {
+                // 起点和终点保持较小抖动，其他节点正常随机位移
+                if ((layer == 0 && i == 0) || (layer == numLayers_ && i == 0)) {
+                    // 起点和终点：较小抖动
+                    std::uniform_int_distribution<int> smallJx(-10, 10);
+                    std::uniform_int_distribution<int> smallJy(-5, 5);
+                    nodeDisplayOffset_[g].x = smallJx(gen);
+                    nodeDisplayOffset_[g].y = smallJy(gen);
+                } else {
+                    // 其他节点：正常随机位移
                     nodeDisplayOffset_[g].x = jx(gen);
                     nodeDisplayOffset_[g].y = jy(gen);
                 }
             }
-        }
-    }
-    // 起点与终点保持较小的抖动
-    if (!layerNodes_[0].empty()) {
-        int g = getGlobalNodeIndex(0, 0);
-        if (g != -1 && g < static_cast<int>(nodeDisplayOffset_.size())) {
-            nodeDisplayOffset_[g].x = 0;
-            nodeDisplayOffset_[g].y = 0;
-        }
-    }
-    if (numLayers_ >= 2 && !layerNodes_[numLayers_].empty()) {
-        int g = getGlobalNodeIndex(numLayers_, 0);
-        if (g != -1 && g < static_cast<int>(nodeDisplayOffset_.size())) {
-            nodeDisplayOffset_[g].x = 0;
-            nodeDisplayOffset_[g].y = 0;
         }
     }
 }

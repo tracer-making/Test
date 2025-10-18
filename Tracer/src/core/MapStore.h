@@ -16,6 +16,9 @@ public:
 		std::vector<int> connections;
 		int size = 44;
 		std::string label;
+		// 随机位移数据
+		int displayOffsetX = 0;
+		int displayOffsetY = 0;
 	};
 
 	static MapStore& instance() {
@@ -45,6 +48,7 @@ public:
 	int& playerCurrentNode() { return playerCurrentNode_; }
 	std::vector<int>& accessibleNodes() { return accessibleNodes_; }
 	bool& generated() { return generated_; }
+	int& scrollY() { return scrollY_; }
 
 private:
 	MapStore() = default;
@@ -60,6 +64,7 @@ private:
 	int currentMapLayer_ = 1;
 	int playerCurrentNode_ = -1;
 	std::vector<int> accessibleNodes_{};
+	int scrollY_ = 0;
 };
 
 

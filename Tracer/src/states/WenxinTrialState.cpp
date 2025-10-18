@@ -39,7 +39,8 @@ void WenxinTrialState::onEnter(App& app) {
 void WenxinTrialState::onExit(App& app) {}
 
 void WenxinTrialState::handleEvent(App& app, const SDL_Event& e) {
-    if (backButton_) backButton_->handleEvent(e);
+    // 处理按钮事件（只在上帝模式下）
+    if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
     
     // 如果奖励卡牌准备好，处理点击事件
     if (rewardCardReady_ && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -163,7 +164,8 @@ void WenxinTrialState::render(App& app) {
         SDL_RenderCopy(r, titleTex_, nullptr, &d); 
     }
     
-    if (backButton_) backButton_->render(r);
+    // 返回按钮（只在上帝模式下显示）
+    if (backButton_ && App::isGodMode()) backButton_->render(r);
 
     // 如果试炼已开始，不显示试炼卡牌
     if (!trialStarted_) {
@@ -616,16 +618,26 @@ void WenxinTrialState::startCardsFadeOut() {
 }
 
 void WenxinTrialState::generateRewardCard() {
-    // 从所有牌库（CardDB）中随机选择一张卡牌
+    // 从所有牌库（CardDB）中随机选择一张可获取的卡牌
     auto allCardIds = CardDB::instance().allIds();
-    if (allCardIds.empty()) {
-        // 如果CardDB为空，使用默认卡牌
+    std::vector<std::string> obtainableIds;
+    
+    // 过滤出可获取的卡牌
+    for (const auto& id : allCardIds) {
+        Card c = CardDB::instance().make(id);
+        if (c.obtainable) {
+            obtainableIds.push_back(id);
+        }
+    }
+    
+    if (obtainableIds.empty()) {
+        // 如果没有可获取的卡牌，使用默认卡牌
         rewardCard_ = CardDB::instance().make("shulin_shucheng");
     } else {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(0, (int)allCardIds.size() - 1);
-        std::string randomCardId = allCardIds[dis(gen)];
+        std::uniform_int_distribution<> dis(0, (int)obtainableIds.size() - 1);
+        std::string randomCardId = obtainableIds[dis(gen)];
         rewardCard_ = CardDB::instance().make(randomCardId);
     }
     

@@ -74,8 +74,8 @@ void BattleState::onEnter(App& app) {
 	infoFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 18);
 	enemyFont_ = TTF_OpenFont("assets/fonts/Sanji.ttf", 48);  // 敌人区域使用更大字体
 
-    // 初始化战斗
-    initializeBattle();
+	// 初始化战斗
+	initializeBattle();
     // 焚书增益：初始魂骨+extraInitialBones
     boneCount_ += ItemStore::instance().extraInitialBones;
 
@@ -133,8 +133,8 @@ void BattleState::onExit(App& app) {
 }
 
 void BattleState::handleEvent(App& app, const SDL_Event& e) {
-	// 处理按钮事件
-	if (backButton_) backButton_->handleEvent(e);
+	// 处理按钮事件（只在上帝模式下）
+	if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
 
 	// 处理键盘事件
 	if (e.type == SDL_KEYDOWN) {
@@ -1512,6 +1512,9 @@ void BattleState::update(App& app, float dt) {
 	// 处理被推动卡牌动画
 	updatePushedAnimation(dt);
 
+	// 处理胜利动画
+	updateVictoryAnimation(dt);
+
 	// 检测卡牌死亡，获得魂骨
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
 		bool wasAlive = previousCardStates_[i];
@@ -1777,7 +1780,7 @@ void BattleState::initializeBattle() {
 		
 		// 随机印记效果：加入手牌时，删去随机印记并添加任意一个印记
 		applyRandomMarkEffect(card);
-		handCards_.push_back(card);
+			handCards_.push_back(card);
 		store.hand().push_back(card);
 	}
 
@@ -2531,6 +2534,7 @@ void BattleState::checkGameOver() {
     if (meterActualPos_ >= 5) {
         int wenmaiGained = meterActualPos_ - 5;
         currentPhase_ = GamePhase::GameOver;
+        std::cout << "[VICTORY] 墨尺胜利！actualPos=" << meterActualPos_ << ", wenmaiGained=" << wenmaiGained << std::endl;
         if (wenmaiGained > 0) {
             // 添加文脉到全局存储
             WenMaiStore::instance().add(wenmaiGained);
@@ -2538,23 +2542,32 @@ void BattleState::checkGameOver() {
         } else {
             statusMessage_ = "胜利！";
         }
+        // 启动胜利动画
+        startVictoryAnimation();
         return;
     }
 
     // 失败：实际墨尺 <= -5
     if (meterActualPos_ <= -5) {
         currentPhase_ = GamePhase::GameOver;
+        std::cout << "[DEFEAT] 墨尺失败！actualPos=" << meterActualPos_ << std::endl;
         statusMessage_ = "游戏失败！";
         return;
     }
 
 	if (playerHealth_ <= 0) {
 		currentPhase_ = GamePhase::GameOver;
+		std::cout << "[DEFEAT] 玩家血量失败！playerHealth=" << playerHealth_ << std::endl;
 		statusMessage_ = "游戏失败！";
+		return;
 	}
 	else if (enemyHealth_ <= 0) {
 		currentPhase_ = GamePhase::GameOver;
+		std::cout << "[VICTORY] 敌方血量胜利！enemyHealth=" << enemyHealth_ << std::endl;
 		statusMessage_ = "胜利！";
+		// 启动胜利动画
+		startVictoryAnimation();
+		return;
 	}
 }
 
@@ -2710,6 +2723,14 @@ void BattleState::renderBattlefield(App& app) {
 				renderRect = bfCard.rect;
 			}
 
+			// 胜利动画：所有卡牌淡出
+			float victoryAlpha = 1.0f;
+			if (isVictoryAnimating_) {
+				float victoryProgress = victoryAnimTime_ / victoryAnimDuration_;
+				victoryAlpha = 1.0f - victoryProgress; // 从1.0淡出到0.0
+				victoryAlpha = std::max(0.0f, victoryAlpha);
+			}
+
 			// 成长轻量动画：对待成长卡片做轻微放大与发光
 			if (isGrowthAnimating_) {
 				bool willGrowHere = false;
@@ -2765,6 +2786,13 @@ void BattleState::renderBattlefield(App& app) {
 					int y2 = centerY + 8 + static_cast<int>(4 * std::sin(i * 0.3));
 					SDL_RenderDrawLine(r, x, y1, x, y2);
 				}
+				
+				// 胜利动画：应用alpha值到水袭卡牌
+				if (isVictoryAnimating_ && victoryAlpha < 1.0f) {
+					SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+					SDL_SetRenderDrawColor(r, 0, 0, 0, static_cast<Uint8>(255 * (1.0f - victoryAlpha)));
+					SDL_RenderFillRect(r, &renderRect);
+				}
 			}
 			else {
 				// 正常渲染卡牌
@@ -2776,7 +2804,21 @@ void BattleState::renderBattlefield(App& app) {
 				} else {
 					tempCard.attack = getDisplayAttackForIndex(i);
 				}
+				
+				// 胜利动画：应用alpha值
+				if (isVictoryAnimating_ && victoryAlpha < 1.0f) {
+					// 手动实现alpha效果：先渲染到临时表面，然后应用alpha
+					// 由于CardRenderer不支持alpha，我们使用半透明遮罩的方式
+					CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+					
+					// 应用半透明遮罩来实现淡出效果
+					SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+					SDL_SetRenderDrawColor(r, 0, 0, 0, static_cast<Uint8>(255 * (1.0f - victoryAlpha)));
+					SDL_RenderFillRect(r, &renderRect);
+				} else {
+					// 正常渲染
 				CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+				}
 			}
 
 			// 显示献祭符号
@@ -3983,8 +4025,8 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		if (attacker.isPlayer) {
                 // 扣除敌方血量，并按溢出计入文脉
                 int before = enemyHealth_;
-                enemyHealth_ -= damage;
-				if (enemyHealth_ < 0) enemyHealth_ = 0;
+			enemyHealth_ -= damage;
+			if (enemyHealth_ < 0) enemyHealth_ = 0;
 				
 				// 更新墨尺：直接增加伤害值
 				meterActualPos_ += damage;
@@ -4018,7 +4060,7 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 		if (attacker.isPlayer) {
             {
                 int before = enemyHealth_;
-                enemyHealth_ -= damage;
+			enemyHealth_ -= damage;
             }
 			if (enemyHealth_ < 0) enemyHealth_ = 0;
 			
@@ -4046,11 +4088,11 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 	if (hasAirStrike) {
 		bool targetHasHighJump = hasMark(target.card, u8"高跳");
 		if (!targetHasHighJump) {
-		// 空袭攻击非高跳目标，直接攻击本体
-		if (attacker.isPlayer) {
+			// 空袭攻击非高跳目标，直接攻击本体
+			if (attacker.isPlayer) {
                 {
                     int before = enemyHealth_;
-                    enemyHealth_ -= damage;
+				enemyHealth_ -= damage;
                 }
 				if (enemyHealth_ < 0) enemyHealth_ = 0;
 				
@@ -4727,8 +4769,8 @@ void BattleState::renderUI(App& app) {
 		}
 	}
 
-	// 渲染按钮
-	if (backButton_) backButton_->render(r);
+	// 渲染按钮（只在上帝模式下显示）
+	if (backButton_ && App::isGodMode()) backButton_->render(r);
 
 	// 显示魂骨数量（战斗区域和道具区域之间，白色骨头图案）
 	if (boneCount_ > 0) {
@@ -5514,6 +5556,7 @@ void BattleState::onMovementComplete() {
 			checkGameOver();
 			if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
 			
+			// 只有在游戏没有结束时才切换到敌方回合
 			currentPhase_ = GamePhase::EnemyTurn;
 			currentTurn_++; // 有移动时，从玩家回合切到敌方回合也需要递增回合数
 			hasDrawnThisTurn_ = false; // 重置抽牌状态
@@ -5526,21 +5569,48 @@ void BattleState::onMovementComplete() {
 }
 
 bool BattleState::parseOneTurnGrowthTarget(const Card& card, std::string& outTargetName) {
-	// 仅支持：
-	//  - "一回合成长"（仅数值成长）
-	//  - "一回合成长XXXX"（目标名直接拼接）
+	// 检查是否有"一回合成长"印记
+	bool hasGrowthMark = false;
 	for (const auto& mk : card.marks) {
-		if (mk.rfind(u8"一回合成长", 0) == 0) {
-			// 取前缀后的剩余部分作为目标名（可能为空）
-			std::string tail = mk.substr(std::string(u8"一回合成长").size());
-			// 去除两端空白
-			while (!tail.empty() && (tail.front() == ' ' || tail.front() == '\t')) tail.erase(tail.begin());
-			while (!tail.empty() && (tail.back() == ' ' || tail.back() == '\t')) tail.pop_back();
-			outTargetName = tail; // 空字符串表示仅数值成长
-			return true;
+		if (mk == u8"一回合成长") {
+			hasGrowthMark = true;
+			break;
 		}
 	}
-	return false;
+	
+	if (!hasGrowthMark) return false;
+	
+	// 通过卡牌ID特例检测来确定成长目标
+	if (card.id == "xuanwu_zhi") {
+		outTargetName = u8"玄乌";
+	} else if (card.id == "canglang_youhun") {
+		outTargetName = u8"朔漠苍狼";
+	} else if (card.id == "yunqu_youmi") {
+		outTargetName = u8"云渠巨麋";
+	} else if (card.id == "xueyuan_langpei") {
+		outTargetName = u8"霜牙战狼";
+	} else if (card.id == "shuchong_yizhuan") {
+		outTargetName = u8"书虫墨茧";
+	} else if (card.id == "shuchong_mojian") {
+		outTargetName = u8"羽人墨客";
+	} else if (card.id == "xuanbei_dou") {
+		outTargetName = u8"碧蟾";
+	} else if (card.id == "yunqu_jumi") {
+		outTargetName = u8"千峰驼鹿";
+	} else if (card.id == "shuangdao_moke") {
+		outTargetName = u8"刀笔吏";
+	} else if (card.id == "chaojing_gongyi") {
+		outTargetName = u8"典诰蚁后";
+	} else if (card.id == "yifei_yi") {
+		outTargetName = u8"典诰蚁后";
+	} else if (card.id == "chuanfen_yanzi") {
+		outTargetName = u8"穿坟隐士";
+	} else {
+		// 默认数值成长
+		outTargetName = "";
+	}
+	
+	return true;
 }
 
 std::string BattleState::findCardIdByName(const std::string& nameUtf8) {
@@ -6156,5 +6226,29 @@ void BattleState::updateFuhunsuoAnimation(float dt) {
 		fuhunsuoAnimTime_ = 0.0f;
 		fuhunsuoFromIndex_ = -1;
 		fuhunsuoToIndex_ = -1;
+	}
+}
+
+// 胜利动画相关方法实现
+void BattleState::startVictoryAnimation() {
+	isVictoryAnimating_ = true;
+	victoryAnimTime_ = 0.0f;
+	std::cout << "[VICTORY] 开始胜利动画！" << std::endl;
+}
+
+void BattleState::updateVictoryAnimation(float dt) {
+	if (!isVictoryAnimating_) return;
+	
+	victoryAnimTime_ += dt;
+	
+	// 动画完成
+	if (victoryAnimTime_ >= victoryAnimDuration_) {
+		// 重置动画状态
+		isVictoryAnimating_ = false;
+		victoryAnimTime_ = 0.0f;
+		
+		// 设置返回地图标志
+		pendingGoMapExplore_ = true;
+		std::cout << "[VICTORY] 胜利动画完成，返回地图！" << std::endl;
 	}
 }

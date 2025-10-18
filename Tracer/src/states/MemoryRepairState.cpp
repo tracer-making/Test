@@ -203,11 +203,11 @@ void MemoryRepairState::buildCandidates() {
     std::shuffle(ids.begin(), ids.end(), gen);
     std::vector<std::string> filtered;
     if (sessionHint_ == BackHintType::KnownTribe) {
-        // 从不同部族各取一张，最多三张；忽略“其他”类别
+        // 从不同部族各取一张，最多三张；忽略"其他"类别，只考虑可获取的卡牌
         std::unordered_map<std::string, std::vector<std::string>> catToIds;
         for (const auto& id : ids) {
             Card c = CardDB::instance().make(id);
-            if (c.category.empty() || c.category == u8"其他") continue;
+            if (c.category.empty() || c.category == u8"其他" || !c.obtainable) continue;
             catToIds[c.category].push_back(id);
         }
         // 收集并打乱部族列表
@@ -222,9 +222,10 @@ void MemoryRepairState::buildCandidates() {
             filtered.push_back(vec.front());
         }
     } else if (sessionHint_ == BackHintType::KnownCost) {
-        // 只考虑墨滴 1..3（非骨）或魂骨 1..4（骨）
+        // 只考虑墨滴 1..3（非骨）或魂骨 1..4（骨），且必须是可获取的卡牌
         for (const auto& id : ids) {
             Card c = CardDB::instance().make(id);
+            if (!c.obtainable) continue;
             bool hasBone = false; for (const auto& m : c.marks) { if (m == u8"消耗骨头") { hasBone = true; break; } }
             if (hasBone) {
                 if (c.sacrificeCost >= 1 && c.sacrificeCost <= 4) filtered.push_back(id);
@@ -233,7 +234,11 @@ void MemoryRepairState::buildCandidates() {
             }
         }
     } else {
-        filtered = ids;
+        // 默认情况：只考虑可获取的卡牌
+        for (const auto& id : ids) {
+            Card c = CardDB::instance().make(id);
+            if (c.obtainable) filtered.push_back(id);
+        }
     }
     std::shuffle(filtered.begin(), filtered.end(), gen);
     int take = (int)SDL_min((int)filtered.size(), 3);

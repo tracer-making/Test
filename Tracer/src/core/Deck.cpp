@@ -1,5 +1,6 @@
 #include "Deck.h"
 #include "Cards.h"
+#include "App.h"
 #include "EngraveStore.h"
 #include <algorithm>
 
@@ -77,18 +78,36 @@ void DeckStore::initializePlayerDeck() {
 	// 确保CardDB已加载
 	CardDB::instance().loadBuiltinCards();
 	
-	// 使用战斗界面中的初始牌堆：两张书林署丞 + 一张守宫 + 一张刀笔吏 + 一张蛇自环
-	std::vector<std::string> initialCardIds = {
-		"shulin_shucheng",  // 书林署丞
-		"tuopi_mao",        // 兔皮
-		"jinang_mao",       // 金羊皮
-		"langpi",           // 狼皮
-		"shougong",         // 守宫
-		
-		"daobi_li",         // 刀笔吏
-		
-		"tengshe_zihuan"    // 蛇自环iw
-	};
+	// 根据选择的初始牌组设置不同的卡牌
+	std::vector<std::string> initialCardIds;
+	std::string selectedDeck = App::getSelectedInitialDeck();
+	
+	if (selectedDeck == "default_deck") {
+		// 默认牌组：雪尾鼬生、碧蟾、朔漠苍狼
+		initialCardIds = {"xuewei_yousheng", "bichan", "shuomuo_canglang"};
+	} else if (selectedDeck == "xuanmu_deck") {
+		// 玄牧牌组：玄牧、千峰驼鹿、穿坟鼹子
+		initialCardIds = {"xuanmu", "qianfeng_tuolu", "chuanfen_yanzi"};
+	} else if (selectedDeck == "ant_deck") {
+		// 蚂蚁牌组：典诰蚁后、驿飞蚁、黄鼬臭尉
+		initialCardIds = {"diangao_yihou", "yifei_yi", "huangyou_chouwei"};
+	} else if (selectedDeck == "daobi_deck") {
+		// 刀笔吏牌组：刀笔吏、卷册螟蛉、卷册螟蛉
+		initialCardIds = {"daobi_li", "juance_mingling", "juance_mingling"};
+	} else if (selectedDeck == "bone_deck") {
+		// 魂骨牌组：浣沙溪生、雪原狼胚、野皋犺狗
+		initialCardIds = {"huansha_xisheng", "xueyuan_langpei", "yegao_kangou"};
+	} else if (selectedDeck == "weak_deck") {
+		// 弱小牌组：白毫仔、玄贝蚪、守宫
+		initialCardIds = {"baimao_zi", "xuanbei_dou", "shougong"};
+	} else {
+		// 默认牌组（如果没有选择或选择无效）
+		initialCardIds = {"xuewei_yousheng", "bichan", "shuomuo_canglang"};
+	}
+	
+	// 每个牌组都会获得两张兔皮
+	initialCardIds.push_back("tuopi_mao");
+	initialCardIds.push_back("tuopi_mao");
 	
 	// 将卡牌添加到牌库
 	for (const auto& cardId : initialCardIds) {

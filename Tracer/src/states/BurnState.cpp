@@ -77,7 +77,8 @@ void BurnState::onEnter(App& app) {
 void BurnState::onExit(App& app) {}
 
 void BurnState::handleEvent(App& app, const SDL_Event& e) {
-    if (backButton_) backButton_->handleEvent(e);
+	// 处理按钮事件（只在上帝模式下）
+	if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
     if (burnButton_) burnButton_->handleEvent(e);
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         int mx=e.button.x, my=e.button.y;
@@ -142,7 +143,8 @@ void BurnState::render(App& app) {
         }
     }
 
-    if (backButton_) backButton_->render(r);
+    // 返回按钮（只在上帝模式下显示）
+    if (backButton_ && App::isGodMode()) backButton_->render(r);
     if (burnButton_) burnButton_->render(r);
 
 	if (!message_.empty() && smallFont_) {

@@ -36,7 +36,8 @@ void SeekerState::onEnter(App& app) {
 void SeekerState::onExit(App& app) {}
 
 void SeekerState::handleEvent(App& app, const SDL_Event& e) {
-	if (backButton_) backButton_->handleEvent(e);
+	// 处理按钮事件（只在上帝模式下）
+	if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx=e.button.x, my=e.button.y;
 		for (auto& en : entries_) {
@@ -65,7 +66,8 @@ void SeekerState::update(App& app, float dt) {
 void SeekerState::render(App& app) {
 	SDL_Renderer* r = app.getRenderer(); SDL_SetRenderDrawColor(r, 18,22,32,255); SDL_RenderClear(r);
 	if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect d{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r,titleTex_,nullptr,&d); }
-	if (backButton_) backButton_->render(r);
+	// 返回按钮（只在上帝模式下显示）
+	if (backButton_ && App::isGodMode()) backButton_->render(r);
 
 	for (const auto& en : entries_) {
 		if (en.revealed) {
@@ -117,11 +119,21 @@ void SeekerState::buildEntries() {
 		if (i == goldIx) {
 			entries_[i].card = CardDB::instance().make("jinang_mao");
 		} else {
-			// 全牌库随机一张
+			// 全牌库随机一张可获取的卡牌
 			auto all = CardDB::instance().allIds();
-			if (!all.empty()) {
-				std::shuffle(all.begin(), all.end(), g);
-				entries_[i].card = CardDB::instance().make(all.front());
+			std::vector<std::string> obtainableIds;
+			
+			// 过滤出可获取的卡牌
+			for (const auto& id : all) {
+				Card c = CardDB::instance().make(id);
+				if (c.obtainable) {
+					obtainableIds.push_back(id);
+				}
+			}
+			
+			if (!obtainableIds.empty()) {
+				std::shuffle(obtainableIds.begin(), obtainableIds.end(), g);
+				entries_[i].card = CardDB::instance().make(obtainableIds.front());
 			}
 			// 附加两个印记（复用战斗界面的随机印记候选池）
 			std::vector<std::string> availableMarks = {

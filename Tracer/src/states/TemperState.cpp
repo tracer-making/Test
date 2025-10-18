@@ -160,16 +160,28 @@ void TemperState::applyTemper() {
     Card& card = lib[libIndex];
     int& count = temperCountByInstance_[card.instanceId];
     bool success = true;
+    
+    // 检查是否已经获得淬炼祝福（摧毁过卷册螟蛉或巴蛇）
+    bool hasBlessing = App::hasTemperBlessing();
+    
     if (count == 0) {
         success = true; // 第一次必定成功
     } else if (count == 1) {
-        // 第二次50%失败
-        std::random_device rd; std::mt19937 gen(rd()); std::uniform_real_distribution<float> d(0.0f, 1.0f);
-        success = (d(gen) >= 0.5f);
+        if (hasBlessing) {
+            success = true; // 有祝福时第二次也必定成功
+        } else {
+            // 第二次50%失败
+            std::random_device rd; std::mt19937 gen(rd()); std::uniform_real_distribution<float> d(0.0f, 1.0f);
+            success = (d(gen) >= 0.5f);
+        }
     } else {
-        // 第三次及以后：同样50%失败（可按需扩展）
-        std::random_device rd; std::mt19937 gen(rd()); std::uniform_real_distribution<float> d(0.0f, 1.0f);
-        success = (d(gen) >= 0.5f);
+        if (hasBlessing) {
+            success = true; // 有祝福时第三次及以后也必定成功
+        } else {
+            // 第三次及以后：同样50%失败（可按需扩展）
+            std::random_device rd; std::mt19937 gen(rd()); std::uniform_real_distribution<float> d(0.0f, 1.0f);
+            success = (d(gen) >= 0.5f);
+        }
     }
 
     if (success) {
@@ -178,13 +190,20 @@ void TemperState::applyTemper() {
         if (!firstSuccessDone_) firstSuccessDone_ = true; // 标记已完成第一次成功
     } else {
         // 失败则从牌库中删除这张牌
+        // 检查被摧毁的卡牌是否是卷册螟蛉或巴蛇
+        if (card.id == "juance_mingling" || card.id == "bashe") {
+            App::setTemperBlessing(true);
+            message_ = u8"淬炼失败：卡牌被摧毁，但获得了淬炼祝福！";
+        } else {
+            message_ = u8"淬炼失败：卡牌被摧毁";
+        }
+        
         lib.erase(lib.begin() + libIndex);
         selectedLibIndex_ = -1;
         buildSelectionGrid();
-        message_ = u8"淬炼失败：卡牌被摧毁";
     }
     count += 1;
-    // 按下“+”后锁定并隐藏下方列表，不允许再更换
+    // 按下"+"后锁定并隐藏下方列表，不允许再更换
     locked_ = true;
     // 若是第二次（或之后）完成，触发动画并返回地图
     if (count >= 2) {

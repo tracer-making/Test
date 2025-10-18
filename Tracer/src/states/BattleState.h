@@ -377,6 +377,11 @@ private:
 	float destroyAnimDuration_ = 0.5f; // 摧毁动画持续时间
 	std::vector<int> cardsToDestroy_;  // 待摧毁的卡牌索引
 
+	// 胜利动画系统
+	bool isVictoryAnimating_ = false;  // 是否正在播放胜利动画
+	float victoryAnimTime_ = 0.0f;    // 胜利动画时间
+	float victoryAnimDuration_ = 2.0f; // 胜利动画持续时间（2秒）
+
 	// 攻击动画系统
 	bool isAttackAnimating_ = false;   // 是否正在播放攻击动画
 	float attackAnimTime_ = 0.0f;     // 攻击动画时间
@@ -442,6 +447,10 @@ private:
 	// 移动卡牌队列处理方法
 	void processNextMovement();
 	void onMovementComplete();
+
+	// 胜利动画相关方法
+	void startVictoryAnimation();
+	void updateVictoryAnimation(float dt);
 
     // 掘墓人：回合结束时结算骨头增益（仅统计一方）
     // countEnemySide=false 统计我方；true 统计敌方
