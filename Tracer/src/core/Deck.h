@@ -31,6 +31,10 @@ public:
 	// 设置和获取战斗中的待更新数值
 	void setPendingCardUpdates(const std::unordered_map<std::string, std::pair<int, int>>& updates);
 	const std::unordered_map<std::string, std::pair<int, int>>& getPendingCardUpdates() const;
+	
+	// 获取资源数量
+	int getBoneCount() const;
+	int getInkCount() const;
 
 private:
 	DeckStore() = default;

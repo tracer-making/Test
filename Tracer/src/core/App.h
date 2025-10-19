@@ -33,6 +33,14 @@ public:
 	// 初始牌组选择
 	static std::string getSelectedInitialDeck() { return selectedInitialDeck_; }
 	static void setSelectedInitialDeck(const std::string& deckId) { selectedInitialDeck_ = deckId; }
+	
+	// 蜡烛系统（游戏生命值）
+	static int getRemainingCandles() { return remainingCandles_; }
+	static void setRemainingCandles(int count) { remainingCandles_ = count; }
+	static void extinguishCandle() { 
+		if (remainingCandles_ > 0) remainingCandles_--; 
+	}
+	static void resetCandles() { remainingCandles_ = 2; }
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -46,6 +54,8 @@ private:
 	static bool temperBlessing_;
 	// 初始牌组选择
 	static std::string selectedInitialDeck_;
+	// 蜡烛系统（游戏生命值）
+	static int remainingCandles_;
 };
 
 

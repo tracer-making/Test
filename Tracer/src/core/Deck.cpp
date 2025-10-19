@@ -142,4 +142,27 @@ const std::unordered_map<std::string, std::pair<int, int>>& DeckStore::getPendin
 	return pendingCardUpdates_;
 }
 
+int DeckStore::getBoneCount() const {
+	// 计算所有卡牌中消耗骨头的数量
+	int boneCount = 0;
+	for (const auto& card : hand_) {
+		for (const auto& mark : card.marks) {
+			if (mark == u8"消耗骨头") {
+				boneCount++;
+				break;
+			}
+		}
+	}
+	return boneCount;
+}
+
+int DeckStore::getInkCount() const {
+	// 计算所有卡牌的献祭消耗（墨滴）
+	int inkCount = 0;
+	for (const auto& card : hand_) {
+		inkCount += card.sacrificeCost;
+	}
+	return inkCount;
+}
+
 

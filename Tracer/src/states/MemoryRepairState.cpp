@@ -7,6 +7,9 @@
 #include <random>
 #include <algorithm>
 
+// 定义静态变量
+MemoryRepairState::BackHintType MemoryRepairState::mapHintType_ = BackHintType::Unknown;
+
 static void drawBackIcon(SDL_Renderer* r, bool bone, int x, int y, int size) {
     if (bone) {
         SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
@@ -26,9 +29,11 @@ static void drawBackIcon(SDL_Renderer* r, bool bone, int x, int y, int size) {
 
 MemoryRepairState::MemoryRepairState() {
 	backButton_ = new Button();
+	rerollButton_ = new Button();
 }
 MemoryRepairState::~MemoryRepairState() {
 	if (backButton_) { delete backButton_; backButton_ = nullptr; }
+	if (rerollButton_) { delete rerollButton_; rerollButton_ = nullptr; }
 	if (titleFont_) { TTF_CloseFont(titleFont_); titleFont_ = nullptr; }
 	if (smallFont_) { TTF_CloseFont(smallFont_); smallFont_ = nullptr; }
 	if (cardNameFont_) { TTF_CloseFont(cardNameFont_); cardNameFont_ = nullptr; }
@@ -55,13 +60,50 @@ void MemoryRepairState::onEnter(App& app) {
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
 		});
 	}
-	// 决定本次的统一提示类型（随机一种）
-	{
+	// 重新抽卡按钮（位置在牌位下方）
+	if (rerollButton_) {
+		SDL_Rect rc{140,20,120,40}; // 临时位置，会在layoutCandidates后重新设置
+		rerollButton_->setRect(rc);
+		rerollButton_->setText(u8"重新抽卡");
+		if (smallFont_) rerollButton_->setFont(smallFont_, app.getRenderer());
+		rerollButton_->setOnClick([this]() {
+			if (!rerollUsed_) {
+				rerollUsed_ = true;
+				// 重新生成候选卡牌
+				buildCandidates();
+				layoutCandidates();
+				// 重置翻转状态
+				for (int i = 0; i < 3; ++i) flipped_[i] = false;
+				selected_ = -1;
+				added_ = false;
+			}
+		});
+	}
+	// 使用地图传递的提示类型，如果没有则随机选择
+	if (mapHintType_ != BackHintType::Unknown) {
+		sessionHint_ = mapHintType_;
+		// 重置地图提示类型，避免影响下次
+		mapHintType_ = BackHintType::Unknown;
+	} else {
+		// 随机选择提示类型（兼容旧逻辑）
 		std::random_device rd; std::mt19937 gen(rd());
 		std::uniform_int_distribution<int> d(0,2);
 		int r = d(gen);
 		sessionHint_ = (r==0? BackHintType::Unknown : (r==1? BackHintType::KnownTribe : BackHintType::KnownCost));
 	}
+	// 如果是已知消耗，随机分配三个不同的消耗类型
+	if (sessionHint_ == BackHintType::KnownCost) {
+		std::random_device rd; std::mt19937 gen(rd());
+		// 四种消耗类型：0=1墨滴, 1=2墨滴, 2=3墨滴, 3=魂骨
+		std::vector<int> costTypes = {0, 1, 2, 3};
+		std::shuffle(costTypes.begin(), costTypes.end(), gen);
+		// 取前三个作为三个牌位的消耗类型
+		for (int i = 0; i < 3; ++i) {
+			sessionCostTypes_[i] = costTypes[i];
+		}
+	}
+	// 重置重新抽卡状态
+	rerollUsed_ = false;
 	buildCandidates();
 	layoutCandidates();
 	for (int i=0;i<3;++i) flipped_[i] = false;
@@ -70,6 +112,8 @@ void MemoryRepairState::onExit(App& app) {}
 void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
 	// 处理返回按钮事件
 	if (backButton_) backButton_->handleEvent(e);
+	// 处理重新抽卡按钮事件
+	if (rerollButton_ && !rerollUsed_) rerollButton_->handleEvent(e);
 	
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx = e.button.x, my = e.button.y;
@@ -115,6 +159,8 @@ void MemoryRepairState::render(App& app) {
 
 	// 返回按钮
 	if (backButton_) backButton_->render(r);
+	// 重新抽卡按钮（只有在未使用时才渲染）
+	if (rerollButton_ && !rerollUsed_) rerollButton_->render(r);
 
     // 渲染三张候选卡（使用与战斗界面相近尺寸）
 	for (int i=0;i<(int)candidates_.size(); ++i) {
@@ -147,23 +193,20 @@ void MemoryRepairState::render(App& app) {
                     }
                 }
             } else if (c.hint == BackHintType::KnownCost) {
-                // 中心显示墨滴/骨头图案，数量限制：墨滴1..3 或 骨头1..4（二者互斥）
-                bool hasBone = false; for (const auto& m : c.card.marks) { if (m == u8"消耗骨头") { hasBone = true; break; } }
-                int bones = hasBone ? SDL_max(0, c.card.sacrificeCost) : 0;
-                int ink = hasBone ? 0 : SDL_max(0, c.card.sacrificeCost);
-                bones = SDL_min(bones, 4);
-                ink = SDL_min(ink, 3);
-                int count = hasBone ? bones : ink;
+                // 使用对应牌位的消耗类型：消耗1墨滴、消耗2墨滴、消耗3墨滴、消耗魂骨
+                int costType = sessionCostTypes_[i]; // 使用第i个牌位的消耗类型
+                bool hasBone = (costType == 3);
+                int count = hasBone ? 1 : (costType + 1); // 魂骨显示1个，墨滴显示对应数量
                 if (count > 0) {
                     int sz = SDL_max(12, (int)(SDL_min(c.rect.w, c.rect.h) * 0.18f)); // 稍小一些
-                    if (hasBone && bones == 4) {
-                        // 以“骨头图标 x 4”的方式显示
+                    if (hasBone && count > 0) {
+                        // 以"魂骨图案 X ？"的方式显示
                         int y = c.rect.y + (c.rect.h - sz) / 2;
-                        int startX = c.rect.x + (c.rect.w - (sz + 24)) / 2; // 图标 + “x4”宽度预估
+                        int startX = c.rect.x + (c.rect.w - (sz + 30)) / 2; // 图标 + "X ？"宽度预估
                         drawBackIcon(r, true, startX, y, sz);
                         if (smallFont_) {
                             SDL_Color col{220, 230, 255, 255};
-                            SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, "x 4", col);
+                            SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, "X ？", col);
                             if (s) {
                                 SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
                                 int desiredH = SDL_max(10, (int)(sz * 0.8f));
@@ -175,13 +218,14 @@ void MemoryRepairState::render(App& app) {
                                 SDL_FreeSurface(s);
                             }
                         }
-                    } else {
+                    } else if (!hasBone && count > 0) {
+                        // 显示墨滴图案
                         int gap = SDL_max(6, sz / 3);
                         int totalW = count * sz + (count - 1) * gap;
                         int startX = c.rect.x + (c.rect.w - totalW) / 2;
                         int y = c.rect.y + (c.rect.h - sz) / 2;
                         for (int k = 0; k < count; ++k) {
-                            drawBackIcon(r, hasBone, startX + k * (sz + gap), y, sz);
+                            drawBackIcon(r, false, startX + k * (sz + gap), y, sz);
                         }
                     }
                 }
@@ -207,7 +251,7 @@ void MemoryRepairState::buildCandidates() {
         std::unordered_map<std::string, std::vector<std::string>> catToIds;
         for (const auto& id : ids) {
             Card c = CardDB::instance().make(id);
-            if (c.category.empty() || c.category == u8"其他" || !c.obtainable) continue;
+            if (c.category.empty() || c.category == u8"其他" || c.obtainable == 0) continue;
             catToIds[c.category].push_back(id);
         }
         // 收集并打乱部族列表
@@ -222,25 +266,57 @@ void MemoryRepairState::buildCandidates() {
             filtered.push_back(vec.front());
         }
     } else if (sessionHint_ == BackHintType::KnownCost) {
-        // 只考虑墨滴 1..3（非骨）或魂骨 1..4（骨），且必须是可获取的卡牌
-        for (const auto& id : ids) {
-            Card c = CardDB::instance().make(id);
-            if (!c.obtainable) continue;
-            bool hasBone = false; for (const auto& m : c.marks) { if (m == u8"消耗骨头") { hasBone = true; break; } }
-            if (hasBone) {
-                if (c.sacrificeCost >= 1 && c.sacrificeCost <= 4) filtered.push_back(id);
+        // 根据每个牌位的消耗类型生成对应的卡牌
+        for (int i = 0; i < 3; ++i) {
+            int costType = sessionCostTypes_[i];
+            std::vector<std::string> matchingCards;
+            
+            for (const auto& id : ids) {
+                Card c = CardDB::instance().make(id);
+                if (c.obtainable == 0) continue;
+                
+                bool hasBone = false; 
+                for (const auto& m : c.marks) { 
+                    if (m == u8"消耗骨头") { 
+                        hasBone = true; 
+                        break; 
+                    } 
+                }
+                
+                if (costType == 3) {
+                    // 消耗魂骨的情况
+                    if (hasBone) {
+                        matchingCards.push_back(id);
+                    }
+                } else {
+                    // 消耗墨滴的情况：1、2、3墨滴
+                    if (!hasBone && c.sacrificeCost == (costType + 1)) {
+                        matchingCards.push_back(id);
+                    }
+                }
+            }
+            
+            if (!matchingCards.empty()) {
+                std::shuffle(matchingCards.begin(), matchingCards.end(), gen);
+                filtered.push_back(matchingCards.front());
             } else {
-                if (c.sacrificeCost >= 1 && c.sacrificeCost <= 3) filtered.push_back(id);
+                // 如果没有匹配的卡牌，使用默认卡牌
+                filtered.push_back("shulin_shucheng");
             }
         }
     } else {
         // 默认情况：只考虑可获取的卡牌
         for (const auto& id : ids) {
             Card c = CardDB::instance().make(id);
-            if (c.obtainable) filtered.push_back(id);
+            if (c.obtainable > 0) filtered.push_back(id);
         }
     }
-    std::shuffle(filtered.begin(), filtered.end(), gen);
+    
+    // 只有在非已知消耗的情况下才打乱顺序
+    if (sessionHint_ != BackHintType::KnownCost) {
+        std::shuffle(filtered.begin(), filtered.end(), gen);
+    }
+    
     int take = (int)SDL_min((int)filtered.size(), 3);
     for (int i=0; i<take; ++i) {
         Card c = CardDB::instance().make(filtered[i]);
@@ -263,4 +339,12 @@ void MemoryRepairState::layoutCandidates() {
 	int x0 = (screenW_-totalW)/2; 
 	int y = 180;
 	for (int i=0;i<3 && i<(int)candidates_.size(); ++i) { candidates_[i].rect = { x0 + i*(w+gap), y, w, h }; }
+	
+	// 设置重新抽卡按钮位置（在牌位下方居中）
+	if (rerollButton_) {
+		int buttonY = y + h + 30; // 牌位下方30像素
+		int buttonX = (screenW_ - 120) / 2; // 居中
+		SDL_Rect buttonRect{ buttonX, buttonY, 120, 40 };
+		rerollButton_->setRect(buttonRect);
+	}
 }

@@ -14,6 +14,7 @@
 bool App::godMode_ = false;
 bool App::temperBlessing_ = false;
 std::string App::selectedInitialDeck_ = "";
+int App::remainingCandles_ = 2;
 
 App::App() = default;
 App::~App() { shutdown(); }

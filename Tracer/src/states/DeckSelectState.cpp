@@ -214,14 +214,14 @@ void DeckSelectState::initializeDecks() {
     InitialDeck deck5;
     deck5.id = "bone_deck";
     deck5.name = u8"魂骨牌组";
-    deck5.description = u8"浣沙溪生\n雪原狼胚\n野皋犺狗";
+    deck5.description = u8"浣沙溪生\n雪原狼胚\n野皋烈狗";
     deck5.cardIds = {"huansha_xisheng", "xueyuan_langpei", "yegao_kangou"};
     initialDecks_.push_back(deck5);
     
     // 弱小牌组
     InitialDeck deck6;
     deck6.id = "weak_deck";
-    deck6.name = u8"弱小牌组";
+    deck6.name = u8"免费牌组";
     deck6.description = u8"白毫仔\n玄贝蚪\n守宫";
     deck6.cardIds = {"baimao_zi", "xuanbei_dou", "shougong"};
     initialDecks_.push_back(deck6);
@@ -336,6 +336,29 @@ void DeckSelectState::renderDeckView(App& app) {
         Card card = CardDB::instance().make(deck.cardIds[i]);
         if (!card.id.empty()) {
             CardRenderer::renderCard(app, card, cardRect, smallFont_, smallFont_, false);
+        }
+    }
+    
+    // 渲染两张兔皮（在卡牌下方）
+    int rabbitFurY = startY + totalCardsHeight + 30; // 卡牌下方30像素
+    int rabbitFurX = centerX - cardWidth - cardSpacing/2; // 居中显示两张兔皮
+    
+    for (int i = 0; i < 2; ++i) {
+        int x = rabbitFurX + i * (cardWidth + cardSpacing);
+        int y = rabbitFurY;
+        
+        SDL_Rect rabbitRect{ x, y, cardWidth, cardHeight };
+        
+        // 绘制兔皮背景
+        SDL_SetRenderDrawColor(r, 40, 50, 60, 200);
+        SDL_RenderFillRect(r, &rabbitRect);
+        SDL_SetRenderDrawColor(r, 100, 120, 140, 255);
+        SDL_RenderDrawRect(r, &rabbitRect);
+        
+        // 创建兔皮卡牌并渲染
+        Card rabbitCard = CardDB::instance().make("tuopi_mao");
+        if (!rabbitCard.id.empty()) {
+            CardRenderer::renderCard(app, rabbitCard, rabbitRect, smallFont_, smallFont_, false);
         }
     }
     

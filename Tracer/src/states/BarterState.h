@@ -46,6 +46,7 @@ private:
         Card card;
         SDL_Rect rect{0,0,0,0};
         bool selected = false;
+        int count = 1; // 毛皮数量
     };
     std::vector<PlayerFurCard> playerFurCards_;
     

@@ -1174,14 +1174,14 @@ void BattleState::update(App& app, float dt) {
 			showDamage_ = false;
 
 			// 伤害显示完成，检查是否需要开始移动动画
-			if (currentPhase_ == GamePhase::PlayerTurn && !isRushing_ && !isBruteForcing_ && !isProcessingMovementQueue_) {
+            if (currentPhase_ == GamePhase::PlayerTurn && !isRushing_ && !isBruteForcing_ && !isProcessingMovementQueue_) {
 				// 收集所有需要移动的卡牌，按照从左到右的顺序
 				pendingMovementCards_.clear();
 
 				// 检查所有卡牌，收集需要移动的卡牌
 				for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
-					if (battlefield_[i].isAlive && battlefield_[i].isPlayer) {
-						if (hasMark(battlefield_[i].card, u8"冲刺能手") || hasMark(battlefield_[i].card, u8"蛮力冲撞")) {
+                    if (battlefield_[i].isAlive && battlefield_[i].isPlayer) {
+                        if (hasMark(battlefield_[i].card, u8"冲刺能手") || hasMark(battlefield_[i].card, u8"横冲直撞") || hasMark(battlefield_[i].card, u8"蛮力冲撞")) {
 							pendingMovementCards_.push_back(i);
 						}
 					}
@@ -1342,13 +1342,13 @@ void BattleState::update(App& app, float dt) {
 				attackingCards_.clear();
 				currentAttackingIndex_ = 0;
 
-				// 检查是否有卡牌需要冲刺能手或蛮力冲撞
+                // 检查是否有卡牌需要冲刺能手/横冲直撞或蛮力冲撞
 				bool hasEnemyRushingCard = false;
 				bool hasEnemyBruteForceCard = false;
 
 				for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
 					if (battlefield_[i].isAlive && !battlefield_[i].isPlayer) {
-						if (hasMark(battlefield_[i].card, u8"冲刺能手")) {
+                        if (hasMark(battlefield_[i].card, u8"冲刺能手") || hasMark(battlefield_[i].card, u8"横冲直撞")) {
 							hasEnemyRushingCard = true;
 						}
 						if (hasMark(battlefield_[i].card, u8"蛮力冲撞")) {
@@ -1365,7 +1365,7 @@ void BattleState::update(App& app, float dt) {
 					for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
 						int enemyIndex = 1 * BATTLEFIELD_COLS + col;  // 第二行（敌方攻击行）
 						if (battlefield_[enemyIndex].isAlive && !battlefield_[enemyIndex].isPlayer) {
-							if (hasMark(battlefield_[enemyIndex].card, u8"冲刺能手") || hasMark(battlefield_[enemyIndex].card, u8"蛮力冲撞")) {
+                        if (hasMark(battlefield_[enemyIndex].card, u8"冲刺能手") || hasMark(battlefield_[enemyIndex].card, u8"横冲直撞") || hasMark(battlefield_[enemyIndex].card, u8"蛮力冲撞")) {
 								pendingMovementCards_.push_back(enemyIndex);
 							}
 						}
@@ -1420,6 +1420,10 @@ void BattleState::update(App& app, float dt) {
                     }
                 }
                 fengyaShanAirstrikeSlots_.clear();
+                
+                // 敌方回合结束，进行胜负判定
+                checkGameOver();
+                if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
                 
                 currentPhase_ = GamePhase::PlayerTurn;
                 // 重置本回合献祭次数
@@ -1514,6 +1518,9 @@ void BattleState::update(App& app, float dt) {
 
 	// 处理胜利动画
 	updateVictoryAnimation(dt);
+
+	// 处理失败动画
+	updateDefeatAnimation(dt);
 
 	// 检测卡牌死亡，获得魂骨
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
@@ -1729,11 +1736,14 @@ void BattleState::initializeBattle() {
 	// 初始化游戏状态
 	currentPhase_ = GamePhase::PlayerTurn;
 	currentTurn_ = 1;
-	playerHealth_ = 20;
+	playerHealth_ = 100;
 	enemyHealth_ = 100;
 	maxInk_ = 10;
 	selectedHandCard_ = -1;
 	statusMessage_ = "战斗开始！";
+	
+	// 重置蜡烛（每场战斗开始时确保蜡烛状态正确）
+	App::resetCandles();
 
 	// 初始化护主翻面状态数组（默认不翻面）
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
@@ -2351,6 +2361,10 @@ void BattleState::enemyTurn() {
 	}
 	fengyaShanAirstrikeSlots_.clear();
 	
+		// 敌方回合结束，进行胜负判定
+		checkGameOver();
+		if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
+		
 		currentPhase_ = GamePhase::PlayerTurn;
 	// 重置本回合献祭次数
 	sacrificeCountThisTurn_ = 0;
@@ -2551,14 +2565,30 @@ void BattleState::checkGameOver() {
     if (meterActualPos_ <= -5) {
         currentPhase_ = GamePhase::GameOver;
         std::cout << "[DEFEAT] 墨尺失败！actualPos=" << meterActualPos_ << std::endl;
-        statusMessage_ = "游戏失败！";
+        // 熄灭一根蜡烛
+        App::extinguishCandle();
+        if (App::getRemainingCandles() <= 0) {
+            statusMessage_ = "整局游戏失败！";
+        } else {
+            statusMessage_ = "战斗失败！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
+        }
+        // 启动失败动画
+        startDefeatAnimation();
         return;
     }
 
 	if (playerHealth_ <= 0) {
 		currentPhase_ = GamePhase::GameOver;
 		std::cout << "[DEFEAT] 玩家血量失败！playerHealth=" << playerHealth_ << std::endl;
-		statusMessage_ = "游戏失败！";
+		// 熄灭一根蜡烛
+		App::extinguishCandle();
+		if (App::getRemainingCandles() <= 0) {
+			statusMessage_ = "整局游戏失败！";
+		} else {
+			statusMessage_ = "战斗失败！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
+		}
+		// 启动失败动画
+		startDefeatAnimation();
 		return;
 	}
 	else if (enemyHealth_ <= 0) {
@@ -2731,6 +2761,14 @@ void BattleState::renderBattlefield(App& app) {
 				victoryAlpha = std::max(0.0f, victoryAlpha);
 			}
 
+			// 失败动画：所有卡牌淡出
+			float defeatAlpha = 1.0f;
+			if (isDefeatAnimating_) {
+				float defeatProgress = defeatAnimTime_ / defeatAnimDuration_;
+				defeatAlpha = 1.0f - defeatProgress; // 从1.0淡出到0.0
+				defeatAlpha = std::max(0.0f, defeatAlpha);
+			}
+
 			// 成长轻量动画：对待成长卡片做轻微放大与发光
 			if (isGrowthAnimating_) {
 				bool willGrowHere = false;
@@ -2793,6 +2831,13 @@ void BattleState::renderBattlefield(App& app) {
 					SDL_SetRenderDrawColor(r, 0, 0, 0, static_cast<Uint8>(255 * (1.0f - victoryAlpha)));
 					SDL_RenderFillRect(r, &renderRect);
 				}
+				
+				// 失败动画：应用alpha值到水袭卡牌
+				if (isDefeatAnimating_ && defeatAlpha < 1.0f) {
+					SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+					SDL_SetRenderDrawColor(r, 0, 0, 0, static_cast<Uint8>(255 * (1.0f - defeatAlpha)));
+					SDL_RenderFillRect(r, &renderRect);
+				}
 			}
 			else {
 				// 正常渲染卡牌
@@ -2814,6 +2859,14 @@ void BattleState::renderBattlefield(App& app) {
 					// 应用半透明遮罩来实现淡出效果
 					SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
 					SDL_SetRenderDrawColor(r, 0, 0, 0, static_cast<Uint8>(255 * (1.0f - victoryAlpha)));
+					SDL_RenderFillRect(r, &renderRect);
+				} else if (isDefeatAnimating_ && defeatAlpha < 1.0f) {
+					// 失败动画：应用alpha值
+					CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+					
+					// 应用半透明遮罩来实现淡出效果
+					SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+					SDL_SetRenderDrawColor(r, 0, 0, 0, static_cast<Uint8>(255 * (1.0f - defeatAlpha)));
 					SDL_RenderFillRect(r, &renderRect);
 				} else {
 					// 正常渲染
@@ -2844,18 +2897,18 @@ void BattleState::renderBattlefield(App& app) {
 		// 战场牌位悬停高亮（无论该格是否有牌）
 		if (i == hoveredBattlefieldIndex_) {
 			// 固定透明度的背景与描边（无脉动）
-			const Uint8 bgAlpha = 25;
-			const Uint8 innerAlpha = 70;
-			const Uint8 outerAlpha = 35;
-			// 背景半透明填充
-			SDL_SetRenderDrawColor(r, 255, 240, 180, bgAlpha);
+			const Uint8 bgAlpha = 20;
+			const Uint8 innerAlpha = 50;
+			const Uint8 outerAlpha = 25;
+			// 背景半透明填充（降低亮度）
+			SDL_SetRenderDrawColor(r, 200, 190, 140, bgAlpha);
 			SDL_RenderFillRect(r, &bfCard.rect);
-			// 内描边
-			SDL_SetRenderDrawColor(r, 255, 240, 180, innerAlpha);
+			// 内描边（降低亮度）
+			SDL_SetRenderDrawColor(r, 200, 190, 140, innerAlpha);
 			SDL_RenderDrawRect(r, &bfCard.rect);
-			// 外描边
+			// 外描边（降低亮度）
 			SDL_Rect outerSlot = bfCard.rect; outerSlot.x -= 3; outerSlot.y -= 3; outerSlot.w += 6; outerSlot.h += 6;
-			SDL_SetRenderDrawColor(r, 255, 220, 120, outerAlpha);
+			SDL_SetRenderDrawColor(r, 180, 170, 100, outerAlpha);
 			SDL_RenderDrawRect(r, &outerSlot);
 		}
 	}
@@ -2898,12 +2951,12 @@ void BattleState::renderBattlefield(App& app) {
 				tempCard.attack = getDisplayAttackForIndex(currentCardIndex);
 				CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
 
-				// 添加多层闪烁边框效果
-				SDL_SetRenderDrawColor(r, 255, 255, 0, static_cast<Uint8>(255 * flashIntensity));
+				// 添加多层闪烁边框效果（降低亮度）
+				SDL_SetRenderDrawColor(r, 200, 200, 0, static_cast<Uint8>(180 * flashIntensity));
 				SDL_RenderDrawRect(r, &renderRect);
 
-				// 添加外圈高亮效果
-				SDL_SetRenderDrawColor(r, 255, 200, 0, static_cast<Uint8>(128 * flashIntensity));
+				// 添加外圈高亮效果（降低亮度）
+				SDL_SetRenderDrawColor(r, 180, 160, 0, static_cast<Uint8>(100 * flashIntensity));
 				SDL_Rect outerRect = renderRect;
 				outerRect.x -= 3;
 				outerRect.y -= 3;
@@ -2916,7 +2969,7 @@ void BattleState::renderBattlefield(App& app) {
 				int centerY = renderRect.y + renderRect.h / 2;
 				int effectRadius = static_cast<int>(20.0f * attackProgress);
 
-				SDL_SetRenderDrawColor(r, 255, 100, 0, static_cast<Uint8>(200 * (1.0f - attackProgress)));
+				SDL_SetRenderDrawColor(r, 200, 80, 0, static_cast<Uint8>(150 * (1.0f - attackProgress)));
 				for (int i = 0; i < effectRadius; i += 2) {
 					SDL_Rect effectRect = { centerX - i, centerY - i, i * 2, i * 2 };
 					SDL_RenderDrawRect(r, &effectRect);
@@ -2982,34 +3035,34 @@ void BattleState::renderBattlefield(App& app) {
 			tempCard.attack = getDisplayAttackForIndex(attackerIndex);
 			CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
 
-			// 根据攻击类型显示不同的边框颜色
+			// 根据攻击类型显示不同的边框颜色（降低亮度）
 			switch (currentAttackType_) {
 			case BattleState::AttackType::Double:
-				SDL_SetRenderDrawColor(r, 0, 255, 255, static_cast<Uint8>(255 * flashIntensity)); // 青色 - 双向攻击
+				SDL_SetRenderDrawColor(r, 0, 180, 180, static_cast<Uint8>(200 * flashIntensity)); // 青色 - 双向攻击
 				break;
 			case BattleState::AttackType::Triple:
-				SDL_SetRenderDrawColor(r, 255, 0, 255, static_cast<Uint8>(255 * flashIntensity)); // 紫色 - 三向攻击
+				SDL_SetRenderDrawColor(r, 180, 0, 180, static_cast<Uint8>(200 * flashIntensity)); // 紫色 - 三向攻击
 				break;
 			case BattleState::AttackType::Twice:
-				SDL_SetRenderDrawColor(r, 255, 165, 0, static_cast<Uint8>(255 * flashIntensity)); // 橙色 - 双重攻击
+				SDL_SetRenderDrawColor(r, 180, 120, 0, static_cast<Uint8>(200 * flashIntensity)); // 橙色 - 双重攻击
 				break;
 			case BattleState::AttackType::DoubleTwice:
-				SDL_SetRenderDrawColor(r, 0, 255, 0, static_cast<Uint8>(255 * flashIntensity)); // 绿色 - 双向双重攻击
+				SDL_SetRenderDrawColor(r, 0, 180, 0, static_cast<Uint8>(200 * flashIntensity)); // 绿色 - 双向双重攻击
 				break;
 			case BattleState::AttackType::TripleTwice:
-				SDL_SetRenderDrawColor(r, 255, 255, 255, static_cast<Uint8>(255 * flashIntensity)); // 白色 - 三向双重攻击
+				SDL_SetRenderDrawColor(r, 200, 200, 200, static_cast<Uint8>(200 * flashIntensity)); // 白色 - 三向双重攻击
 				break;
 			case BattleState::AttackType::AllDirection:
-				SDL_SetRenderDrawColor(r, 255, 0, 255, static_cast<Uint8>(255 * flashIntensity)); // 紫色 - 全向打击
+				SDL_SetRenderDrawColor(r, 180, 0, 180, static_cast<Uint8>(200 * flashIntensity)); // 紫色 - 全向打击
 				break;
 			default:
-				SDL_SetRenderDrawColor(r, 255, 255, 0, static_cast<Uint8>(255 * flashIntensity)); // 黄色 - 普通攻击
+				SDL_SetRenderDrawColor(r, 200, 200, 0, static_cast<Uint8>(200 * flashIntensity)); // 黄色 - 普通攻击
 				break;
 			}
 			SDL_RenderDrawRect(r, &renderRect);
 
-			// 添加外圈高亮效果
-			SDL_SetRenderDrawColor(r, 255, 200, 0, static_cast<Uint8>(128 * flashIntensity));
+			// 添加外圈高亮效果（降低亮度）
+			SDL_SetRenderDrawColor(r, 180, 160, 0, static_cast<Uint8>(100 * flashIntensity));
 			SDL_Rect outerRect = renderRect;
 			outerRect.x -= 3;
 			outerRect.y -= 3;
@@ -4043,6 +4096,17 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
             if (!lockPlayerHealth_) {
                 playerHealth_ -= damage;
                 if (playerHealth_ < 0) playerHealth_ = 0;
+                
+                // 更新墨尺：敌方伤害减少墨尺指针
+                meterActualPos_ -= damage;
+                
+                // 显示值锁定在-5，但实际值继续累减
+                meterTargetPos_ = std::max(-5, meterActualPos_);
+                meterStartPos_ = meterDisplayPos_;
+                isMeterAnimating_ = true;
+                meterAnimTime_ = 0.0f;
+                
+                std::cout << "[METER] enemyHit actualPos=" << meterActualPos_ << " displayPos=" << meterTargetPos_ << std::endl;
             }
 		}
 		return;
@@ -4079,6 +4143,17 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
             if (!lockPlayerHealth_) {
                 playerHealth_ -= damage;
                 if (playerHealth_ < 0) playerHealth_ = 0;
+                
+                // 更新墨尺：敌方伤害减少墨尺指针
+                meterActualPos_ -= damage;
+                
+                // 显示值锁定在-5，但实际值继续累减
+                meterTargetPos_ = std::max(-5, meterActualPos_);
+                meterStartPos_ = meterDisplayPos_;
+                isMeterAnimating_ = true;
+                meterAnimTime_ = 0.0f;
+                
+                std::cout << "[METER] enemyHit actualPos=" << meterActualPos_ << " displayPos=" << meterTargetPos_ << std::endl;
             }
 		}
 		return;
@@ -4320,16 +4395,16 @@ void BattleState::renderHandCards(App& app) {
 			scaledH
 		};
 
-		// 悬停时的高亮效果（更明显的变色）
+		// 悬停时的高亮效果（降低亮度）
 		if (hovered) {
-			// 更亮的灰白色背景
-			SDL_SetRenderDrawColor(r, 255, 255, 255, 200);
+			// 更柔和的灰白色背景
+			SDL_SetRenderDrawColor(r, 200, 200, 200, 150);
 			SDL_RenderFillRect(r, &scaledRect);
-			// 蓝色边框表示悬停
-			SDL_SetRenderDrawColor(r, 100, 150, 255, 255);
+			// 蓝色边框表示悬停（降低亮度）
+			SDL_SetRenderDrawColor(r, 80, 120, 200, 200);
 			SDL_RenderDrawRect(r, &scaledRect);
-			// 添加内边框增强效果
-			SDL_SetRenderDrawColor(r, 150, 200, 255, 200);
+			// 添加内边框增强效果（降低亮度）
+			SDL_SetRenderDrawColor(r, 120, 160, 200, 150);
 			SDL_Rect innerRect = { scaledRect.x + 2, scaledRect.y + 2, scaledRect.w - 4, scaledRect.h - 4 };
 			SDL_RenderDrawRect(r, &innerRect);
 		}
@@ -4399,7 +4474,7 @@ void BattleState::renderUI(App& app) {
 	// 绘制墨尺指针（在中间位置，水墨风格），根据meterPosition_偏移
 	int stepPerTick = (inkRulerRect_.w / std::max(1, maxInk_));
 	int pointerX = inkRulerRect_.x + inkRulerRect_.w / 2 + static_cast<int>(std::round(meterDisplayPos_ * stepPerTick));
-	SDL_SetRenderDrawColor(r, 255, 255, 255, 255); // 水墨风格白色指针
+	SDL_SetRenderDrawColor(r, 200, 200, 200, 255); // 水墨风格白色指针（降低亮度）
 	// 主指针线（更粗更长）
 	SDL_RenderDrawLine(r, pointerX, inkRulerRect_.y + 50, pointerX, inkRulerRect_.y + 80);
 	SDL_RenderDrawLine(r, pointerX - 1, inkRulerRect_.y + 50, pointerX - 1, inkRulerRect_.y + 80);
@@ -4428,8 +4503,8 @@ void BattleState::renderUI(App& app) {
 					}
 				}
 			}
-			// 绘制圆形边框
-			SDL_SetRenderDrawColor(r, 255, 255, 255, 255); // 白色边框
+			// 绘制圆形边框（降低亮度）
+			SDL_SetRenderDrawColor(r, 200, 200, 200, 255); // 白色边框
 			for (int angle = 0; angle < 360; angle += 2) {
 				float rad = angle * 3.14159f / 180.0f;
 				int px = circleX + static_cast<int>(circleRadius * cosf(rad));
@@ -4528,6 +4603,9 @@ void BattleState::renderUI(App& app) {
 			}
 			SDL_FreeSurface(s4);
 		}
+		
+		// 绘制生命蜡烛（卡牌介绍区域左侧）
+		renderHealthCandles(r);
 
 		// 道具区域标签
 		SDL_Surface* s5 = TTF_RenderUTF8_Blended(infoFont_, "道具", textColor);
@@ -4848,7 +4926,7 @@ void BattleState::renderUI(App& app) {
 
 	// 显示伤害数值（在敌人区域中央）
 	if (showDamage_ && totalDamageDealt_ > 0 && enemyFont_) {
-		SDL_Color damageColor{ 255, 255, 0, 255 }; // 黄色
+		SDL_Color damageColor{ 200, 200, 0, 255 }; // 黄色（降低亮度）
 		std::string damageText = "-" + std::to_string(totalDamageDealt_);
 		SDL_Surface* damageSurface = TTF_RenderUTF8_Blended(enemyFont_, damageText.c_str(), damageColor);
 		if (damageSurface) {
@@ -4876,7 +4954,7 @@ void BattleState::renderUI(App& app) {
 	if (godMode_) {
 		TTF_Font* helpFont = cardStatFont_ ? cardStatFont_ : (infoFont_ ? infoFont_ : enemyFont_);
 		if (helpFont) {
-		SDL_Color godModeColor{ 255, 255, 0, 255 }; // 黄色
+		SDL_Color godModeColor{ 200, 200, 0, 255 }; // 黄色（降低亮度）
 			const char* lines[] = {
 				u8"上帝模式：",
 				u8"H：锁血/锁墨尺",
@@ -4910,7 +4988,7 @@ void BattleState::renderUI(App& app) {
 
 	// 显示状态消息（在敌人区域）
 	if (!statusMessage_.empty() && enemyFont_) {
-		SDL_Color statusColor{ 255, 255, 255, 255 }; // 白色文字
+		SDL_Color statusColor{ 200, 200, 200, 255 }; // 白色文字（降低亮度）
 		SDL_Surface* statusSurface = TTF_RenderUTF8_Blended(enemyFont_, statusMessage_.c_str(), statusColor);
 		if (statusSurface) {
 			SDL_Texture* statusTexture = SDL_CreateTextureFromSurface(r, statusSurface);
@@ -4959,7 +5037,7 @@ void BattleState::renderUI(App& app) {
 
 		std::vector<std::string> lines = wrapUtf8(tip, 16);
 		TTF_Font* tipFont = cardNameFont_ ? cardNameFont_ : enemyFont_;
-		SDL_Color tipColor{ 255, 255, 0, 255 };
+		SDL_Color tipColor{ 200, 200, 0, 255 }; // 降低亮度
 
 		// 计算最大宽与总高
 		int maxW = 0; int totalH = 0; int lineH = 0; std::vector<SDL_Surface*> surfaces; surfaces.reserve(lines.size());
@@ -5065,12 +5143,19 @@ void BattleState::startRushing(int cardIndex) {
 
 // 添加 checkRushingCanMove 函数实现
 bool BattleState::checkRushingCanMove(int currentRow, int currentCol, int direction) {
-	int targetCol = currentCol + direction;
-	if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
-		int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
-		return !battlefield_[targetIndex].isAlive;
-	}
-	return false;
+    int targetCol = currentCol + direction;
+    if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
+        int currentIndex = currentRow * BATTLEFIELD_COLS + currentCol;
+        int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
+        // 横冲直撞：目标格无论是否有牌都可进行（占用则交换）
+        if (battlefield_[currentIndex].isAlive &&
+            hasMark(battlefield_[currentIndex].card, u8"横冲直撞")) {
+            return true;
+        }
+        // 冲刺能手：只能移动到空位
+        return !battlefield_[targetIndex].isAlive;
+    }
+    return false;
 }
 
 void BattleState::updateRushing(float dt) {
@@ -5108,7 +5193,7 @@ void BattleState::executeRushing() {
 	int currentCol = rushingCardIndex_ % BATTLEFIELD_COLS;
 	int targetCol = currentCol + rushingDirection_;
 	// 检查是否是摇晃动画
-	if (isRushingShaking_) {
+    if (isRushingShaking_) {
 		// 摇晃动画，不执行移动
 		statusMessage_ = "冲刺能手摇晃完成，下回合将向新方向移动！";
 	}
@@ -5117,25 +5202,30 @@ void BattleState::executeRushing() {
 		// 计算当前位置
 
 		// 移动到目标位置
-		
-		if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
+        
+        if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
 			int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
 
-			if (!battlefield_[targetIndex].isAlive) {
-				// 找到空位，移动到这里
-				SDL_Rect targetRect = battlefield_[targetIndex].rect;
-
-				// 移动卡牌数据
-				battlefield_[targetIndex] = battlefield_[rushingCardIndex_];
-				// 保持目标位置的rect
-				battlefield_[targetIndex].rect = targetRect;
-
-				// 清空原位置，标记为因移动死亡（不获得魂骨）
-				battlefield_[rushingCardIndex_].isAlive = false;
-				battlefield_[rushingCardIndex_].health = 0;
-				battlefield_[rushingCardIndex_].isMovedToDeath = true;
-				suppressBoneGainThisFrame_ = true;
-			}
+            bool hasCrossRush = hasMark(battlefield_[rushingCardIndex_].card, u8"横冲直撞");
+            if (!battlefield_[targetIndex].isAlive) {
+                // 空位：直接移动
+                SDL_Rect targetRect = battlefield_[targetIndex].rect;
+                battlefield_[targetIndex] = battlefield_[rushingCardIndex_];
+                battlefield_[targetIndex].rect = targetRect;
+                battlefield_[rushingCardIndex_].isAlive = false;
+                battlefield_[rushingCardIndex_].health = 0;
+                battlefield_[rushingCardIndex_].isMovedToDeath = true;
+                suppressBoneGainThisFrame_ = true;
+            } else if (hasCrossRush) {
+                // 交换位置：横冲直撞特性
+                SDL_Rect rectA = battlefield_[rushingCardIndex_].rect;
+                SDL_Rect rectB = battlefield_[targetIndex].rect;
+                std::swap(battlefield_[rushingCardIndex_], battlefield_[targetIndex]);
+                battlefield_[rushingCardIndex_].rect = rectA;
+                battlefield_[targetIndex].rect = rectB;
+                // 更新当前列为目标列，便于后续边界判断
+                currentCol = targetCol;
+            }
 		}
 	}
 	// 检查移动后是否在边界
@@ -5483,12 +5573,12 @@ void BattleState::executePushedAnimation() {
 // 移动卡牌队列处理方法实现
 void BattleState::processNextMovement() {
 	// 按照位置顺序处理，不区分类型
-	if (!pendingMovementCards_.empty()) {
+    if (!pendingMovementCards_.empty()) {
 		int cardIndex = pendingMovementCards_[0];
 		pendingMovementCards_.erase(pendingMovementCards_.begin());
 
 		// 根据卡牌类型启动相应的移动
-		if (hasMark(battlefield_[cardIndex].card, u8"冲刺能手")) {
+        if (hasMark(battlefield_[cardIndex].card, u8"冲刺能手") || hasMark(battlefield_[cardIndex].card, u8"横冲直撞")) {
 			startRushing(cardIndex);
 		}
 		else if (hasMark(battlefield_[cardIndex].card, u8"蛮力冲撞")) {
@@ -5841,7 +5931,7 @@ void BattleState::renderDeckSelection(App& app) {
 	
 	// 显示提示文字
 	if (cardNameFont_) {
-		SDL_Color textColor = { 255, 255, 0, 255 };
+		SDL_Color textColor = { 200, 200, 0, 255 }; // 降低亮度
 		SDL_Surface* textSurface = TTF_RenderUTF8_Blended(cardNameFont_, u8"请选择一张卡牌加入手牌", textColor);
 		if (textSurface) {
 			SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
@@ -6180,7 +6270,7 @@ void BattleState::renderEngravingHints(App& app) {
 	int lineHeight = 25;
 	
 	if (infoFont_) {
-		SDL_Color titleColor{255, 255, 100, 255}; // 金黄色标题
+		SDL_Color titleColor{200, 200, 80, 255}; // 金黄色标题（降低亮度）
 		SDL_Surface* titleSurface = TTF_RenderUTF8_Blended(infoFont_, u8"已组合意境", titleColor);
 		if (titleSurface) {
 			SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(r, titleSurface);
@@ -6250,5 +6340,97 @@ void BattleState::updateVictoryAnimation(float dt) {
 		// 设置返回地图标志
 		pendingGoMapExplore_ = true;
 		std::cout << "[VICTORY] 胜利动画完成，返回地图！" << std::endl;
+	}
+}
+
+void BattleState::startDefeatAnimation() {
+	isDefeatAnimating_ = true;
+	defeatAnimTime_ = 0.0f;
+	std::cout << "[DEFEAT] 开始失败动画！" << std::endl;
+}
+
+void BattleState::updateDefeatAnimation(float dt) {
+	if (!isDefeatAnimating_) return;
+	
+	defeatAnimTime_ += dt;
+	
+	// 动画完成
+	if (defeatAnimTime_ >= defeatAnimDuration_) {
+		// 重置动画状态
+		isDefeatAnimating_ = false;
+		defeatAnimTime_ = 0.0f;
+		
+		// 设置返回地图标志
+		pendingGoMapExplore_ = true;
+		std::cout << "[DEFEAT] 失败动画完成，返回地图！" << std::endl;
+	}
+}
+
+void BattleState::renderHealthCandles(SDL_Renderer* r) {
+	// 蜡烛位置：卡牌介绍区域左侧
+	int candleAreaX = cardInfoRect_.x - 120; // 卡牌介绍区域左侧120像素
+	int candleAreaY = cardInfoRect_.y + 20;   // 与卡牌介绍区域顶部对齐
+	int candleWidth = 20;  // 蜡烛宽度
+	int candleHeight = 40; // 蜡烛高度
+	int candleSpacing = 15; // 蜡烛间距
+	
+	// 固定两只蜡烛，代表整局游戏生命值
+	int totalCandles = 2; // 总蜡烛数
+	int remainingCandles = App::getRemainingCandles(); // 剩余蜡烛数（从全局状态获取）
+	
+	// 绘制蜡烛背景区域（调整为两只蜡烛的大小）
+	SDL_SetRenderDrawColor(r, 15, 15, 15, 180);
+	SDL_Rect candleBg{ candleAreaX - 10, candleAreaY - 10, 70, 60 };
+	SDL_RenderFillRect(r, &candleBg);
+	SDL_SetRenderDrawColor(r, 40, 40, 40, 255);
+	SDL_RenderDrawRect(r, &candleBg);
+	
+	// 绘制两只蜡烛
+	for (int i = 0; i < totalCandles; ++i) {
+		int candleX = candleAreaX + i * (candleWidth + candleSpacing);
+		int candleY = candleAreaY;
+		bool isLit = (i < remainingCandles); // 前remainingCandles根蜡烛是点燃的
+		
+		// 蜡烛主体（白色）
+		SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
+		SDL_Rect candleBody{ candleX, candleY, candleWidth, candleHeight };
+		SDL_RenderFillRect(r, &candleBody);
+		
+		// 蜡烛边框（灰色）
+		SDL_SetRenderDrawColor(r, 200, 200, 200, 255);
+		SDL_RenderDrawRect(r, &candleBody);
+		
+		// 蜡烛火焰（只有点燃的蜡烛才有火焰）
+		if (isLit) {
+			int flameHeight = 8;
+			int flameWidth = 6;
+			int flameX = candleX + (candleWidth - flameWidth) / 2;
+			int flameY = candleY - flameHeight;
+			
+			// 火焰颜色（明亮的黄色）
+			SDL_SetRenderDrawColor(r, 255, 255, 100, 255);
+			SDL_Rect flame{ flameX, flameY, flameWidth, flameHeight };
+			SDL_RenderFillRect(r, &flame);
+			
+			// 火焰边框（更亮的黄色）
+			SDL_SetRenderDrawColor(r, 255, 255, 150, 255);
+			SDL_RenderDrawRect(r, &flame);
+		}
+	}
+	
+	// 绘制蜡烛状态文字
+	if (infoFont_) {
+		SDL_Color candleColor{ 255, 255, 200, 255 };
+		std::string candleText = "蜡烛: " + std::to_string(remainingCandles) + "/" + std::to_string(totalCandles);
+		SDL_Surface* candleSurface = TTF_RenderUTF8_Blended(infoFont_, candleText.c_str(), candleColor);
+		if (candleSurface) {
+			SDL_Texture* candleTexture = SDL_CreateTextureFromSurface(r, candleSurface);
+			if (candleTexture) {
+				SDL_Rect candleRect{ candleAreaX, candleAreaY + candleHeight + 10, candleSurface->w, candleSurface->h };
+				SDL_RenderCopy(r, candleTexture, nullptr, &candleRect);
+				SDL_DestroyTexture(candleTexture);
+			}
+			SDL_FreeSurface(candleSurface);
+		}
 	}
 }

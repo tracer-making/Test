@@ -117,6 +117,7 @@ private:
     void renderNode(SDL_Renderer* renderer, const MapNode& node, int index);
     void renderConnection(SDL_Renderer* renderer, int fromGlobalIndex, int toGlobalIndex);
     void renderGodModeIndicator(SDL_Renderer* renderer);
+    void renderLeftSideUI(SDL_Renderer* renderer);
     
     // 玩家移动相关
     void initializePlayer();

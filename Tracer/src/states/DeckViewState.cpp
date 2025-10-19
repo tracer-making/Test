@@ -126,7 +126,7 @@ void DeckViewState::layoutCards() {
     if (cardsPerRow_ < 1) cardsPerRow_ = 1;
     
     // 计算总行数
-    int totalRows = (libraryCards_.size() + cardsPerRow_ - 1) / cardsPerRow_;
+    int totalRows = (static_cast<int>(libraryCards_.size()) + cardsPerRow_ - 1) / cardsPerRow_;
     
     // 计算最大滚动距离
     int totalHeight = totalRows * (cardHeight_ + cardSpacing_) + marginY;
@@ -134,8 +134,8 @@ void DeckViewState::layoutCards() {
     
     // 布局卡牌
     for (size_t i = 0; i < libraryCards_.size(); ++i) {
-        int row = i / cardsPerRow_;
-        int col = i % cardsPerRow_;
+        int row = static_cast<int>(i) / cardsPerRow_;
+        int col = static_cast<int>(i) % cardsPerRow_;
         
         int x = marginX + col * (cardWidth_ + cardSpacing_);
         int y = marginY + row * (cardHeight_ + cardSpacing_);
@@ -151,7 +151,7 @@ void DeckViewState::updateScrollBounds() {
         return;
     }
     
-    int totalRows = (libraryCards_.size() + cardsPerRow_ - 1) / cardsPerRow_;
+    int totalRows = (static_cast<int>(libraryCards_.size()) + cardsPerRow_ - 1) / cardsPerRow_;
     int totalHeight = totalRows * (cardHeight_ + cardSpacing_) + 100; // 100为标题空间
     int availableHeight = screenH_ - 150; // 150为标题和提示信息空间
     

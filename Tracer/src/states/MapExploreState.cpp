@@ -2,6 +2,7 @@
 #include "MapExploreState.h"
 #include "BattleState.h"
 #include "../core/ItemStore.h"
+#include "../core/WenMaiStore.h"
 #include "TestState.h"
 #include "BattleState.h"
 #include "BarterState.h"
@@ -589,6 +590,9 @@ void MapExploreState::render(App& app) {
     
     // 渲染地图
     renderMap(r);
+    
+    // 渲染左侧UI信息
+    renderLeftSideUI(r);
     
     // 渲染按钮
     if (regenerateButton_) {
@@ -1810,6 +1814,11 @@ void MapExploreState::assignRowEventLabels() {
                         continue;
                     }
                     
+                    // 第一层除了第一个节点，其他节点不出现"以物易物"
+                    if (currentMapLayer_ == 1 && event.name == u8"以物易物") {
+                        continue;
+                    }
+                    
                     // 检查是否已经使用过（只限制"以物易物"和"墨坊"每层最多1个）
                     if ((event.name == u8"以物易物" || event.name == u8"墨坊") && 
                         usedEvents.find(event.name) != usedEvents.end()) {
@@ -1851,6 +1860,21 @@ void MapExploreState::assignRowEventLabels() {
         size_t take = std::min(uniqueEvents.size(), idxs.size());
         for (size_t k = 0; k < take; ++k) {
             nodes[idxs[k]].label = uniqueEvents[k];
+            
+            // 为记忆修复节点添加提示信息
+            if (uniqueEvents[k] == u8"记忆修复") {
+                // 随机选择提示类型（与MemoryRepairState中的逻辑一致）
+                std::uniform_int_distribution<int> hintDist(0, 2);
+                int hintType = hintDist(gen);
+                if (hintType == 0) {
+                    nodes[idxs[k]].label = u8"记忆修复(随机)";
+                } else if (hintType == 1) {
+                    nodes[idxs[k]].label = u8"记忆修复(已知部族)";
+                } else {
+                    nodes[idxs[k]].label = u8"记忆修复(已知消耗)";
+                }
+            }
+            
             // 只跟踪"以物易物"和"墨坊"的使用情况
             if (uniqueEvents[k] == u8"以物易物" || uniqueEvents[k] == u8"墨坊") {
                 usedEvents.insert(uniqueEvents[k]);
@@ -1859,7 +1883,22 @@ void MapExploreState::assignRowEventLabels() {
         
         // 多余的节点复用已有事件
         for (size_t k = take; k < idxs.size(); ++k) {
-            nodes[idxs[k]].label = uniqueEvents[(k - take) % uniqueEvents.size()];
+            std::string baseEvent = uniqueEvents[(k - take) % uniqueEvents.size()];
+            nodes[idxs[k]].label = baseEvent;
+            
+            // 为记忆修复节点添加提示信息
+            if (baseEvent == u8"记忆修复") {
+                // 随机选择提示类型（与MemoryRepairState中的逻辑一致）
+                std::uniform_int_distribution<int> hintDist(0, 2);
+                int hintType = hintDist(gen);
+                if (hintType == 0) {
+                    nodes[idxs[k]].label = u8"记忆修复(随机)";
+                } else if (hintType == 1) {
+                    nodes[idxs[k]].label = u8"记忆修复(已知部族)";
+                } else {
+                    nodes[idxs[k]].label = u8"记忆修复(已知消耗)";
+                }
+            }
         }
     }
 }
@@ -2082,7 +2121,21 @@ void MapExploreState::movePlayerToNode(int nodeIndex) {
             pendingGoInkWorkshop_ = true;
         } else if (node->label == u8"墨鬼") {
             pendingGoInkGhost_ = true;
-        } else if (node->label == u8"记忆修复") {
+        } else if (node->label == u8"记忆修复" || 
+                   node->label == u8"记忆修复(随机)" || 
+                   node->label == u8"记忆修复(已知部族)" || 
+                   node->label == u8"记忆修复(已知消耗)") {
+            // 根据地图标签设置记忆修复的提示类型
+            if (node->label == u8"记忆修复(随机)") {
+                MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::Unknown);
+            } else if (node->label == u8"记忆修复(已知部族)") {
+                MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::KnownTribe);
+            } else if (node->label == u8"记忆修复(已知消耗)") {
+                MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::KnownCost);
+            } else {
+                // 默认情况（u8"记忆修复"）随机选择
+                MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::Unknown);
+            }
             pendingGoMemoryRepair_ = true;
         } else if (node->label == u8"墨宝拾遗") {
             pendingGoRelicPickup_ = true;
@@ -2111,4 +2164,90 @@ void MapExploreState::startMoveAnimation(int targetNodeIndex) {
     moveToNode_ = targetNodeIndex;
     moveT_ = 0.0f;
     isMoving_ = true;
+}
+
+void MapExploreState::renderLeftSideUI(SDL_Renderer* renderer) {
+    if (!smallFont_) return;
+    
+    // 左侧UI区域位置 - 更大的显示区域
+    int leftX = 20;
+    int startY = 100;
+    int lineHeight = 40;  // 增加行高
+    int spacing = 50;     // 增加间距
+    
+    // 背景框 - 更大
+    SDL_Rect bgRect = { 10, 80, 250, 400 };
+    SDL_SetRenderDrawColor(renderer, 30, 30, 50, 200); // 半透明深色背景
+    SDL_RenderFillRect(renderer, &bgRect);
+    SDL_SetRenderDrawColor(renderer, 100, 100, 150, 255); // 边框
+    SDL_RenderDrawRect(renderer, &bgRect);
+    
+    // 标题 - 使用更大的字体
+    SDL_Color titleColor{ 255, 255, 200, 255 }; // 浅黄色
+    SDL_Surface* titleSurface = TTF_RenderUTF8_Blended(smallFont_, u8"当前状态", titleColor);
+    if (titleSurface) {
+        SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(renderer, titleSurface);
+        if (titleTexture) {
+            SDL_Rect titleRect = { leftX, startY, titleSurface->w, titleSurface->h };
+            SDL_RenderCopy(renderer, titleTexture, nullptr, &titleRect);
+            SDL_DestroyTexture(titleTexture);
+        }
+        SDL_FreeSurface(titleSurface);
+    }
+    
+    int currentY = startY + lineHeight + 20;
+    
+    // 显示道具数量和种类
+    auto& itemStore = ItemStore::instance();
+    const auto& items = itemStore.items();
+    
+    SDL_Color itemColor{ 200, 200, 255, 255 }; // 浅蓝色
+    std::string itemText = u8"道具总数: " + std::to_string(itemStore.totalCount());
+    SDL_Surface* itemSurface = TTF_RenderUTF8_Blended(smallFont_, itemText.c_str(), itemColor);
+    if (itemSurface) {
+        SDL_Texture* itemTexture = SDL_CreateTextureFromSurface(renderer, itemSurface);
+        if (itemTexture) {
+            SDL_Rect itemRect = { leftX, currentY, itemSurface->w, itemSurface->h };
+            SDL_RenderCopy(renderer, itemTexture, nullptr, &itemRect);
+            SDL_DestroyTexture(itemTexture);
+        }
+        SDL_FreeSurface(itemSurface);
+    }
+    currentY += lineHeight;
+    
+    // 显示具体道具种类
+    for (const auto& item : items) {
+        if (item.count > 0) {
+            std::string itemDetailText = item.name + u8": " + std::to_string(item.count);
+            SDL_Surface* itemDetailSurface = TTF_RenderUTF8_Blended(smallFont_, itemDetailText.c_str(), itemColor);
+            if (itemDetailSurface) {
+                SDL_Texture* itemDetailTexture = SDL_CreateTextureFromSurface(renderer, itemDetailSurface);
+                if (itemDetailTexture) {
+                    SDL_Rect itemDetailRect = { leftX + 20, currentY, itemDetailSurface->w, itemDetailSurface->h };
+                    SDL_RenderCopy(renderer, itemDetailTexture, nullptr, &itemDetailRect);
+                    SDL_DestroyTexture(itemDetailTexture);
+                }
+                SDL_FreeSurface(itemDetailSurface);
+            }
+            currentY += lineHeight;
+        }
+    }
+    currentY += spacing;
+    
+    // 显示文脉数量
+    auto& wenMaiStore = WenMaiStore::instance();
+    int totalWenMai = wenMaiStore.get();
+    
+    SDL_Color wenMaiColor{ 255, 200, 200, 255 }; // 浅红色
+    std::string wenMaiText = u8"文脉: " + std::to_string(totalWenMai);
+    SDL_Surface* wenMaiSurface = TTF_RenderUTF8_Blended(smallFont_, wenMaiText.c_str(), wenMaiColor);
+    if (wenMaiSurface) {
+        SDL_Texture* wenMaiTexture = SDL_CreateTextureFromSurface(renderer, wenMaiSurface);
+        if (wenMaiTexture) {
+            SDL_Rect wenMaiRect = { leftX, currentY, wenMaiSurface->w, wenMaiSurface->h };
+            SDL_RenderCopy(renderer, wenMaiTexture, nullptr, &wenMaiRect);
+            SDL_DestroyTexture(wenMaiTexture);
+        }
+        SDL_FreeSurface(wenMaiSurface);
+    }
 }

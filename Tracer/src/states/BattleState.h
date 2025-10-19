@@ -382,6 +382,11 @@ private:
 	float victoryAnimTime_ = 0.0f;    // 胜利动画时间
 	float victoryAnimDuration_ = 2.0f; // 胜利动画持续时间（2秒）
 
+	// 失败动画系统
+	bool isDefeatAnimating_ = false;  // 是否正在播放失败动画
+	float defeatAnimTime_ = 0.0f;    // 失败动画时间
+	float defeatAnimDuration_ = 2.0f; // 失败动画持续时间（2秒）
+
 	// 攻击动画系统
 	bool isAttackAnimating_ = false;   // 是否正在播放攻击动画
 	float attackAnimTime_ = 0.0f;     // 攻击动画时间
@@ -443,6 +448,7 @@ private:
 	void renderUI(App& app);
 	void renderDeckSelection(App& app);
 	void renderEngravingHints(App& app);
+	void renderHealthCandles(SDL_Renderer* r);
 
 	// 移动卡牌队列处理方法
 	void processNextMovement();
@@ -451,6 +457,10 @@ private:
 	// 胜利动画相关方法
 	void startVictoryAnimation();
 	void updateVictoryAnimation(float dt);
+
+	// 失败动画相关方法
+	void startDefeatAnimation();
+	void updateDefeatAnimation(float dt);
 
     // 掘墓人：回合结束时结算骨头增益（仅统计一方）
     // countEnemySide=false 统计我方；true 统计敌方

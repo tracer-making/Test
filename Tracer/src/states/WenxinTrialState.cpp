@@ -372,7 +372,7 @@ void WenxinTrialState::buildTrialCards() {
     // 随机选择三种试炼类型
     std::vector<TrialType> allTypes = {
         TrialType::Wisdom, TrialType::Bone, TrialType::Power, 
-        TrialType::Life, TrialType::Tribe
+        TrialType::Life, TrialType::Tribe, TrialType::Blood
     };
     
     std::random_device rd;
@@ -494,10 +494,26 @@ void WenxinTrialState::updateCalculationText() {
         int value = 0;
         
         switch (type) {
-        case TrialType::Wisdom:
-            value = (int)card.marks.size();
-            calculationText_ += card.name + u8"：" + std::to_string(value) + u8"个印记\n";
+        case TrialType::Wisdom: {
+            // 只统计随机池中的印记
+            static const std::vector<std::string> availableMarks = {
+                u8"空袭", u8"水袭", u8"高跳", u8"护主", u8"领袖力量", u8"掘墓人",
+                u8"双重攻击", u8"双向攻击", u8"三向攻击", u8"冲刺能手", u8"蛮力冲撞",
+                u8"生生不息",  u8"不死印记", u8"优质祭品", u8"丰产之巢", u8"一回合成长",
+                u8"内心之蜂", u8"滋生寄生虫", u8"断尾求生", u8"反伤", u8"死神之触",
+                u8"臭臭", u8"蚁后", u8"一口之量", u8"坚硬之躯", u8"守护者",
+                u8"兔窝", u8"筑坝师", u8"检索", u8"道具商", u8"食尸鬼", u8"骨王"
+            };
+            
+            value = 0;
+            for (const auto& mark : card.marks) {
+                if (std::find(availableMarks.begin(), availableMarks.end(), mark) != availableMarks.end()) {
+                    value++;
+                }
+            }
+            calculationText_ += card.name + u8"：" + std::to_string(value) + u8"个随机池印记\n";
             break;
+        }
         case TrialType::Bone:
             value = card.sacrificeCost;
             calculationText_ += card.name + u8"：" + std::to_string(value) + u8"根魂骨\n";
@@ -514,6 +530,14 @@ void WenxinTrialState::updateCalculationText() {
             // 部族试炼特殊处理
             calculationText_ += card.name + u8"：" + card.category + u8"\n";
             break;
+        case TrialType::Blood: {
+            // 血腥试炼：墨量=献祭消耗，0或带有“消耗骨头”视作0
+            bool hasBoneCost = false;
+            for (const auto& m : card.marks) if (m == u8"消耗骨头") { hasBoneCost = true; break; }
+            value = (hasBoneCost || card.sacrificeCost <= 0) ? 0 : card.sacrificeCost;
+            calculationText_ += card.name + u8"：" + std::to_string(value) + u8"点墨量\n";
+            break;
+        }
         }
         
         if (type != TrialType::Tribe) {
@@ -549,10 +573,24 @@ void WenxinTrialState::finishTrial() {
 bool WenxinTrialState::checkTrialCompletion(const std::vector<Card>& cards, TrialType type) {
     switch (type) {
     case TrialType::Wisdom: {
-        // 智慧试炼：至少3个印记
+        // 智慧试炼：至少3个随机池印记
+        static const std::vector<std::string> availableMarks = {
+            u8"空袭", u8"水袭", u8"高跳", u8"护主", u8"领袖力量", u8"掘墓人",
+            u8"双重攻击", u8"双向攻击", u8"三向攻击", u8"冲刺能手", u8"蛮力冲撞",
+            u8"生生不息",  u8"不死印记", u8"优质祭品", u8"丰产之巢", u8"一回合成长",
+            u8"内心之蜂", u8"滋生寄生虫", u8"断尾求生", u8"反伤", u8"死神之触",
+            u8"臭臭", u8"蚁后", u8"一口之量", u8"坚硬之躯", u8"守护者",
+            u8"兔窝", u8"筑坝师", u8"检索", u8"道具商", u8"食尸鬼", u8"骨王"
+        };
+        
         int totalMarks = 0;
         for (const auto& card : cards) {
-            totalMarks += (int)card.marks.size();
+            for (const auto& mark : card.marks) {
+                // 只统计随机池中的印记
+                if (std::find(availableMarks.begin(), availableMarks.end(), mark) != availableMarks.end()) {
+                    totalMarks++;
+                }
+            }
         }
         return totalMarks >= 3;
     }
@@ -595,6 +633,17 @@ bool WenxinTrialState::checkTrialCompletion(const std::vector<Card>& cards, Tria
         }
         return false;
     }
+    case TrialType::Blood: {
+        // 血腥试炼：三张牌合计墨量至少4（无消耗或带“消耗骨头”视为0）
+        int totalInk = 0;
+        for (const auto& card : cards) {
+            bool hasBoneCost = false;
+            for (const auto& m : card.marks) if (m == u8"消耗骨头") { hasBoneCost = true; break; }
+            int ink = (hasBoneCost || card.sacrificeCost <= 0) ? 0 : card.sacrificeCost;
+            totalInk += ink;
+        }
+        return totalInk >= 4;
+    }
     default:
         return false;
     }
@@ -607,6 +656,7 @@ std::string WenxinTrialState::getTrialTypeName(TrialType type) {
     case TrialType::Power: return u8"力量试炼";
     case TrialType::Life: return u8"生命试炼";
     case TrialType::Tribe: return u8"同族试炼";
+    case TrialType::Blood: return u8"血腥试炼";
     default:     return u8"未知试炼";
     }
 }
@@ -622,10 +672,10 @@ void WenxinTrialState::generateRewardCard() {
     auto allCardIds = CardDB::instance().allIds();
     std::vector<std::string> obtainableIds;
     
-    // 过滤出可获取的卡牌
+    // 过滤出普通卡牌（obtainable == 1）
     for (const auto& id : allCardIds) {
         Card c = CardDB::instance().make(id);
-        if (c.obtainable) {
+        if (c.obtainable == 1) {
             obtainableIds.push_back(id);
         }
     }
@@ -641,14 +691,14 @@ void WenxinTrialState::generateRewardCard() {
         rewardCard_ = CardDB::instance().make(randomCardId);
     }
     
-    // 添加两个不重复的随机印记（参考寻物人）
+    // 添加两个不重复的随机印记
     static const std::vector<std::string> availableMarks = {
         u8"空袭", u8"水袭", u8"高跳", u8"护主", u8"领袖力量", u8"掘墓人",
         u8"双重攻击", u8"双向攻击", u8"三向攻击", u8"冲刺能手", u8"蛮力冲撞",
-        u8"生生不息",  u8"不死印记", u8"优质祭品",
+        u8"生生不息",  u8"不死印记", u8"优质祭品", u8"丰产之巢", u8"一回合成长",
         u8"内心之蜂", u8"滋生寄生虫", u8"断尾求生", u8"反伤", u8"死神之触",
-        u8"令人生厌", u8"臭臭", u8"蚁后", u8"一口之量", u8"坚硬之躯",
-        u8"兔窝", u8"筑坝师", u8"检索", u8"磐石之身", u8"道具商"
+        u8"臭臭", u8"蚁后", u8"一口之量", u8"坚硬之躯", u8"守护者",
+        u8"兔窝", u8"筑坝师", u8"检索", u8"道具商", u8"食尸鬼", u8"骨王"
     };
     
     std::random_device rd;
@@ -690,6 +740,7 @@ std::string WenxinTrialState::getTrialDescription(TrialType type) {
     case TrialType::Power: return u8"要求抽取的三张牌必须共计拥有4点攻击力才能完成";
     case TrialType::Life: return u8"要求抽取的三张牌必须共计拥有至少6点生命值方可通过";
     case TrialType::Tribe: return u8"要求抽取的三张牌至少2张来自同一部族（不算其他部族）方可通过";
+    case TrialType::Blood: return u8"抽出的3张牌必须至少花费4点墨量才能通过（无消耗或带有消耗骨头的牌都算作0点）";
     default: return u8"未知试炼描述";
     }
 }
