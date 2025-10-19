@@ -14,14 +14,15 @@ struct Card {
 	std::vector<std::string> marks; // 印记
 	bool canInherit = true;    // 是否可传承（接受过传承的卡变为false）
 	int obtainable = 1;       // 获取等级：0=不可获取，1=普通，2=稀有
+	bool canBeSacrificed = true; // 是否可被献祭
 	std::string instanceId;    // 实例唯一ID（用于区分同名卡牌）
 	
 	// 默认构造函数
 	Card() = default;
 	
 	// 带参数的构造函数
-	Card(const std::string& id, const std::string& name, int sacrificeCost, const std::string& category, int attack, int health, const std::string& face, const std::vector<std::string>& marks = {}, int obtainable = 1)
-		: id(id), name(name), sacrificeCost(sacrificeCost), category(category), attack(attack), health(health), face(face), marks(marks), obtainable(obtainable) {}
+	Card(const std::string& id, const std::string& name, int sacrificeCost, const std::string& category, int attack, int health, const std::string& face, const std::vector<std::string>& marks = {}, int obtainable = 1, bool canBeSacrificed = true)
+		: id(id), name(name), sacrificeCost(sacrificeCost), category(category), attack(attack), health(health), face(face), marks(marks), obtainable(obtainable), canBeSacrificed(canBeSacrificed) {}
 };
 
 

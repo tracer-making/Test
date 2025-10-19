@@ -5,6 +5,7 @@
 #include "../ui/CardRenderer.h"
 #include "../core/Card.h"
 #include "../core/Deck.h"
+#include "EnemyPresets.h"
 #include <SDL.h>
 #include <vector>
 #include <array>
@@ -442,6 +443,11 @@ private:
 	void playCard(int handIndex, int battlefieldIndex);
 	void endTurn();
 	void enemyTurn();
+	// 敌方出牌预设
+	bool isImmovable(const Card& card) const; // 判定不可移动
+	
+	// 当前战斗ID
+	int currentBattleId_ = 1;
 	void checkGameOver();
 	void renderBattlefield(App& app);
 	void renderHandCards(App& app);

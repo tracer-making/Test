@@ -6,6 +6,7 @@
 #include "../core/Deck.h"
 #include "../core/ItemStore.h"
 #include "../core/ItemStore.h"
+#include "EnemyPresets.h"
 
 #include "../core/Cards.h"
 #include <SDL.h>
@@ -633,7 +634,20 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 					for (int j = 0; j < TOTAL_BATTLEFIELD_SLOTS; ++j) {
 						battlefield_[j].isSacrificed = false;
 						if (battlefield_[j].isAlive && battlefield_[j].isPlayer) {
-							sacrificeCandidates_.push_back(j);
+							// 检查是否可献祭：原本可献祭 或 有"优质祭品"印记
+							bool canSacrifice = battlefield_[j].card.canBeSacrificed;
+							if (!canSacrifice) {
+								// 检查是否有"优质祭品"印记
+								for (const auto& mark : battlefield_[j].card.marks) {
+									if (mark == u8"优质祭品") {
+										canSacrifice = true;
+										break;
+									}
+								}
+							}
+							if (canSacrifice) {
+								sacrificeCandidates_.push_back(j);
+							}
 						}
 					}
 
@@ -761,6 +775,18 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 						// Sacrifice mode: click battlefield cards to sacrifice
 
 						if (battlefield_[i].isAlive && battlefield_[i].isPlayer && !battlefield_[i].isSacrificed) {
+						// 检查是否可献祭：原本可献祭 或 有"优质祭品"印记
+						bool canSacrifice = battlefield_[i].card.canBeSacrificed;
+						if (!canSacrifice) {
+							// 检查是否有"优质祭品"印记
+							for (const auto& mark : battlefield_[i].card.marks) {
+								if (mark == u8"优质祭品") {
+									canSacrifice = true;
+									break;
+								}
+							}
+						}
+						if (canSacrifice) {
 							// 献祭这张卡牌（点击就加点数，出现墨滴，标记为已献祭）
 
 
@@ -855,7 +881,24 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 							statusMessage_ = "这张卡牌已经被献祭了";
 						}
 						else {
+							// 检查是否是不可献祭的卡牌
+							bool canSacrifice = battlefield_[i].card.canBeSacrificed;
+							if (!canSacrifice) {
+								// 检查是否有"优质祭品"印记
+								bool hasQualitySacrifice = false;
+								for (const auto& mark : battlefield_[i].card.marks) {
+									if (mark == u8"优质祭品") {
+										hasQualitySacrifice = true;
+										break;
+									}
+								}
+								if (!hasQualitySacrifice) {
+									statusMessage_ = "这张卡牌不可被献祭";
+									return;
+								}
+							}
 							statusMessage_ = "只能献祭己方卡牌";
+						}
 						}
 					}
 					else if (selectedHandCard_ >= 0) {
@@ -1174,13 +1217,13 @@ void BattleState::update(App& app, float dt) {
 			showDamage_ = false;
 
 			// 伤害显示完成，检查是否需要开始移动动画
-            if (currentPhase_ == GamePhase::PlayerTurn && !isRushing_ && !isBruteForcing_ && !isProcessingMovementQueue_) {
+			if (currentPhase_ == GamePhase::PlayerTurn && !isRushing_ && !isBruteForcing_ && !isProcessingMovementQueue_) {
 				// 收集所有需要移动的卡牌，按照从左到右的顺序
 				pendingMovementCards_.clear();
 
 				// 检查所有卡牌，收集需要移动的卡牌
 				for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
-                    if (battlefield_[i].isAlive && battlefield_[i].isPlayer) {
+					if (battlefield_[i].isAlive && battlefield_[i].isPlayer) {
                         if (hasMark(battlefield_[i].card, u8"冲刺能手") || hasMark(battlefield_[i].card, u8"横冲直撞") || hasMark(battlefield_[i].card, u8"蛮力冲撞")) {
 							pendingMovementCards_.push_back(i);
 						}
@@ -1538,6 +1581,33 @@ void BattleState::update(App& app, float dt) {
 			// 全局抑制：若本帧发生位移清位，则不加骨
 			if (suppressBoneGainThisFrame_) { continue; }
 
+			// 特殊卡牌死亡后生成机制（敌我双方都生效）
+			const Card& deadCard = battlefield_[i].card;
+			std::string spawnCardId = "";
+			
+			// 检查特殊卡牌死亡后生成
+			if (deadCard.id == "bingfeng_jianjia") {
+				spawnCardId = "jianjia_yu"; // 冰封剑甲死亡后生成剑甲鱼
+			} else if (deadCard.id == "qi_qingwa") {
+				spawnCardId = "tieshou_jia"; // 奇怪的青蛙死亡后生成铁兽夹
+			} else if (deadCard.id == "jiaoyu") {
+				spawnCardId = "jiaolong"; // 蛟鱼死亡后生成蛟龙
+			}
+			
+			// 生成新卡牌
+			if (!spawnCardId.empty()) {
+				Card spawnCard = CardDB::instance().make(spawnCardId);
+				if (!spawnCard.id.empty()) {
+					battlefield_[i].card = spawnCard;
+					battlefield_[i].isAlive = true;
+					battlefield_[i].health = spawnCard.health;
+					battlefield_[i].isPlayer = battlefield_[i].isPlayer; // 保持原有的玩家归属
+					battlefield_[i].moveDirection = 0;
+					statusMessage_ = deadCard.name + "死亡后生成" + spawnCard.name + "！";
+					continue; // 跳过后续的死亡处理
+				}
+			}
+
 			// 不死印记：我方单位死亡时，立刻回到手牌（即时渲染）
 			if (battlefield_[i].isPlayer) {
 				const Card& deadCard = battlefield_[i].card;
@@ -1624,6 +1694,35 @@ void BattleState::update(App& app, float dt) {
 			if (battlefield_[i].isMovedToDeath) {
 				battlefield_[i].isMovedToDeath = false;
 				continue;
+			}
+
+			// 敌方特殊卡牌死亡后生成机制
+			const Card& deadCard = battlefield_[i].card;
+			std::string spawnCardId = "";
+			
+			// 检查特殊卡牌死亡后生成
+			if (deadCard.id == "bingfeng_jianjia") {
+				spawnCardId = "jianjia_yu"; // 冰封剑甲死亡后生成剑甲鱼
+			} else if (deadCard.id == "qi_qingwa") {
+				spawnCardId = "tieshou_jia"; // 奇怪的青蛙死亡后生成铁兽夹
+			} else if (deadCard.id == "jiaoyu") {
+				spawnCardId = "jiaolong"; // 蛟鱼死亡后生成蛟龙
+			}
+			
+			// 生成新卡牌
+			if (!spawnCardId.empty()) {
+				Card spawnCard = CardDB::instance().make(spawnCardId);
+				if (!spawnCard.id.empty()) {
+					battlefield_[i].card = spawnCard;
+					battlefield_[i].isAlive = true;
+					battlefield_[i].health = spawnCard.health;
+					battlefield_[i].isPlayer = battlefield_[i].isPlayer; // 保持原有的玩家归属
+					battlefield_[i].moveDirection = 0;
+					statusMessage_ = deadCard.name + "死亡后生成" + spawnCard.name + "！";
+					// 更新敌方状态记录，因为卡牌重新活过来了
+					previousEnemyCardStates_[i] = true;
+					continue; // 跳过后续的死亡处理
+				}
 			}
 
 			// 检查场上是否有玩家的拾荒者印记的卡牌
@@ -1841,7 +1940,174 @@ void BattleState::initializeBattle() {
 			playerItems_.push_back(Item{item.id, item.name, item.description, item.count});
 		}
 	}
+
+	// 敌方出牌预设：根据矩阵执行初始化三行布置
+	auto matrix = EnemyPresetManager::instance().getMatrix(currentBattleId_);
+    // 初始化战斗区域第三行 (player side)
+    int initRow3 = matrix.rows.size() - 1; // 最后一行
+    if (initRow3 >= 0 && matrix.rows.size() > initRow3) {
+        const auto& row = matrix.rows[initRow3];
+        if (row.randomPlacement) {
+            // 随机位置放置
+            std::vector<std::string> ids;
+            for (const auto& id : row.cards) {
+                if (!id.empty()) ids.push_back(id);
+            }
+            std::vector<int> emptyCols;
+            for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                int idx = 2 * BATTLEFIELD_COLS + col;
+                if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+            }
+            std::random_device rd; std::mt19937 gen(rd());
+            for (const auto& id : ids) {
+                if (emptyCols.empty()) break;
+                std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+                int choose = pick(gen);
+                int col = emptyCols[choose];
+                emptyCols.erase(emptyCols.begin() + choose);
+                int idx = 2 * BATTLEFIELD_COLS + col;
+                Card c = CardDB::instance().make(id);
+                if (!c.id.empty()) {
+                    battlefield_[idx].card = c;
+                    battlefield_[idx].isPlayer = true;
+                    battlefield_[idx].health = c.health;
+                    battlefield_[idx].isAlive = true;
+                    battlefield_[idx].moveDirection = 0;
+                }
+            }
+        } else {
+            // 固定位置放置
+            for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+                const std::string& id = row.cards[col];
+                if (!id.empty()) {
+                    int idx = 2 * BATTLEFIELD_COLS + col;
+                    if (!battlefield_[idx].isAlive) {
+                        Card c = CardDB::instance().make(id);
+                        if (!c.id.empty()) {
+                            battlefield_[idx].card = c;
+                            battlefield_[idx].isPlayer = true;
+                            battlefield_[idx].health = c.health;
+                            battlefield_[idx].isAlive = true;
+                            battlefield_[idx].moveDirection = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // 初始化战斗区域第二行 (enemy side)
+    int initRow2 = matrix.rows.size() - 2; // 倒数第二行
+    if (initRow2 >= 0 && matrix.rows.size() > initRow2) {
+        const auto& row = matrix.rows[initRow2];
+        if (row.randomPlacement) {
+            // 随机位置放置
+            std::vector<std::string> ids;
+            for (const auto& id : row.cards) {
+                if (!id.empty()) ids.push_back(id);
+            }
+            std::vector<int> emptyCols;
+            for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                int idx = 1 * BATTLEFIELD_COLS + col;
+                if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+            }
+            std::random_device rd; std::mt19937 gen(rd());
+            for (const auto& id : ids) {
+                if (emptyCols.empty()) break;
+                std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+                int choose = pick(gen);
+                int col = emptyCols[choose];
+                emptyCols.erase(emptyCols.begin() + choose);
+                int idx = 1 * BATTLEFIELD_COLS + col;
+                Card c = CardDB::instance().make(id);
+                if (!c.id.empty()) {
+                    battlefield_[idx].card = c;
+                    battlefield_[idx].isPlayer = false;
+                    battlefield_[idx].health = c.health;
+                    battlefield_[idx].isAlive = true;
+                    battlefield_[idx].moveDirection = 0;
+                }
+            }
+        } else {
+            // 固定位置放置
+            for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+                const std::string& id = row.cards[col];
+                if (!id.empty()) {
+                    int idx = 1 * BATTLEFIELD_COLS + col;
+                    if (!battlefield_[idx].isAlive) {
+                        Card c = CardDB::instance().make(id);
+                        if (!c.id.empty()) {
+                            battlefield_[idx].card = c;
+                            battlefield_[idx].isPlayer = false;
+                            battlefield_[idx].health = c.health;
+                            battlefield_[idx].isAlive = true;
+                            battlefield_[idx].moveDirection = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // 初始化敌人第一行 (enemy side)
+    int initRow1 = matrix.rows.size() - 3; // 倒数第三行
+    if (initRow1 >= 0 && matrix.rows.size() > initRow1) {
+        const auto& row = matrix.rows[initRow1];
+        if (row.randomPlacement) {
+            // 随机位置放置
+            std::vector<std::string> ids;
+            for (const auto& id : row.cards) {
+                if (!id.empty()) ids.push_back(id);
+            }
+            std::vector<int> emptyCols;
+            for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                int idx = 0 * BATTLEFIELD_COLS + col;
+                if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+            }
+            std::random_device rd; std::mt19937 gen(rd());
+            for (const auto& id : ids) {
+                if (emptyCols.empty()) break;
+                std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+                int choose = pick(gen);
+                int col = emptyCols[choose];
+                emptyCols.erase(emptyCols.begin() + choose);
+                int idx = 0 * BATTLEFIELD_COLS + col;
+                Card c = CardDB::instance().make(id);
+                if (!c.id.empty()) {
+                    battlefield_[idx].card = c;
+                    battlefield_[idx].isPlayer = false;
+                    battlefield_[idx].health = c.health;
+                    battlefield_[idx].isAlive = true;
+                    battlefield_[idx].moveDirection = 0;
+                }
+            }
+        } else {
+            // 固定位置放置
+            for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+                const std::string& id = row.cards[col];
+                if (!id.empty()) {
+                    int idx = 0 * BATTLEFIELD_COLS + col;
+                    if (!battlefield_[idx].isAlive) {
+                        Card c = CardDB::instance().make(id);
+                        if (!c.id.empty()) {
+                            battlefield_[idx].card = c;
+                            battlefield_[idx].isPlayer = false;
+                            battlefield_[idx].health = c.health;
+                            battlefield_[idx].isAlive = true;
+                            battlefield_[idx].moveDirection = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
+
+bool BattleState::isImmovable(const Card& card) const {
+    // 简单规则：名称包含"磐石"或带有"磐石之身"印记的造物视为不可移动
+    if (card.name.find(u8"磐石") != std::string::npos) return true;
+    for (const auto& m : card.marks) if (m == u8"磐石之身") return true;
+    return false;
+}
+
 
 void BattleState::layoutUI() {
 	// 敌人区域（上方，增大上下长度）
@@ -2293,6 +2559,71 @@ void BattleState::enemyTurn() {
 	// 敌方攻击开始前：先完成敌人前进（若有）
 	if (startEnemyAdvanceIfAny()) {
 		return; // 动画完成后会回调进入敌方攻击
+	}
+
+	// 敌方前进完成：根据矩阵行读取当回合的第一行放置
+	{
+		auto matrix = EnemyPresetManager::instance().getMatrix(currentBattleId_);
+		// 根据回合数选择矩阵行：从倒数第4行开始，向前计算
+		int matrixRow = -1;
+		int totalRows = matrix.rows.size();
+		int turnRows = totalRows - 3; // 减去最后3行初始化行
+		
+		if (turnRows > 0 && currentTurn_ <= turnRows) {
+			matrixRow = turnRows - currentTurn_; // 第1回合=倒数第4行，第2回合=倒数第5行...
+		}
+		// 超出回合数后不出牌（matrixRow保持-1）
+		
+		if (matrixRow >= 0 && matrix.rows.size() > matrixRow) {
+			const auto& row = matrix.rows[matrixRow];
+			if (row.randomPlacement) {
+				// 随机位置放置
+				std::vector<std::string> ids;
+				for (const auto& id : row.cards) {
+					if (!id.empty()) ids.push_back(id);
+				}
+				std::vector<int> emptyCols;
+				for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+					int idx = 0 * BATTLEFIELD_COLS + col;
+					if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+				}
+				std::random_device rd; std::mt19937 gen(rd());
+				for (const auto& id : ids) {
+					if (emptyCols.empty()) break;
+					std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+					int choose = pick(gen);
+					int col = emptyCols[choose];
+					emptyCols.erase(emptyCols.begin() + choose);
+					int idx = 0 * BATTLEFIELD_COLS + col;
+					Card c = CardDB::instance().make(id);
+					if (!c.id.empty()) {
+						battlefield_[idx].card = c;
+						battlefield_[idx].isPlayer = false;
+						battlefield_[idx].health = c.health;
+						battlefield_[idx].isAlive = true;
+						battlefield_[idx].moveDirection = 0;
+					}
+				}
+			} else {
+				// 固定位置放置
+				for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+					const std::string& id = row.cards[col];
+					if (!id.empty()) {
+						int idx = 0 * BATTLEFIELD_COLS + col;
+						if (!battlefield_[idx].isAlive) {
+							Card c = CardDB::instance().make(id);
+							if (!c.id.empty()) {
+								battlefield_[idx].card = c;
+								battlefield_[idx].isPlayer = false;
+								battlefield_[idx].health = c.health;
+								battlefield_[idx].isAlive = true;
+								battlefield_[idx].moveDirection = 0;
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// 敌方前进完成后：敌人攻击前成长（含动画）。若有成长，先return，动画结束后再进入攻击。
@@ -5143,19 +5474,19 @@ void BattleState::startRushing(int cardIndex) {
 
 // 添加 checkRushingCanMove 函数实现
 bool BattleState::checkRushingCanMove(int currentRow, int currentCol, int direction) {
-    int targetCol = currentCol + direction;
-    if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
+	int targetCol = currentCol + direction;
+	if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
         int currentIndex = currentRow * BATTLEFIELD_COLS + currentCol;
-        int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
+		int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
         // 横冲直撞：目标格无论是否有牌都可进行（占用则交换）
         if (battlefield_[currentIndex].isAlive &&
             hasMark(battlefield_[currentIndex].card, u8"横冲直撞")) {
             return true;
         }
         // 冲刺能手：只能移动到空位
-        return !battlefield_[targetIndex].isAlive;
-    }
-    return false;
+		return !battlefield_[targetIndex].isAlive;
+	}
+	return false;
 }
 
 void BattleState::updateRushing(float dt) {
@@ -5193,7 +5524,7 @@ void BattleState::executeRushing() {
 	int currentCol = rushingCardIndex_ % BATTLEFIELD_COLS;
 	int targetCol = currentCol + rushingDirection_;
 	// 检查是否是摇晃动画
-    if (isRushingShaking_) {
+	if (isRushingShaking_) {
 		// 摇晃动画，不执行移动
 		statusMessage_ = "冲刺能手摇晃完成，下回合将向新方向移动！";
 	}
@@ -5202,20 +5533,20 @@ void BattleState::executeRushing() {
 		// 计算当前位置
 
 		// 移动到目标位置
-        
-        if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
+		
+		if (targetCol >= 0 && targetCol < BATTLEFIELD_COLS) {
 			int targetIndex = currentRow * BATTLEFIELD_COLS + targetCol;
 
             bool hasCrossRush = hasMark(battlefield_[rushingCardIndex_].card, u8"横冲直撞");
-            if (!battlefield_[targetIndex].isAlive) {
+			if (!battlefield_[targetIndex].isAlive) {
                 // 空位：直接移动
-                SDL_Rect targetRect = battlefield_[targetIndex].rect;
-                battlefield_[targetIndex] = battlefield_[rushingCardIndex_];
-                battlefield_[targetIndex].rect = targetRect;
-                battlefield_[rushingCardIndex_].isAlive = false;
-                battlefield_[rushingCardIndex_].health = 0;
-                battlefield_[rushingCardIndex_].isMovedToDeath = true;
-                suppressBoneGainThisFrame_ = true;
+				SDL_Rect targetRect = battlefield_[targetIndex].rect;
+				battlefield_[targetIndex] = battlefield_[rushingCardIndex_];
+				battlefield_[targetIndex].rect = targetRect;
+				battlefield_[rushingCardIndex_].isAlive = false;
+				battlefield_[rushingCardIndex_].health = 0;
+				battlefield_[rushingCardIndex_].isMovedToDeath = true;
+				suppressBoneGainThisFrame_ = true;
             } else if (hasCrossRush) {
                 // 交换位置：横冲直撞特性
                 SDL_Rect rectA = battlefield_[rushingCardIndex_].rect;
@@ -5225,7 +5556,7 @@ void BattleState::executeRushing() {
                 battlefield_[targetIndex].rect = rectB;
                 // 更新当前列为目标列，便于后续边界判断
                 currentCol = targetCol;
-            }
+			}
 		}
 	}
 	// 检查移动后是否在边界
@@ -5242,6 +5573,20 @@ void BattleState::executeRushing() {
 	}
 	else {
 		statusMessage_ = "冲刺能手移动成功！";
+	}
+
+	// 检查霜蹄鹤影特殊机制：移动后留下墨影
+	if (!isRushingShaking_ && battlefield_[rushingCardIndex_].card.id == "shuangti_heying") {
+		// 在原位置留下墨影
+		Card moyingCard = CardDB::instance().make("moying");
+		if (!moyingCard.id.empty()) {
+			battlefield_[rushingCardIndex_].card = moyingCard;
+			battlefield_[rushingCardIndex_].isAlive = true;
+			battlefield_[rushingCardIndex_].health = moyingCard.health;
+			battlefield_[rushingCardIndex_].isPlayer = card.isPlayer;
+			battlefield_[rushingCardIndex_].moveDirection = 0; // 墨影不可移动
+			statusMessage_ = "霜蹄鹤影移动后留下墨影！";
+		}
 	}
 
 	// 重置状态
@@ -5573,7 +5918,7 @@ void BattleState::executePushedAnimation() {
 // 移动卡牌队列处理方法实现
 void BattleState::processNextMovement() {
 	// 按照位置顺序处理，不区分类型
-    if (!pendingMovementCards_.empty()) {
+	if (!pendingMovementCards_.empty()) {
 		int cardIndex = pendingMovementCards_[0];
 		pendingMovementCards_.erase(pendingMovementCards_.begin());
 

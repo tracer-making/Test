@@ -63,10 +63,10 @@ void CardDB::loadBuiltinCards() {
 	
 	// 鹿部
 	c = Card{"yunqu_youmi", u8"云渠幼麋", 1, u8"鹿部", 1, 1, "face_yunqu_young", {u8"冲刺能手", u8"一回合成长"}}; registerCard(c);
-	c = Card{"yunqu_jumi", u8"云渠巨麋", 2, u8"鹿部", 2, 4, "face_yunqu_giant", {u8"冲刺能手", u8"一回合成长"}}; registerCard(c);
+	c = Card{"yunqu_jumi", u8"云渠巨麋", 2, u8"鹿部", 2, 4, "face_yunqu_giant", {u8"冲刺能手"}}; registerCard(c);
 	c = Card{"dishisanzi", u8"第十三子", 1, u8"鹿部", 0, 1, "face_dishisan", {u8"生生不息", u8"形态转换"}, 2}; registerCard(c);
 	c = Card{"dishisanzi_juexing", u8"第十三子", 1, u8"鹿部", 2, 1, "face_dishisan", {u8"形态转换",u8"空袭",u8"生生不息"}, 0}; registerCard(c);
-	c = Card{"shuangti_heying", u8"霜蹄鹤影", 4, u8"鹿部", 1, 2, "face_shuangti", {u8"冲刺能手", u8"死神之触"}, 2}; registerCard(c);
+	c = Card{"shuangti_heying", u8"霜蹄鹤影", 4, u8"鹿部", 1, 2, "face_shuangti", {u8"冲刺能手", u8"死神之触",u8"消耗骨头"}, 2}; registerCard(c);
 	c = Card{"xuanmu", u8"玄牡", 1, u8"鹿部", 0, 1, "face_xuanmu", {u8"优质祭品"}}; registerCard(c);
 	c = Card{"qijiao_shuangqi", u8"岐角双歧鹿", 2, u8"鹿部", 1, 3, "face_qijiao", {u8"冲刺能手", u8"双向攻击"}}; registerCard(c);
 	c = Card{"qianfeng_tuolu", u8"千峰驼鹿", 3, u8"鹿部", 3, 7, "face_qianfeng", {u8"蛮力冲撞"}}; registerCard(c);
@@ -81,10 +81,10 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"yuren_moke", u8"羽人墨客", 0, u8"介部", 7, 3, "face_shuchong", {u8"空袭"}, 0}; registerCard(c);
 	c = Card{"yunqian_fengchao", u8"芸签蜂巢", 1, u8"介部", 0, 2, "face_yunqian", {u8"内心之蜂"}}; registerCard(c);
 	c = Card{"yunchuang_fengshi", u8"芸窗蜂使", 0, u8"介部", 1, 1, "face_yunchuang", {u8"空袭"}, 0}; registerCard(c);
-	c = Card{"shuangdao_moke", u8"双刀墨客", 1, u8"介部", 1, 1, "face_shuangdao", {u8"双向攻击", u8"一回合成长"}}; registerCard(c);
+	c = Card{"shuangdao_moke", u8"双刀墨客", 1, u8"介部", 1, 1, "face_shuangdao", {u8"双向攻击"}}; registerCard(c);
 	c = Card{"diangao_yihou", u8"典诰蚁后", 2, u8"介部", 0, 3, "face_diangao", {u8"蚂蚁",u8"蚁后"}}; registerCard(c);
-	c = Card{"chaojing_gongyi", u8"抄经工蚁", 1, u8"介部", 0, 2, "face_chaojing", {u8"蚂蚁", u8"一回合成长"}}; registerCard(c);
-	c = Card{"yifei_yi", u8"驿飞蚁", 1, u8"介部", 0, 1, "face_yifei", {u8"空袭", u8"蚂蚁", u8"一回合成长"}}; registerCard(c);
+	c = Card{"chaojing_gongyi", u8"抄经工蚁", 1, u8"介部", 0, 2, "face_chaojing", {u8"蚂蚁"}}; registerCard(c);
+	c = Card{"yifei_yi", u8"驿飞蚁", 1, u8"介部", 0, 1, "face_yifei", {u8"空袭", u8"蚂蚁"}}; registerCard(c);
 	c = Card{"duyu_buhua", u8"蠹鱼不化", 4, u8"介部", 1, 1, "face_duyu", {u8"不死印记", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"dushi_chong", u8"蠹尸虫", 5, u8"介部", 1, 2, "face_dushi", {u8"食尸鬼", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"qiushi", u8"裘虱", 4, u8"介部", 1, 1, "face_qiushi", {u8"双重攻击", u8"消耗骨头"}, 2}; registerCard(c);
@@ -104,44 +104,58 @@ void CardDB::loadBuiltinCards() {
 	
 	// 其他
 	// 破碎的卵（用于滋生寄生虫默认产物）
-	c = Card{"posui_deluan", u8"破碎的卵", 0, u8"其他", 0, 1, "face_posui", {}, 0}; registerCard(c);
-	c = Card{"maoxiu_wo", u8"卯宿窝", 1, u8"其他", 0, 2, "face_maoxiu", {u8"兔窝", u8"继承印记"}}; registerCard(c);
+	c = Card{"posui_deluan", u8"破碎的卵", 0, u8"其他", 0, 1, "face_posui", {}, 0, false}; registerCard(c);
+	c = Card{"maoxiu_wo", u8"卯宿窝", 1, u8"其他", 0, 2, "face_maoxiu", {u8"兔窝"}}; registerCard(c);
 	c = Card{"baimao_zi", u8"白毫仔", 0, u8"其他", 0, 1, "face_baimao", {}, 0}; registerCard(c);
-	c = Card{"shuigong_tuoshi", u8"水工柁师", 2, u8"其他", 1, 3, "face_shuigong", {u8"筑坝师", u8"堤坝附带印记"}}; registerCard(c);
-	c = Card{"diba", u8"堤坝", 0, u8"其他", 0, 2, "face_diba", {}, 0}; registerCard(c);
+	c = Card{"shuigong_tuoshi", u8"水工柁师", 2, u8"其他", 1, 3, "face_shuigong", {u8"筑坝师"}}; registerCard(c);
+	c = Card{"diba", u8"堤坝", 0, u8"其他", 0, 2, "face_diba", {}, 0, false}; registerCard(c);
 	c = Card{"wengjian_choucheng", u8"瓮间臭丞", 2, u8"其他", 1, 2, "face_wengjian", {u8"臭臭", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"chuanfen_yinshi", u8"穿坟隐士", 1, u8"其他", 0, 6, "face_chuanfen", {u8"高跳", u8"守护者"}, 2}; registerCard(c);
 	c = Card{"baina_ou", u8"百衲偶", 2, u8"其他", 3, 3, "face_baina", {u8"全物种", u8"蚂蚁类"}, 2}; registerCard(c);
 	c = Card{"shulin_shucheng", u8"书林署丞", 2, u8"其他", 2, 2, "face_shulin", {u8"道具商"},2}; registerCard(c);
 	c = Card{"maomin", u8"毛民", 4, u8"其他", 7, 7, "face_maomin", {}, 2}; registerCard(c);
 	c = Card{"taiyi_hundun", u8"太一混沌", 2, u8"其他", 1, 2, "face_taiyi", {u8"随机",u8"消耗骨头"}, 2}; registerCard(c);
-	c = Card{"moding", u8"墨锭", 0, u8"其他", 0, 1, "face_moding", {}, 0}; registerCard(c);
+	
 	c = Card{"xianchan_nu", u8"衔蝉奴", 1, u8"其他", 0, 1, "face_xianchan", {u8"生生不息"}}; registerCard(c);
 	c = Card{"jiance_jishu", u8"简册计数触", 1, u8"其他", 0, 1, "face_jiance", {u8"手牌数"}}; registerCard(c);
 	c = Card{"zhaogu_jingxu", u8"照骨镜须", 1, u8"其他", 0, 3, "face_zhaogu", {u8"镜像"}}; registerCard(c);
 	c = Card{"duoling_suodi", u8"铎铃缩地须", 2, u8"其他", 0, 3, "face_duoling", {u8"铃铛距离"}}; registerCard(c);
-	c = Card{"chuanfen_yanzi", u8"穿坟鼹子", 1, u8"其他", 0, 4, "face_chuanfen_yan", {u8"守护者", u8"一回合成长"}}; registerCard(c);
+	c = Card{"chuanfen_yanzi", u8"穿坟鼹子", 1, u8"其他", 0, 4, "face_chuanfen_yan", {u8"守护者"}}; registerCard(c);
 	c = Card{"weijia_tong", u8"猬甲童", 1, u8"其他", 1, 2, "face_weijia", {u8"反伤"}}; registerCard(c);
 	c = Card{"hegong_tuozi", u8"河工柁子", 1, u8"其他", 1, 1, "face_hegong", {u8"水袭"}}; registerCard(c);
 	c = Card{"huangyou_chouwei", u8"黄鼬臭尉", 1, u8"其他", 0, 3, "face_huangyou", {u8"臭臭"}}; registerCard(c);
 	c = Card{"xuewei_yousheng", u8"雪尾鼬生", 1, u8"其他", 1, 2, "face_xuewei", {}}; registerCard(c);
 	c = Card{"cangdun_shuoshu", u8"仓囤硕鼠", 2, u8"其他", 2, 2, "face_cangdun", {u8"丰产之巢"}}; registerCard(c);
 	c = Card{"dulou_shuwang", u8"髑髅鼠王", 2, u8"其他", 2, 1, "face_dulou", {u8"骨王"}}; registerCard(c);
-	c = Card{"jiaoke", u8"鲛客", 3, u8"其他", 4, 2, "face_jiaoke", {u8"水袭"}}; registerCard(c);
+	c = Card{"jiaolong", u8"鲛龙", 3, u8"其他", 4, 2, "face_jiaolong", {u8"水袭"}}; registerCard(c);
 	c = Card{"jiufang_xiongjun", u8"九方熊君", 3, u8"其他", 4, 6, "face_jiufang", {}}; registerCard(c);
-	c = Card{"beizi_daisheng", u8"背子袋生", 2, u8"其他", 1, 1, "face_beizi", {u8"消耗骨头"}}; registerCard(c);
+	c = Card{"jianjia_yu", u8"剑甲鱼", 2, u8"其他", 1, 1, "face_jianjia", {u8"消耗骨头"}}; registerCard(c);
+
 	c = Card{"yefei_fuyi", u8"夜飞伏翼", 4, u8"其他", 2, 1, "face_yefei", {u8"空袭", u8"消耗骨头"}}; registerCard(c);
 	c = Card{"dulou_yan", u8"髑髅烟", 0, u8"其他", 0, 1, "face_dulou_yan", {u8"骨王"}, 0}; registerCard(c);
 	c = Card{"xiqushen_jiao", u8"犀渠神角", 2, u8"其他", 1, 5, "face_xiqushen", {u8"嗜血狂热"}, 2}; registerCard(c);
 	c = Card{"huansha_xisheng", u8"浣沙溪生", 1, u8"其他", 1, 1, "face_huansha", {u8"拾荒者"}}; registerCard(c);
 	c = Card{"xuanhuan", u8"玄獾", 5, u8"其他", 1, 3, "face_xuanhuan", {u8"嗜血狂热", u8"消耗骨头"}}; registerCard(c);
-	c = Card{"langpi", u8"狼皮", 0, u8"其他", 0, 2, "face_langpi", {}, 0}; registerCard(c);
-	c = Card{"jinang_mao", u8"金羊皮", 0, u8"其他", 0, 3, "face_jinang", {}, 0}; registerCard(c);
-	c = Card{"tuopi_mao", u8"兔皮", 0, u8"其他", 0, 1, "face_tuopi", {}, 0}; registerCard(c);
 
-	// 磐石之身测试卡牌
-	c = Card{"panshi", u8"磐石", 0, u8"其他", 0, 5, "face_panshi", {u8"磐石之身"}, 0}; registerCard(c);
+	c = Card{"moding", u8"墨锭", 0, u8"其他", 0, 1, "face_moding", {}, 0}; registerCard(c);
+	c = Card{"langpi", u8"狼皮", 0, u8"其他", 0, 2, "face_langpi", {}, 0, false}; registerCard(c);
+	c = Card{"jinang_mao", u8"金羊皮", 0, u8"其他", 0, 3, "face_jinang", {}, 0, false}; registerCard(c);
+	c = Card{"tuopi_mao", u8"兔皮", 0, u8"其他", 0, 1, "face_tuopi", {}, 0, false}; registerCard(c);
 
+	//特殊牌
+	c = Card{"bingfeng_jianjia", u8"冰封剑甲", 0, u8"其他", 0, 5, "face_bingfeng_jianjia", {},0, false}; registerCard(c);
+	c = Card{"panshi", u8"磐石", 0, u8"其他", 0, 5, "face_panshi", {u8"磐石之身"}, 0, false}; registerCard(c);
+	c = Card{"jiaoyu", u8"蛟鱼", 0, u8"其他", 0, 1, "face_jiaoyu", {}, 0, false}; registerCard(c);
+	c = Card{"jinkuai", u8"金块", 0, u8"其他", 0, 2, "face_jinkuai", {}, 0, false}; registerCard(c);
+	c = Card{"yunshan", u8"云杉", 0, u8"其他", 0, 3, "face_yunshan", {u8"高跳"}, 0, false}; registerCard(c);
+	c = Card{"xueshan", u8"雪杉", 0, u8"其他", 0, 4, "face_xueshan", {u8"高跳"}, 0, false}; registerCard(c);
+	c = Card{"moying", u8"墨影", 0, u8"鹿部", 0, 1, "face_moying", {}, 0}; registerCard(c);
+	c = Card{"luma", u8"骡子", 0, u8"鹿部", 0, 5, "face_luma", {u8"冲刺能手"}, 0}; registerCard(c);
+	c = Card{"hungry", u8"饥饿", 0, u8"其他", 1, 1, "face_hungry", {u8"令人生厌"}, 0, false}; registerCard(c);
+	c = Card{"muzhuang", u8"木桩", 0, u8"其他", 0, 3, "face_muzhuang", {}, 0, false}; registerCard(c);
+	c = Card{"qi_qingwa", u8"奇怪的青蛙", 0, u8"其他", 1, 2, "face_qi_qingwa", {u8"高跳"}, 0, false}; registerCard(c);
+	c = Card{"yueqiu", u8"月球", 0, u8"其他", 1, 40, "face_yueqiu", {u8"高跳", u8"全向打击", u8"磐石"}, 0, false}; registerCard(c);
 	// 铁兽夹测试卡牌
-	c = Card{"tieshou_jia", u8"铁兽夹", 0, u8"其他", 0, 1, "face_tieshou", {u8"铁兽夹"}, 0}; registerCard(c);
+	c = Card{"tieshou_jia", u8"铁兽夹", 0, u8"其他", 0, 1, "face_tieshou", {u8"铁兽夹",u8"高跳"}, 0, false}; registerCard(c);
+
 }
