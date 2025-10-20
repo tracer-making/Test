@@ -40,6 +40,7 @@ MapExploreState::~MapExploreState() {
     for (auto* b : difficultyButtons_) delete b;
     difficultyButtons_.clear();
     delete backToTestButton_;
+    delete testMinerButton_;
 }
 
 void MapExploreState::onEnter(App& app) {
@@ -103,6 +104,17 @@ void MapExploreState::onEnter(App& app) {
     if (!s_mapGenerated_ || !ms.hasMap()) {
         generateLayeredMap(true); // 第一次生成，需要构建偏移
         s_mapGenerated_ = true;
+        // 为第1-3层随机分配环境：林地/湿地/雪原，且互不重复
+        if (ms.layerBiomes().empty()) {
+            std::vector<std::string> biomes = { u8"林地", u8"湿地", u8"雪原" };
+            std::random_device rd; std::mt19937 g(rd());
+            std::shuffle(biomes.begin(), biomes.end(), g);
+            ms.layerBiomes().clear();
+            ms.layerBiomes().resize(5); // 预留到索引3
+            ms.layerBiomes()[1] = biomes[0];
+            ms.layerBiomes()[2] = biomes[1];
+            ms.layerBiomes()[3] = biomes[2];
+        }
         // 将本地数据写入全局
         ms.layerNodes().clear();
         ms.layerNodes().resize(layerNodes_.size());
@@ -318,6 +330,18 @@ void MapExploreState::onEnter(App& app) {
             pendingGoTest_ = true;
         });
     }
+
+    // 矿工测试按钮（左上角下方）
+    testMinerButton_ = new Button();
+    if (testMinerButton_) {
+        SDL_Rect r{ startX + 130, startY + btnH + 12, 120, 36 };
+        testMinerButton_->setRect(r);
+        testMinerButton_->setText(u8"矿工测试");
+        if (smallFont_) testMinerButton_->setFont(smallFont_, app.getRenderer());
+        testMinerButton_->setOnClick([this]() {
+            pendingGoMinerBoss_ = true;
+        });
+    }
     // 进入时更新滚动边界
     updateScrollBounds();
     
@@ -434,6 +458,7 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         if (b) b->handleEvent(e);
     }
     if (backToTestButton_) backToTestButton_->handleEvent(e);
+    if (testMinerButton_) testMinerButton_->handleEvent(e);
 
     // 滚轮滚动地图（仅在上帝模式下生效）
     if (e.type == SDL_MOUSEWHEEL && godMode_) {
@@ -515,6 +540,14 @@ void MapExploreState::update(App& app, float dt) {
         return;
     }
     
+    if (pendingGoMinerBoss_) {
+        pendingGoMinerBoss_ = false;
+        // 设置矿工Boss战（ID: 100）
+        auto* battleState = new BattleState(100);
+        app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
+        return;
+    }
+    
     if (pendingGoBarter_) {
         pendingGoBarter_ = false;
         app.setState(std::unique_ptr<State>(static_cast<State*>(new BarterState())));
@@ -541,7 +574,7 @@ void MapExploreState::update(App& app, float dt) {
     
     if (pendingGoInkWorkshop_) {
         pendingGoInkWorkshop_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new InkWorkshopState())));
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new InkWorkshopState(currentMapLayer_))));
         return;
     }
     
@@ -618,6 +651,9 @@ void MapExploreState::render(App& app) {
     if (backToTestButton_) {
         try { backToTestButton_->render(r); } catch (...) {}
     }
+    if (testMinerButton_) {
+        try { testMinerButton_->render(r); } catch (...) {}
+    }
 }
 
 void MapExploreState::renderTitle(SDL_Renderer* renderer) {
@@ -629,6 +665,26 @@ void MapExploreState::renderTitle(SDL_Renderer* renderer) {
             titleH_
         };
         SDL_RenderCopy(renderer, titleTex_, nullptr, &titleRect);
+    }
+    // 显示当前层环境
+    if (smallFont_) {
+        auto& ms = MapStore::instance();
+        std::string biome;
+        if ((int)ms.layerBiomes().size() > currentMapLayer_) {
+            biome = ms.layerBiomes()[currentMapLayer_];
+        }
+        if (!biome.empty()) {
+            SDL_Color col{200,230,255,255};
+            std::string text = u8"当前层环境：" + biome;
+            SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, text.c_str(), col);
+            if (s) {
+                SDL_Texture* t = SDL_CreateTextureFromSurface(renderer, s);
+                SDL_Rect d{ 20, 20, s->w, s->h };
+                SDL_RenderCopy(renderer, t, nullptr, &d);
+                SDL_DestroyTexture(t);
+                SDL_FreeSurface(s);
+            }
+        }
     }
 }
 
@@ -2249,5 +2305,27 @@ void MapExploreState::renderLeftSideUI(SDL_Renderer* renderer) {
             SDL_DestroyTexture(wenMaiTexture);
         }
         SDL_FreeSurface(wenMaiSurface);
+    }
+
+    // 在文脉下方显示当前层环境提示
+    currentY += lineHeight;
+    auto& ms = MapStore::instance();
+    std::string biome;
+    if ((int)ms.layerBiomes().size() > currentMapLayer_) {
+        biome = ms.layerBiomes()[currentMapLayer_];
+    }
+    if (!biome.empty()) {
+        SDL_Color tipColor{ 200, 230, 255, 255 };
+        std::string tip = u8"当前层环境：" + biome;
+        SDL_Surface* tipSurface = TTF_RenderUTF8_Blended(smallFont_, tip.c_str(), tipColor);
+        if (tipSurface) {
+            SDL_Texture* tipTexture = SDL_CreateTextureFromSurface(renderer, tipSurface);
+            if (tipTexture) {
+                SDL_Rect tipRect = { leftX, currentY, tipSurface->w, tipSurface->h };
+                SDL_RenderCopy(renderer, tipTexture, nullptr, &tipRect);
+                SDL_DestroyTexture(tipTexture);
+            }
+            SDL_FreeSurface(tipSurface);
+        }
     }
 }

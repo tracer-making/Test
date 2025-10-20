@@ -20,7 +20,7 @@ struct Item {
 
 class InkWorkshopState : public State {
 public:
-    InkWorkshopState();
+    InkWorkshopState(int mapLayer = 1);
     ~InkWorkshopState();
 
     void onEnter(App& app) override;
@@ -91,4 +91,7 @@ private:
     std::string statusMessage_;
     float messageTime_ = 0.0f;
     float messageDuration_ = 2.0f;
+    
+    // 地图层级
+    int mapLayer_ = 1;
 };

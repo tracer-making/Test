@@ -14,7 +14,7 @@
 
 class BattleState : public State {
 public:
-	BattleState();
+	BattleState(int battleId = 1);
 	~BattleState();
 
 	void onEnter(App& app) override;

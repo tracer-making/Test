@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <algorithm>
 
-InkWorkshopState::InkWorkshopState() {
+InkWorkshopState::InkWorkshopState(int mapLayer) : mapLayer_(mapLayer) {
     backButton_ = new Button();
 }
 
@@ -36,6 +36,19 @@ void InkWorkshopState::onEnter(App& app) {
     
     if (!titleFont_ || !smallFont_ || !cardNameFont_ || !cardStatFont_) {
         SDL_Log("TTF_OpenFont failed: %s", TTF_GetError());
+    }
+    
+    // 根据地图层级设置毛皮价格
+    if (mapLayer_ == 3) {
+        // 第三层：兔皮2、狼皮6、金羊皮11
+        rabbitCost_ = 2;
+        wolfCost_ = 6;
+        goldSheepCost_ = 11;
+    } else {
+        // 其他层级：默认价格
+        rabbitCost_ = 2;
+        wolfCost_ = 4;
+        goldSheepCost_ = 7;
     }
     
     // 设置返回按钮

@@ -137,6 +137,24 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"huansha_xisheng", u8"浣沙溪生", 1, u8"其他", 1, 1, "face_huansha", {u8"拾荒者"}}; registerCard(c);
 	c = Card{"xuanhuan", u8"玄獾", 5, u8"其他", 1, 3, "face_xuanhuan", {u8"嗜血狂热", u8"消耗骨头"}}; registerCard(c);
 
+	// 死亡卡
+	c = Card{"louis", u8"Louis", 1, u8"死亡", 1, 1, "face_louis", {u8"冲刺能手", u8"水袭"}, 0}; registerCard(c);
+	c = Card{"jonah", u8"Jonah", 3, u8"死亡", 2, 5, "face_jonah", {u8"内心之蜂", u8"反伤"}, 0}; registerCard(c);
+	c = Card{"kevin", u8"Kevin", 2, u8"死亡", 2, 3, "face_kevin", {u8"横冲直撞", u8"断尾求生"}, 0}; registerCard(c);
+	c = Card{"sean", u8"Sean", 2, u8"死亡", 1, 6, "face_sean", {u8"高跳", u8"死神之触"}, 0}; registerCard(c);
+	c = Card{"tamara", u8"Tamara", 2, u8"死亡", 2, 3, "face_tamara", {u8"蛮力冲撞", u8"断尾求生"}, 0}; registerCard(c);
+	c = Card{"daniel", u8"Daniel", 2, u8"死亡", 2, 2, "face_daniel", {u8"双重攻击"}, 0}; registerCard(c);
+	c = Card{"cody", u8"Cody", 2, u8"死亡", 3, 1, "face_cody", {u8"守护者", u8"断尾求生"}, 0}; registerCard(c);
+	c = Card{"david", u8"David", 2, u8"死亡", 2, 4, "face_david", {u8"蛮力冲撞", u8"反伤"}, 0}; registerCard(c);
+	c = Card{"tahnee", u8"Tahnee", 2, u8"死亡", 1, 3, "face_tahnee", {u8"三向攻击"}, 0}; registerCard(c);
+	c = Card{"berke", u8"Berke", 2, u8"死亡", 2, 1, "face_berke", {u8"守护者"}, 0}; registerCard(c);
+	c = Card{"kaycee", u8"Kaycee", 1, u8"死亡", 1, 2, "face_kaycee", {u8"双向攻击", u8"反伤"}, 0}; registerCard(c);
+	c = Card{"kaminski", u8"Kaminski", 1, u8"死亡", 0, 1, "face_kaminski", {u8"守护者", u8"反伤", u8"消耗骨头"}, 0}; registerCard(c);
+	c = Card{"reginald", u8"Reginald", 3, u8"死亡", 1, 3, "face_reginald", {u8"死神之触", u8"消耗骨头"}, 0}; registerCard(c);
+	c = Card{"Oct19", u8"Oct19", 1, u8"死亡", 3, 2, "face_Oct19", {u8"死神之触"}, 0}; registerCard(c);
+	c = Card{"Luke", u8"Luke", 0, u8"死亡", 4, 4, "face_Luke", {}, 0}; registerCard(c);
+
+	//资源类
 	c = Card{"moding", u8"墨锭", 0, u8"其他", 0, 1, "face_moding", {}, 0}; registerCard(c);
 	c = Card{"langpi", u8"狼皮", 0, u8"其他", 0, 2, "face_langpi", {}, 0, false}; registerCard(c);
 	c = Card{"jinang_mao", u8"金羊皮", 0, u8"其他", 0, 3, "face_jinang", {}, 0, false}; registerCard(c);
@@ -155,7 +173,6 @@ void CardDB::loadBuiltinCards() {
 	c = Card{"muzhuang", u8"木桩", 0, u8"其他", 0, 3, "face_muzhuang", {}, 0, false}; registerCard(c);
 	c = Card{"qi_qingwa", u8"奇怪的青蛙", 0, u8"其他", 1, 2, "face_qi_qingwa", {u8"高跳"}, 0, false}; registerCard(c);
 	c = Card{"yueqiu", u8"月球", 0, u8"其他", 1, 40, "face_yueqiu", {u8"高跳", u8"全向打击", u8"磐石"}, 0, false}; registerCard(c);
-	// 铁兽夹测试卡牌
 	c = Card{"tieshou_jia", u8"铁兽夹", 0, u8"其他", 0, 1, "face_tieshou", {u8"铁兽夹",u8"高跳"}, 0, false}; registerCard(c);
 
 }

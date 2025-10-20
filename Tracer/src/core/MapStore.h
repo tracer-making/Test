@@ -30,6 +30,7 @@ public:
 	bool hasMap() const { return generated_; }
 	void clear() {
 		layerNodes_.clear();
+		layerBiomes_.clear();
 		numLayers_ = 0;
 		startNodeIdx_ = -1;
 		bossNodeIdx_ = -1;
@@ -41,6 +42,7 @@ public:
 
 	// 数据访问
 	std::vector<std::vector<MapNodeData>>& layerNodes() { return layerNodes_; }
+	std::vector<std::string>& layerBiomes() { return layerBiomes_; }
 	int& numLayers() { return numLayers_; }
 	int& startNodeIdx() { return startNodeIdx_; }
 	int& bossNodeIdx() { return bossNodeIdx_; }
@@ -58,6 +60,7 @@ private:
 
 	bool generated_ = false;
 	std::vector<std::vector<MapNodeData>> layerNodes_{};
+	std::vector<std::string> layerBiomes_{}; // 每层环境标签（林地/湿地/雪原）
 	int numLayers_ = 0;
 	int startNodeIdx_ = -1;
 	int bossNodeIdx_ = -1;

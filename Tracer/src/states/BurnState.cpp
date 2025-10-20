@@ -52,10 +52,13 @@ void BurnState::onEnter(App& app) {
                 if (li >= 0 && li < (int)lib.size()) {
                     // 动画并删除
                     animActive_ = true; animTime_ = 0.0f; animRect_ = slotRect_;
-                    // 记录全局增益：基础+1；若焚毁“玄牡(xuanmu)”则+8
+                    // 记录全局增益：基础+1；若焚毁"玄牡(xuanmu)"则+8；毛皮卡牌不增加魂骨
                     const Card& destroyed = lib[li];
                     if (destroyed.id == std::string("xuanmu")) {
                         ItemStore::instance().extraInitialBones += 8;
+                    } else if (destroyed.id == "tuopi_mao" || destroyed.id == "langpi" || destroyed.id == "jinang_mao") {
+                        // 毛皮卡牌：可以焚书但不增加魂骨
+                        // 不增加魂骨数量
                     } else {
                         ItemStore::instance().extraInitialBones += 1;
                     }

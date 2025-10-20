@@ -7,7 +7,7 @@
 // 敌方预设行结构
 struct EnemyPresetRow {
     std::vector<std::string> cards; // 4列卡牌ID，空字符串表示不放置
-    bool randomPlacement;           // 是否随机位置放置
+    int placementType;              // -1=固定位置固定放置，其他值=预期生成数量（用于调控生成概率）
 };
 
 // 4列N行的敌方预设矩阵
@@ -31,6 +31,10 @@ public:
 
     // 根据战斗ID获取预设矩阵
     EnemyPresetMatrix getMatrix(int battleId) const;
+    // 根据环境获取Boss战预设矩阵（林地/湿地/雪原）
+    EnemyPresetMatrix getBossMatrixForBiome(const std::string& biome) const;
+    // 根据环境与阶段(1/2)获取Boss预设；若无阶段2则返回阶段1
+    EnemyPresetMatrix getBossMatrixForBiomePhase(const std::string& biome, int phase) const;
     
     // 获取可用的战斗ID列表
     std::vector<int> getAvailableBattleIds() const;

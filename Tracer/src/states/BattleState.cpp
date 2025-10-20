@@ -32,7 +32,8 @@ const std::vector<std::string>& BattleState::getAvailableItems() {
 #include <string>
 #include "../core/WenMaiStore.h"
 
-BattleState::BattleState() = default;
+BattleState::BattleState(int battleId) : currentBattleId_(battleId) {
+}
 
 
 BattleState::~BattleState() {
@@ -646,7 +647,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 								}
 							}
 							if (canSacrifice) {
-								sacrificeCandidates_.push_back(j);
+							sacrificeCandidates_.push_back(j);
 							}
 						}
 					}
@@ -1947,49 +1948,88 @@ void BattleState::initializeBattle() {
     int initRow3 = matrix.rows.size() - 1; // 最后一行
     if (initRow3 >= 0 && matrix.rows.size() > initRow3) {
         const auto& row = matrix.rows[initRow3];
-        if (row.randomPlacement) {
-            // 随机位置放置
-            std::vector<std::string> ids;
+        // 根据placementType决定放置方式
+        std::vector<std::string> ids;
+        if (row.placementType == -1) {
+            // 固定造物 + 固定位置
             for (const auto& id : row.cards) {
-                if (!id.empty()) ids.push_back(id);
+                if (!id.empty()) {
+                    ids.push_back(id);
+                }
             }
-            std::vector<int> emptyCols;
-            for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
-                int idx = 2 * BATTLEFIELD_COLS + col;
-                if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
-            }
-            std::random_device rd; std::mt19937 gen(rd());
-            for (const auto& id : ids) {
-                if (emptyCols.empty()) break;
-                std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
-                int choose = pick(gen);
-                int col = emptyCols[choose];
-                emptyCols.erase(emptyCols.begin() + choose);
-                int idx = 2 * BATTLEFIELD_COLS + col;
-                Card c = CardDB::instance().make(id);
-                if (!c.id.empty()) {
-                    battlefield_[idx].card = c;
-                    battlefield_[idx].isPlayer = true;
-                    battlefield_[idx].health = c.health;
-                    battlefield_[idx].isAlive = true;
-                    battlefield_[idx].moveDirection = 0;
+        } else if (row.placementType == 0) {
+            // 固定造物 + 随机位置
+            for (const auto& id : row.cards) {
+                if (!id.empty()) {
+                    ids.push_back(id);
                 }
             }
         } else {
-            // 固定位置放置
-            for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
-                const std::string& id = row.cards[col];
+            // 概率造物 + 随机位置（基于预期生成数量）
+            int expectedCount = row.placementType;
+            std::vector<std::string> availableCards;
+            for (const auto& id : row.cards) {
                 if (!id.empty()) {
-                    int idx = 2 * BATTLEFIELD_COLS + col;
-                    if (!battlefield_[idx].isAlive) {
-                        Card c = CardDB::instance().make(id);
-                        if (!c.id.empty()) {
-                            battlefield_[idx].card = c;
-                            battlefield_[idx].isPlayer = true;
-                            battlefield_[idx].health = c.health;
-                            battlefield_[idx].isAlive = true;
-                            battlefield_[idx].moveDirection = 0;
+                    availableCards.push_back(id);
+                }
+            }
+            
+            if (!availableCards.empty() && expectedCount > 0) {
+                // 计算每个卡牌的概率：预期数量 / 可用卡牌数量
+                float probability = (float)expectedCount / (float)availableCards.size();
+                std::random_device rd;
+                std::mt19937 g(rd());
+                std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+                
+                for (const auto& id : availableCards) {
+                    if (dis(g) < probability) {
+                        ids.push_back(id);
+                    }
+                }
+            }
+        }
+        
+        if (!ids.empty()) {
+            if (row.placementType == -1) {
+                // 固定位置放置
+                for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+                    const std::string& id = row.cards[col];
+                    if (!id.empty()) {
+                        int idx = 2 * BATTLEFIELD_COLS + col;
+                        if (!battlefield_[idx].isAlive) {
+                            Card c = CardDB::instance().make(id);
+                            if (!c.id.empty()) {
+                                battlefield_[idx].card = c;
+                                battlefield_[idx].isPlayer = true;
+                                battlefield_[idx].health = c.health;
+                                battlefield_[idx].isAlive = true;
+                                battlefield_[idx].moveDirection = 0;
+                            }
                         }
+                    }
+                }
+            } else {
+                // 随机位置放置
+                std::vector<int> emptyCols;
+                for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                    int idx = 2 * BATTLEFIELD_COLS + col;
+                    if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+                }
+                std::random_device rd; std::mt19937 gen(rd());
+                for (const auto& id : ids) {
+                    if (emptyCols.empty()) break;
+                    std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+                    int choose = pick(gen);
+                    int col = emptyCols[choose];
+                    emptyCols.erase(emptyCols.begin() + choose);
+                    int idx = 2 * BATTLEFIELD_COLS + col;
+                    Card c = CardDB::instance().make(id);
+                    if (!c.id.empty()) {
+                        battlefield_[idx].card = c;
+                        battlefield_[idx].isPlayer = true;
+                        battlefield_[idx].health = c.health;
+                        battlefield_[idx].isAlive = true;
+                        battlefield_[idx].moveDirection = 0;
                     }
                 }
             }
@@ -1999,49 +2039,88 @@ void BattleState::initializeBattle() {
     int initRow2 = matrix.rows.size() - 2; // 倒数第二行
     if (initRow2 >= 0 && matrix.rows.size() > initRow2) {
         const auto& row = matrix.rows[initRow2];
-        if (row.randomPlacement) {
-            // 随机位置放置
-            std::vector<std::string> ids;
+        // 根据placementType决定放置方式
+        std::vector<std::string> ids;
+        if (row.placementType == -1) {
+            // 固定造物 + 固定位置
             for (const auto& id : row.cards) {
-                if (!id.empty()) ids.push_back(id);
+                if (!id.empty()) {
+                    ids.push_back(id);
+                }
             }
-            std::vector<int> emptyCols;
-            for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
-                int idx = 1 * BATTLEFIELD_COLS + col;
-                if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
-            }
-            std::random_device rd; std::mt19937 gen(rd());
-            for (const auto& id : ids) {
-                if (emptyCols.empty()) break;
-                std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
-                int choose = pick(gen);
-                int col = emptyCols[choose];
-                emptyCols.erase(emptyCols.begin() + choose);
-                int idx = 1 * BATTLEFIELD_COLS + col;
-                Card c = CardDB::instance().make(id);
-                if (!c.id.empty()) {
-                    battlefield_[idx].card = c;
-                    battlefield_[idx].isPlayer = false;
-                    battlefield_[idx].health = c.health;
-                    battlefield_[idx].isAlive = true;
-                    battlefield_[idx].moveDirection = 0;
+        } else if (row.placementType == 0) {
+            // 固定造物 + 随机位置
+            for (const auto& id : row.cards) {
+                if (!id.empty()) {
+                    ids.push_back(id);
                 }
             }
         } else {
-            // 固定位置放置
-            for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
-                const std::string& id = row.cards[col];
+            // 概率造物 + 随机位置（基于预期生成数量）
+            int expectedCount = row.placementType;
+            std::vector<std::string> availableCards;
+            for (const auto& id : row.cards) {
                 if (!id.empty()) {
-                    int idx = 1 * BATTLEFIELD_COLS + col;
-                    if (!battlefield_[idx].isAlive) {
-                        Card c = CardDB::instance().make(id);
-                        if (!c.id.empty()) {
-                            battlefield_[idx].card = c;
-                            battlefield_[idx].isPlayer = false;
-                            battlefield_[idx].health = c.health;
-                            battlefield_[idx].isAlive = true;
-                            battlefield_[idx].moveDirection = 0;
+                    availableCards.push_back(id);
+                }
+            }
+            
+            if (!availableCards.empty() && expectedCount > 0) {
+                // 计算每个卡牌的概率：预期数量 / 可用卡牌数量
+                float probability = (float)expectedCount / (float)availableCards.size();
+                std::random_device rd;
+                std::mt19937 g(rd());
+                std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+                
+                for (const auto& id : availableCards) {
+                    if (dis(g) < probability) {
+                        ids.push_back(id);
+                    }
+                }
+            }
+        }
+        
+        if (!ids.empty()) {
+            if (row.placementType == -1) {
+                // 固定位置放置
+                for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+                    const std::string& id = row.cards[col];
+                    if (!id.empty()) {
+                        int idx = 1 * BATTLEFIELD_COLS + col;
+                        if (!battlefield_[idx].isAlive) {
+                            Card c = CardDB::instance().make(id);
+                            if (!c.id.empty()) {
+                                battlefield_[idx].card = c;
+                                battlefield_[idx].isPlayer = false;
+                                battlefield_[idx].health = c.health;
+                                battlefield_[idx].isAlive = true;
+                                battlefield_[idx].moveDirection = 0;
+                            }
                         }
+                    }
+                }
+            } else {
+                // 随机位置放置
+                std::vector<int> emptyCols;
+                for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                    int idx = 1 * BATTLEFIELD_COLS + col;
+                    if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+                }
+                std::random_device rd; std::mt19937 gen(rd());
+                for (const auto& id : ids) {
+                    if (emptyCols.empty()) break;
+                    std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+                    int choose = pick(gen);
+                    int col = emptyCols[choose];
+                    emptyCols.erase(emptyCols.begin() + choose);
+                    int idx = 1 * BATTLEFIELD_COLS + col;
+                    Card c = CardDB::instance().make(id);
+                    if (!c.id.empty()) {
+                        battlefield_[idx].card = c;
+                        battlefield_[idx].isPlayer = false;
+                        battlefield_[idx].health = c.health;
+                        battlefield_[idx].isAlive = true;
+                        battlefield_[idx].moveDirection = 0;
                     }
                 }
             }
@@ -2051,49 +2130,88 @@ void BattleState::initializeBattle() {
     int initRow1 = matrix.rows.size() - 3; // 倒数第三行
     if (initRow1 >= 0 && matrix.rows.size() > initRow1) {
         const auto& row = matrix.rows[initRow1];
-        if (row.randomPlacement) {
-            // 随机位置放置
-            std::vector<std::string> ids;
+        // 根据placementType决定放置方式
+        std::vector<std::string> ids;
+        if (row.placementType == -1) {
+            // 固定造物 + 固定位置
             for (const auto& id : row.cards) {
-                if (!id.empty()) ids.push_back(id);
+                if (!id.empty()) {
+                    ids.push_back(id);
+                }
             }
-            std::vector<int> emptyCols;
-            for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
-                int idx = 0 * BATTLEFIELD_COLS + col;
-                if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
-            }
-            std::random_device rd; std::mt19937 gen(rd());
-            for (const auto& id : ids) {
-                if (emptyCols.empty()) break;
-                std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
-                int choose = pick(gen);
-                int col = emptyCols[choose];
-                emptyCols.erase(emptyCols.begin() + choose);
-                int idx = 0 * BATTLEFIELD_COLS + col;
-                Card c = CardDB::instance().make(id);
-                if (!c.id.empty()) {
-                    battlefield_[idx].card = c;
-                    battlefield_[idx].isPlayer = false;
-                    battlefield_[idx].health = c.health;
-                    battlefield_[idx].isAlive = true;
-                    battlefield_[idx].moveDirection = 0;
+        } else if (row.placementType == 0) {
+            // 固定造物 + 随机位置
+            for (const auto& id : row.cards) {
+                if (!id.empty()) {
+                    ids.push_back(id);
                 }
             }
         } else {
-            // 固定位置放置
-            for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
-                const std::string& id = row.cards[col];
+            // 概率造物 + 随机位置（基于预期生成数量）
+            int expectedCount = row.placementType;
+            std::vector<std::string> availableCards;
+            for (const auto& id : row.cards) {
                 if (!id.empty()) {
-                    int idx = 0 * BATTLEFIELD_COLS + col;
-                    if (!battlefield_[idx].isAlive) {
-                        Card c = CardDB::instance().make(id);
-                        if (!c.id.empty()) {
-                            battlefield_[idx].card = c;
-                            battlefield_[idx].isPlayer = false;
-                            battlefield_[idx].health = c.health;
-                            battlefield_[idx].isAlive = true;
-                            battlefield_[idx].moveDirection = 0;
+                    availableCards.push_back(id);
+                }
+            }
+            
+            if (!availableCards.empty() && expectedCount > 0) {
+                // 计算每个卡牌的概率：预期数量 / 可用卡牌数量
+                float probability = (float)expectedCount / (float)availableCards.size();
+                std::random_device rd;
+                std::mt19937 g(rd());
+                std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+                
+                for (const auto& id : availableCards) {
+                    if (dis(g) < probability) {
+                        ids.push_back(id);
+                    }
+                }
+            }
+        }
+        
+        if (!ids.empty()) {
+            if (row.placementType == -1) {
+                // 固定位置放置
+                for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+                    const std::string& id = row.cards[col];
+                    if (!id.empty()) {
+                        int idx = 0 * BATTLEFIELD_COLS + col;
+                        if (!battlefield_[idx].isAlive) {
+                            Card c = CardDB::instance().make(id);
+                            if (!c.id.empty()) {
+                                battlefield_[idx].card = c;
+                                battlefield_[idx].isPlayer = false;
+                                battlefield_[idx].health = c.health;
+                                battlefield_[idx].isAlive = true;
+                                battlefield_[idx].moveDirection = 0;
+                            }
                         }
+                    }
+                }
+            } else {
+                // 随机位置放置
+                std::vector<int> emptyCols;
+                for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                    int idx = 0 * BATTLEFIELD_COLS + col;
+                    if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+                }
+                std::random_device rd; std::mt19937 gen(rd());
+                for (const auto& id : ids) {
+                    if (emptyCols.empty()) break;
+                    std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+                    int choose = pick(gen);
+                    int col = emptyCols[choose];
+                    emptyCols.erase(emptyCols.begin() + choose);
+                    int idx = 0 * BATTLEFIELD_COLS + col;
+                    Card c = CardDB::instance().make(id);
+                    if (!c.id.empty()) {
+                        battlefield_[idx].card = c;
+                        battlefield_[idx].isPlayer = false;
+                        battlefield_[idx].health = c.health;
+                        battlefield_[idx].isAlive = true;
+                        battlefield_[idx].moveDirection = 0;
                     }
                 }
             }
@@ -2207,7 +2325,10 @@ void BattleState::layoutBattlefield() {
 				cardWidth,
 				cardHeight
 			};
-			battlefield_[index].isPlayer = true; // 所有位置都可以放置玩家卡牌
+			// 只为空位置设置isPlayer = true，避免覆盖已放置的敌人卡牌
+			if (!battlefield_[index].isAlive) {
+				battlefield_[index].isPlayer = true;
+			}
 		}
 	}
 }
@@ -2576,49 +2697,88 @@ void BattleState::enemyTurn() {
 		
 		if (matrixRow >= 0 && matrix.rows.size() > matrixRow) {
 			const auto& row = matrix.rows[matrixRow];
-			if (row.randomPlacement) {
-				// 随机位置放置
-				std::vector<std::string> ids;
+			// 根据placementType决定放置方式
+			std::vector<std::string> ids;
+			if (row.placementType == -1) {
+				// 固定造物 + 固定位置
 				for (const auto& id : row.cards) {
-					if (!id.empty()) ids.push_back(id);
+					if (!id.empty()) {
+						ids.push_back(id);
+					}
 				}
-				std::vector<int> emptyCols;
-				for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
-					int idx = 0 * BATTLEFIELD_COLS + col;
-					if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
-				}
-				std::random_device rd; std::mt19937 gen(rd());
-				for (const auto& id : ids) {
-					if (emptyCols.empty()) break;
-					std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
-					int choose = pick(gen);
-					int col = emptyCols[choose];
-					emptyCols.erase(emptyCols.begin() + choose);
-					int idx = 0 * BATTLEFIELD_COLS + col;
-					Card c = CardDB::instance().make(id);
-					if (!c.id.empty()) {
-						battlefield_[idx].card = c;
-						battlefield_[idx].isPlayer = false;
-						battlefield_[idx].health = c.health;
-						battlefield_[idx].isAlive = true;
-						battlefield_[idx].moveDirection = 0;
+			} else if (row.placementType == 0) {
+				// 固定造物 + 随机位置
+				for (const auto& id : row.cards) {
+					if (!id.empty()) {
+						ids.push_back(id);
 					}
 				}
 			} else {
-				// 固定位置放置
-				for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
-					const std::string& id = row.cards[col];
+				// 概率造物 + 随机位置（基于预期生成数量）
+				int expectedCount = row.placementType;
+				std::vector<std::string> availableCards;
+				for (const auto& id : row.cards) {
 					if (!id.empty()) {
-						int idx = 0 * BATTLEFIELD_COLS + col;
-						if (!battlefield_[idx].isAlive) {
-							Card c = CardDB::instance().make(id);
-							if (!c.id.empty()) {
-								battlefield_[idx].card = c;
-								battlefield_[idx].isPlayer = false;
-								battlefield_[idx].health = c.health;
-								battlefield_[idx].isAlive = true;
-								battlefield_[idx].moveDirection = 0;
+						availableCards.push_back(id);
+					}
+				}
+				
+				if (!availableCards.empty() && expectedCount > 0) {
+					// 计算每个卡牌的概率：预期数量 / 可用卡牌数量
+					float probability = (float)expectedCount / (float)availableCards.size();
+					std::random_device rd;
+					std::mt19937 g(rd());
+					std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+					
+					for (const auto& id : availableCards) {
+						if (dis(g) < probability) {
+							ids.push_back(id);
+						}
+					}
+				}
+			}
+			
+			if (!ids.empty()) {
+				if (row.placementType == -1) {
+					// 固定位置放置
+					for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+						const std::string& id = row.cards[col];
+						if (!id.empty()) {
+							int idx = 0 * BATTLEFIELD_COLS + col;
+							if (!battlefield_[idx].isAlive) {
+								Card c = CardDB::instance().make(id);
+								if (!c.id.empty()) {
+									battlefield_[idx].card = c;
+									battlefield_[idx].isPlayer = false;
+									battlefield_[idx].health = c.health;
+									battlefield_[idx].isAlive = true;
+									battlefield_[idx].moveDirection = 0;
+								}
 							}
+						}
+					}
+				} else {
+					// 随机位置放置
+					std::vector<int> emptyCols;
+					for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+						int idx = 0 * BATTLEFIELD_COLS + col;
+						if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+					}
+					std::random_device rd; std::mt19937 gen(rd());
+					for (const auto& id : ids) {
+						if (emptyCols.empty()) break;
+						std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+						int choose = pick(gen);
+						int col = emptyCols[choose];
+						emptyCols.erase(emptyCols.begin() + choose);
+						int idx = 0 * BATTLEFIELD_COLS + col;
+						Card c = CardDB::instance().make(id);
+						if (!c.id.empty()) {
+							battlefield_[idx].card = c;
+							battlefield_[idx].isPlayer = false;
+							battlefield_[idx].health = c.health;
+							battlefield_[idx].isAlive = true;
+							battlefield_[idx].moveDirection = 0;
 						}
 					}
 				}
@@ -2791,9 +2951,14 @@ bool BattleState::startEnemyAdvanceIfAny() {
 
 void BattleState::prepareEnemyAdvanceSteps() {
 	enemyAdvanceSteps_.clear();
+	std::cout << "[DEBUG] 准备敌人前进步骤..." << std::endl;
 	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
 		int fromIndex = 0 * BATTLEFIELD_COLS + col;
 		int toIndex = 1 * BATTLEFIELD_COLS + col;
+		std::cout << "[DEBUG] 列" << col << ": fromIndex=" << fromIndex << " toIndex=" << toIndex 
+				  << " isAlive=" << battlefield_[fromIndex].isAlive 
+				  << " isPlayer=" << battlefield_[fromIndex].isPlayer 
+				  << " toIsAlive=" << battlefield_[toIndex].isAlive << std::endl;
 		if (battlefield_[fromIndex].isAlive && !battlefield_[fromIndex].isPlayer && !battlefield_[toIndex].isAlive) {
 			EnemyAdvanceStep step;
 			step.fromIndex = fromIndex;
@@ -2801,8 +2966,10 @@ void BattleState::prepareEnemyAdvanceSteps() {
 			step.fromRect = battlefield_[fromIndex].rect;
 			step.toRect = battlefield_[toIndex].rect;
 			enemyAdvanceSteps_.push_back(step);
+			std::cout << "[DEBUG] 添加前进步骤: " << fromIndex << " -> " << toIndex << std::endl;
 		}
 	}
+	std::cout << "[DEBUG] 总共准备了 " << enemyAdvanceSteps_.size() << " 个前进步骤" << std::endl;
 }
 
 void BattleState::updateEnemyAdvance(float dt) {

@@ -220,7 +220,12 @@ void TemperState::openSelection() {
 void TemperState::buildSelectionGrid() {
     auto& lib = DeckStore::instance().library();
     libIndices_.clear(); libRects_.clear();
-    for (int i=0;i<(int)lib.size(); ++i) libIndices_.push_back(i);
+    for (int i=0;i<(int)lib.size(); ++i) {
+        // 只显示可获取的卡牌（obtainable > 0）
+        if (lib[i].obtainable > 0) {
+            libIndices_.push_back(i);
+        }
+    }
     // 固定较小缩略图尺寸（与文脉传承更接近）
     int marginX=30; int availW = SDL_max(200, screenW_-marginX*2);
     int gap=6; int thumbW=96; int thumbH=144; // 更小 2:3
