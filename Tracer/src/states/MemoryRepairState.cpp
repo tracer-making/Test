@@ -7,6 +7,7 @@
 #include <random>
 #include <algorithm>
 #include <unordered_set>
+#include <iostream>
 
 // 定义静态变量
 MemoryRepairState::BackHintType MemoryRepairState::mapHintType_ = BackHintType::Unknown;
@@ -62,7 +63,7 @@ void MemoryRepairState::onEnter(App& app) {
 		backButton_->setRect(rc);
 		backButton_->setText(u8"返回地图");
 		if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
-		backButton_->setOnClick([&app]() {
+		backButton_->setOnClick([&app, this]() {
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
 		});
 	}
@@ -136,6 +137,15 @@ void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
 						Card c2 = CardDB::instance().make(id);
 						DeckStore::instance().addToLibrary(c2);
 						added_ = true;
+						
+						// 如果是Boss战胜利，设置特殊标志
+						if (isBossVictory_) {
+							std::cout << "[MEMORY REPAIR] Boss战胜利选牌完成，设置s_bossVictoryReturn_=true" << std::endl;
+							MapExploreState::setBossVictoryReturn(true);
+						} else {
+							std::cout << "[MEMORY REPAIR] 普通记忆修复选牌完成" << std::endl;
+						}
+						
 						app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
 					}
 				}

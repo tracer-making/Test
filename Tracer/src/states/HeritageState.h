@@ -74,6 +74,9 @@ private:
 
 	// 持续漂浮动画
 	float hoverTime_ = 0.0f;
+	
+	// 无卡牌延迟
+	float noCardsDelay_ = 0.0f;
 
 	// 方法
 	void layoutCardSlots();

@@ -144,10 +144,16 @@ void BattleState::onExit(App& app) {
 
 void BattleState::handleEvent(App& app, const SDL_Event& e) {
 	// 处理按钮事件（只在上帝模式下）
-	if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
+	// 猎人Boss毛皮交换状态下禁用按钮交互
+	if (!isHunterBossFurExchange_ && backButton_ && App::isGodMode()) backButton_->handleEvent(e);
 
 	// 处理键盘事件
 	if (e.type == SDL_KEYDOWN) {
+		// 猎人Boss毛皮交换状态下禁用所有键盘交互
+		if (isHunterBossFurExchange_) {
+			return;
+		}
+		
         if (e.key.keysym.sym == SDLK_t) {
 			// T键切换上帝模式
 			godMode_ = !godMode_;
@@ -476,8 +482,8 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			return; // 检索状态下不处理其他点击
 		}
 
-		// 检查牌堆点击（回合制限制）
-		if (mouseX >= inkPileRect_.x && mouseX <= inkPileRect_.x + inkPileRect_.w &&
+		// 检查牌堆点击（回合制限制，毛皮交换状态下禁用）
+		if (!isHunterBossFurExchange_ && mouseX >= inkPileRect_.x && mouseX <= inkPileRect_.x + inkPileRect_.w &&
 			mouseY >= inkPileRect_.y && mouseY <= inkPileRect_.y + inkPileRect_.h) {
 			// 检查是否在献祭模式
 			if (isSacrificing_) {
@@ -517,7 +523,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				statusMessage_ = "墨锭牌堆已空！";
 			}
 		}
-		else if (mouseX >= playerPileRect_.x && mouseX <= playerPileRect_.x + playerPileRect_.w &&
+		else if (!isHunterBossFurExchange_ && mouseX >= playerPileRect_.x && mouseX <= playerPileRect_.x + playerPileRect_.w &&
 			mouseY >= playerPileRect_.y && mouseY <= playerPileRect_.y + playerPileRect_.h) {
 			// 检查是否在献祭模式
 			if (isSacrificing_) {
@@ -582,7 +588,8 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 			}
 		}
 
-		// 检查手牌点击
+		// 检查手牌点击（毛皮交换状态下禁用）
+		if (!isHunterBossFurExchange_) {
 		for (size_t i = 0; i < handCardRects_.size() && i < handCards_.size(); ++i) {
 			const auto& rect = handCardRects_[i];
 			if (mouseX >= rect.x && mouseX <= rect.x + rect.w &&
@@ -668,6 +675,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 					statusMessage_ = "已选择手牌：" + handCards_[i].name + "（0献墨点数，可直接打出）";
 				}
 				break;
+			}
 			}
 		}
 
@@ -1163,6 +1171,7 @@ void BattleState::update(App& app, float dt) {
 	}
 	
 	if (pendingGoMemoryRepair_) {
+		std::cout << "[BATTLE STATE] 跳转到记忆修复界面，isBossVictory=true" << std::endl;
 		pendingGoMemoryRepair_ = false;
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new MemoryRepairState(true))));
 		return;
@@ -3886,6 +3895,7 @@ void BattleState::checkGameOver() {
 			std::cout << "[VICTORY] Boss战二阶段胜利，跳转到记忆修复界面！" << std::endl;
 			// 设置跳转到记忆修复界面的标志
 			pendingGoMemoryRepair_ = true;
+			std::cout << "[VICTORY] 设置pendingGoMemoryRepair_=true" << std::endl;
 			return;
 		}
 		
@@ -8084,13 +8094,13 @@ void BattleState::generateHunterBossExchangeCards() {
 	
 	for (const auto& id : allIds) {
 		Card c = CardDB::instance().make(id);
-		if (c.obtainable > 0) {  // 只选择可获取的卡牌
+		if (c.obtainable == 1) {  // 只选择普通卡牌，不包括稀有卡
 			availableIds.push_back(id);
 		}
 	}
 	
 	if (availableIds.empty()) {
-		std::cout << "[HUNTER BOSS] 警告：没有可获取的卡牌" << std::endl;
+		std::cout << "[HUNTER BOSS] 警告：没有可获取的普通卡牌" << std::endl;
 		return;
 	}
 	
@@ -8108,11 +8118,11 @@ void BattleState::generateHunterBossExchangeCards() {
 		Card card = CardDB::instance().make(cardId);
 		
 		if (!card.id.empty()) {
-			// 判断是否为稀有卡
-			bool isRare = (card.obtainable == 2);
-			
-			// 添加随机印记
-			addRandomMarksToCard(card, isRare);
+		// 由于只选择普通卡牌，所以不是稀有卡
+		bool isRare = false;
+		
+		// 添加随机印记（普通卡牌1-2个印记）
+		addRandomMarksToCard(card, isRare);
 			
 			// 计算放置位置（第一行和第二行）
 			int row = i / BATTLEFIELD_COLS;  // 0或1
@@ -8133,7 +8143,7 @@ void BattleState::generateHunterBossExchangeCards() {
 			hunterBossExchangeCardIndices_.push_back(idx);
 			
 			std::cout << "[HUNTER BOSS] 生成交换卡牌: " << card.name 
-				<< " (稀有: " << (isRare ? "是" : "否") << ")" << std::endl;
+				<< " (普通卡牌，印记数: " << card.marks.size() << ")" << std::endl;
 		}
 	}
 	

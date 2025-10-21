@@ -137,10 +137,10 @@ void BarterState::buildTradeCards() {
                 auto allCardIds = CardDB::instance().allIds();
                 std::vector<std::string> obtainableIds;
                 
-                // 过滤出可获取的卡牌
+                // 过滤出普通卡牌（不包括稀有卡）
                 for (const auto& id : allCardIds) {
                     Card c = CardDB::instance().make(id);
-                    if (c.obtainable > 0) {
+                    if (c.obtainable == 1) {
                         obtainableIds.push_back(id);
                     }
                 }

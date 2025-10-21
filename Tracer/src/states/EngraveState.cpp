@@ -62,10 +62,18 @@ void EngraveState::handleEvent(App& app, const SDL_Event& e) {
             
             // 检查是否需要手动组合（多个意或多个境）
             if (store.yis().size() > 1 || store.jings().size() > 1) {
-                // 有多个选择，进入组合选择模式
-                showCombinePanel_ = true;
-                selectedYi_ = -1;
-                selectedJing_ = -1;
+                // 检查是否为相同类型（AA、AAA、BB、BBB等情况）
+                if ((store.yis().size() > 0 && store.jings().size() == 0) || 
+                    (store.jings().size() > 0 && store.yis().size() == 0)) {
+                    // 相同类型情况（AA、AAA、BB、BBB等），直接返回地图
+                    isAnimating_ = true;
+                    animTime_ = 0.0f;
+                } else {
+                    // 有不同类型（意和境都有），进入组合选择模式
+                    showCombinePanel_ = true;
+                    selectedYi_ = -1;
+                    selectedJing_ = -1;
+                }
             } else {
                 // 唯一组合或无组合，直接返回地图
                 isAnimating_ = true;

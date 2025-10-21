@@ -190,6 +190,15 @@ void HeritageState::update(App& app, float dt) {
 		return;
 	}
 	
+	// 处理无卡牌延迟
+	if (noCardsDelay_ > 0.0f) {
+		noCardsDelay_ -= dt;
+		if (noCardsDelay_ <= 0.0f) {
+			pendingGoMapExplore_ = true;
+		}
+		return;
+	}
+	
 	// 更新悬停动画
 	const float hoverSpeed = 3.0f;  // 悬停响应速度（用于高亮/缩放）
 	leftSlotHover_ = std::max(0.0f, leftSlotHover_ - hoverSpeed * dt);
@@ -563,6 +572,17 @@ void HeritageState::showHandCards(bool isSource) {
 				}
 			}
 		}
+	}
+	
+	// 检查是否有可被传承的卡牌
+	if (availableCards_.empty()) {
+		// 没有可被传承的卡牌，显示提示并返回地图
+		showingHandCards_ = false;
+		message_ = isSource ? u8"没有可被献祭的卡牌（需要有印记的卡牌）" : u8"没有可接受传承的卡牌";
+		
+		// 设置一个短暂的延迟后返回地图，让用户能看到提示信息
+		noCardsDelay_ = 2.0f; // 2秒延迟
+		return;
 	}
 	
 	layoutHandCards();

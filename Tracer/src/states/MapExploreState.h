@@ -19,6 +19,13 @@ public:
     void handleEvent(App& app, const SDL_Event& e) override;
     void update(App& app, float dt) override;
     void render(App& app) override;
+    
+    // Boss战胜利返回处理
+    static void setBossVictoryReturn(bool value) { s_bossVictoryReturn_ = value; }
+    
+    // 玩家移动动画
+    void startPlayerMoveAnimation(int fromNode, int toNode);
+    void updatePlayerMoveAnimation(float dt);
 
 private:
     // 屏幕尺寸
@@ -153,6 +160,20 @@ private:
     // 地图滚动控制
     static bool s_firstMapEnter_;   // 是否第一次进入地图
     
+    // Boss战胜利返回处理
+    static bool s_bossVictoryReturn_;  // 是否从Boss战胜利返回
+    
+    // 玩家移动动画
+    bool isPlayerMoving_ = false;       // 玩家是否正在移动
+    float playerMoveTime_ = 0.0f;       // 移动动画时间
+    float playerMoveDuration_ = 1.0f;   // 移动动画持续时间
+    int playerMoveFromNode_ = -1;       // 移动起始节点
+    int playerMoveToNode_ = -1;         // 移动目标节点
+    float playerMoveStartX_ = 0.0f;     // 移动起始X坐标
+    float playerMoveStartY_ = 0.0f;     // 移动起始Y坐标
+    float playerMoveEndX_ = 0.0f;       // 移动结束X坐标
+    float playerMoveEndY_ = 0.0f;       // 移动结束Y坐标
+    
 
     // 工具：将节点世界坐标转换为屏幕坐标（应用偏移与滚动）
     inline void nodeToScreenXY(const MapNode& node, int& sx, int& sy) const {
@@ -163,6 +184,7 @@ private:
     void updateScrollBounds();
     void assignRowEventLabels();
     void updateHorizontalCenter();
+    void updateAutoScrollToPlayer();  // 基于玩家位置自动滚动
 
     // 仅影响显示的偏移（不改变逻辑坐标）
     std::vector<SDL_Point> nodeDisplayOffset_; // 按全局索引存储额外偏移

@@ -33,6 +33,7 @@
 // 静态成员变量定义（仅控制首次自动生成）
 bool MapExploreState::s_mapGenerated_ = false;
 bool MapExploreState::s_firstMapEnter_ = false;
+bool MapExploreState::s_bossVictoryReturn_ = false;
 
 MapExploreState::MapExploreState() = default;
 MapExploreState::~MapExploreState() {
@@ -103,20 +104,115 @@ void MapExploreState::onEnter(App& app) {
 
     // 只在第一次进入时生成地图；否则从全局MapStore恢复
     auto& ms = MapStore::instance();
+    
+    // 检查是否从Boss战胜利返回
+    std::cout << "[MAP EXPLORE] 进入地图，检查s_bossVictoryReturn_: " << s_bossVictoryReturn_ << std::endl;
+    if (s_bossVictoryReturn_) {
+        std::cout << "[BOSS VICTORY] 从Boss战胜利返回，直接跳转到下一层" << std::endl;
+        s_bossVictoryReturn_ = false; // 重置标志
+        
+        std::cout << "[BOSS VICTORY] 当前层: " << currentMapLayer_ << std::endl;
+        std::cout << "[BOSS VICTORY] 玩家当前节点: " << playerCurrentNode_ << std::endl;
+        
+        // 直接跳转到下一层，不添加节点
+        if (currentMapLayer_ < 4) {
+            currentMapLayer_++;
+            numLayers_++;
+            std::cout << "[BOSS VICTORY] 进入第" << currentMapLayer_ << "层" << std::endl;
+            
+            // 生成新层的地图
+            generateMapForLayer(currentMapLayer_);
+            s_mapGenerated_ = true;
+            
+            // 更新全局当前层
+            ms.currentMapLayer() = currentMapLayer_;
+            
+            // 将新地图数据写入全局存储
+            ms.layerNodes().clear();
+            ms.layerNodes().resize(layerNodes_.size());
+            for (size_t i = 0; i < layerNodes_.size(); ++i) {
+                ms.layerNodes()[i].clear();
+                ms.layerNodes()[i].reserve(layerNodes_[i].size());
+                for (size_t j = 0; j < layerNodes_[i].size(); ++j) {
+                    const auto& n = layerNodes_[i][j];
+                    MapStore::MapNodeData d;
+                    d.layer = n.layer; d.x = n.x; d.y = n.y; d.size = n.size; d.label = n.label;
+                    d.visited = n.visited; d.accessible = n.accessible; d.connections = n.connections;
+                    // 保存随机位移数据
+                    int globalIdx = getGlobalNodeIndex(static_cast<int>(i), static_cast<int>(j));
+                    if (globalIdx >= 0 && globalIdx < static_cast<int>(nodeDisplayOffset_.size())) {
+                        d.displayOffsetX = nodeDisplayOffset_[globalIdx].x;
+                        d.displayOffsetY = nodeDisplayOffset_[globalIdx].y;
+                    }
+                    switch (n.type) {
+                    case MapNode::NodeType::START: d.type = MapStore::MapNodeData::NodeType::START; break;
+                    case MapNode::NodeType::NORMAL: d.type = MapStore::MapNodeData::NodeType::NORMAL; break;
+                    case MapNode::NodeType::BOSS: d.type = MapStore::MapNodeData::NodeType::BOSS; break;
+                    case MapNode::NodeType::ELITE: d.type = MapStore::MapNodeData::NodeType::ELITE; break;
+                    case MapNode::NodeType::SHOP: d.type = MapStore::MapNodeData::NodeType::SHOP; break;
+                    case MapNode::NodeType::EVENT: d.type = MapStore::MapNodeData::NodeType::EVENT; break;
+                    }
+                    ms.layerNodes()[i].push_back(d);
+                }
+            }
+            ms.numLayers() = numLayers_;
+            ms.startNodeIdx() = startNodeIdx_;
+            ms.bossNodeIdx() = bossNodeIdx_;
+            ms.playerCurrentNode() = playerCurrentNode_;
+            ms.accessibleNodes() = accessibleNodes_;
+            ms.generated() = true;
+            
+            // 初始化玩家位置（新层的起点）
+            initializePlayer();
+            updateScrollBounds();
+            
+            // 动态水平居中
+            if (layerNodes_.size() > 1 && !layerNodes_[1].empty()) {
+                int minX = layerNodes_[1][0].x;
+                int maxX = layerNodes_[1][0].x;
+                for (const auto& n : layerNodes_[1]) {
+                    if (n.x < minX) minX = n.x;
+                    if (n.x > maxX) maxX = n.x;
+                }
+                int contentWidth = (maxX - minX) + 400;
+                if (contentWidth < 1) contentWidth = 1;
+                int desiredOffsetX = (screenW_ - contentWidth) / 2 - minX + 200;
+                if (desiredOffsetX < 0) desiredOffsetX = 0;
+                mapOffsetX_ = desiredOffsetX;
+            }
+            
+            return; // 直接返回，不执行下面的常规逻辑
+        } else {
+            std::cout << "[BOSS VICTORY] 已经是最后一层，无法继续前进" << std::endl;
+        }
+    }
+    
+    // 首先确保biome已经设置
+    std::cout << "[BIOME SETUP] 检查layerBiomes是否为空: " << ms.layerBiomes().empty() << std::endl;
+    if (ms.layerBiomes().empty()) {
+        std::cout << "[BIOME SETUP] 开始设置biome" << std::endl;
+        // 为第1-4层随机分配环境：林地/湿地/雪原，且互不重复
+        std::vector<std::string> biomes = { u8"林地", u8"湿地", u8"雪原" };
+        std::random_device rd; std::mt19937 g(rd());
+        std::shuffle(biomes.begin(), biomes.end(), g);
+        ms.layerBiomes().clear();
+        ms.layerBiomes().resize(5); // 预留到索引4
+        ms.layerBiomes()[1] = biomes[0];
+        ms.layerBiomes()[2] = biomes[1];
+        ms.layerBiomes()[3] = biomes[2];
+        ms.layerBiomes()[4] = biomes[0]; // 第4层默认林地
+        std::cout << "[BIOME SETUP] 设置完成，layerBiomes大小: " << ms.layerBiomes().size() << std::endl;
+        std::cout << "[BIOME SETUP] 第1层: " << ms.layerBiomes()[1] << std::endl;
+        std::cout << "[BIOME SETUP] 第2层: " << ms.layerBiomes()[2] << std::endl;
+        std::cout << "[BIOME SETUP] 第3层: " << ms.layerBiomes()[3] << std::endl;
+        std::cout << "[BIOME SETUP] 第4层: " << ms.layerBiomes()[4] << std::endl;
+    } else {
+        std::cout << "[BIOME SETUP] layerBiomes不为空，跳过设置" << std::endl;
+    }
+    
     if (!s_mapGenerated_ || !ms.hasMap()) {
         generateLayeredMap(true); // 第一次生成，需要构建偏移
         s_mapGenerated_ = true;
-        // 为第1-3层随机分配环境：林地/湿地/雪原，且互不重复
-        if (ms.layerBiomes().empty()) {
-            std::vector<std::string> biomes = { u8"林地", u8"湿地", u8"雪原" };
-            std::random_device rd; std::mt19937 g(rd());
-            std::shuffle(biomes.begin(), biomes.end(), g);
-            ms.layerBiomes().clear();
-            ms.layerBiomes().resize(5); // 预留到索引3
-            ms.layerBiomes()[1] = biomes[0];
-            ms.layerBiomes()[2] = biomes[1];
-            ms.layerBiomes()[3] = biomes[2];
-        }
         // 将本地数据写入全局
         ms.layerNodes().clear();
         ms.layerNodes().resize(layerNodes_.size());
@@ -279,10 +375,30 @@ void MapExploreState::onEnter(App& app) {
             if (currentMapLayer_ != i) {
                 // 切换到新层时生成地图
                 currentMapLayer_ = i; // 1..4
+                
+                // 确保biome已经设置
+                auto& ms = MapStore::instance();
+                std::cout << "[LAYER SWITCH] 切换到层 " << i << "，检查layerBiomes是否为空: " << ms.layerBiomes().empty() << std::endl;
+                if (ms.layerBiomes().empty()) {
+                    std::cout << "[LAYER SWITCH] 开始设置biome" << std::endl;
+                    // 为第1-4层随机分配环境：林地/湿地/雪原，且互不重复
+                    std::vector<std::string> biomes = { u8"林地", u8"湿地", u8"雪原" };
+                    std::random_device rd; std::mt19937 g(rd());
+                    std::shuffle(biomes.begin(), biomes.end(), g);
+                    ms.layerBiomes().clear();
+                    ms.layerBiomes().resize(5); // 预留到索引4
+                    ms.layerBiomes()[1] = biomes[0];
+                    ms.layerBiomes()[2] = biomes[1];
+                    ms.layerBiomes()[3] = biomes[2];
+                    ms.layerBiomes()[4] = biomes[0]; // 第4层默认林地
+                    std::cout << "[LAYER SWITCH] 设置完成，layerBiomes大小: " << ms.layerBiomes().size() << std::endl;
+                } else {
+                    std::cout << "[LAYER SWITCH] layerBiomes不为空，跳过设置" << std::endl;
+                }
+                
                 generateMapForLayer(i);
                 s_mapGenerated_ = true; // 确保标志被设置
                 // 更新全局当前层与结构
-                auto& ms = MapStore::instance();
                 ms.currentMapLayer() = currentMapLayer_;
                 // 不重建所有层，仅覆盖本层
                 if (ms.layerNodes().size() != layerNodes_.size()) {
@@ -374,19 +490,10 @@ void MapExploreState::onEnter(App& app) {
     // 从MapStore加载scrollY_值
     scrollY_ = ms.scrollY();
     
-    // 第一次进入地图时scrollY_=0，之后每次进入向上移动200像素
-    SDL_Log("Before scroll logic: s_firstMapEnter_=%s, scrollY_=%d", s_firstMapEnter_ ? "true" : "false", scrollY_);
+    // 删除自动移动逻辑，改为基于玩家位置的自动滚动
+    SDL_Log("Map scroll position loaded: scrollY_=%d", scrollY_);
     
-    if (!s_firstMapEnter_) {
-        s_firstMapEnter_ = true;
-        scrollY_ = 0;  // 第一次进入地图，设置为0
-        SDL_Log("First map enter: scrollY_ set to 0");
-    } else {
-        int oldScrollY = scrollY_;
-        scrollY_ += 200;  // 后续进入地图，向上移动200像素
-        SDL_Log("Subsequent map enter: scrollY_ %d -> %d", oldScrollY, scrollY_);
-    }
-    
+    // 应用滚动边界限制
     if (scrollY_ < 0) scrollY_ = 0;
     if (scrollY_ > maxScrollY_) scrollY_ = maxScrollY_;
     
@@ -413,6 +520,10 @@ void MapExploreState::onExit(App& app) {
 }
 
 void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
+    // 检查是否在猎人Boss毛皮交换状态，如果是则禁用所有交互
+    // 注意：这里需要从BattleState获取状态，但MapExploreState无法直接访问
+    // 所以我们需要通过其他方式来判断，比如检查当前状态或添加全局标志
+    
     // 处理返回按钮（ESC键）
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_ESCAPE) {
         app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
@@ -498,9 +609,26 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         if (scrollY_ < 0) scrollY_ = 0;              // 向上极限
         if (scrollY_ > maxScrollY_) scrollY_ = maxScrollY_; // 向下极限
         
-        // 输出滚轮移动信息
+        // 计算玩家当前位置的绝对坐标和屏幕相对坐标
+        int playerAbsoluteY = 0;  // 玩家绝对Y坐标（以起点为0）
+        int playerScreenY = 0;    // 玩家屏幕相对坐标（真实渲染坐标）
+        
+        if (playerCurrentNode_ >= 0 && playerCurrentNode_ < getTotalNodeCount()) {
+            // 获取玩家当前节点
+            const MapNode* playerNode = getNodeByGlobalIndex(playerCurrentNode_);
+            if (playerNode) {
+                // 绝对坐标：以起点为0的绝对位置
+                playerAbsoluteY = playerNode->y;
+                
+                // 屏幕相对坐标：真实渲染坐标（应用偏移和滚动）
+                playerScreenY = mapOffsetY_ + (playerNode->y + scrollY_);
+            }
+        }
+        
+        // 输出滚轮移动信息和坐标信息
         SDL_Log("Wheel scroll: wheel.y=%d, oldScrollY=%d, newScrollY=%d, maxScrollY=%d", 
                 e.wheel.y, oldScrollY, scrollY_, maxScrollY_);
+        SDL_Log("Player coordinates: AbsoluteY=%d, ScreenY=%d", playerAbsoluteY, playerScreenY);
     }
 
     // 处理鼠标点击到节点
@@ -534,6 +662,9 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void MapExploreState::update(App& app, float dt) {
+    // 更新玩家移动动画
+    updatePlayerMoveAnimation(dt);
+    
     // 移动动画推进
     if (isMoving_) {
         moveT_ += dt / moveDuration_;
@@ -781,6 +912,23 @@ void MapExploreState::generateLayeredMap(bool shouldBuildOffsets) {
 
 void MapExploreState::generateMapForLayer(int layer) {
     SDL_Log("Generating map for layer %d", layer);
+    
+    // 确保biome已经设置
+    auto& ms = MapStore::instance();
+    if (ms.layerBiomes().empty()) {
+        std::cout << "[GENERATE MAP] 在generateMapForLayer中设置biome" << std::endl;
+        // 为第1-4层随机分配环境：林地/湿地/雪原，且互不重复
+        std::vector<std::string> biomes = { u8"林地", u8"湿地", u8"雪原" };
+        std::random_device rd; std::mt19937 g(rd());
+        std::shuffle(biomes.begin(), biomes.end(), g);
+        ms.layerBiomes().clear();
+        ms.layerBiomes().resize(5); // 预留到索引4
+        ms.layerBiomes()[1] = biomes[0];
+        ms.layerBiomes()[2] = biomes[1];
+        ms.layerBiomes()[3] = biomes[2];
+        ms.layerBiomes()[4] = biomes[0]; // 第4层默认林地
+        std::cout << "[GENERATE MAP] 设置完成，layerBiomes大小: " << ms.layerBiomes().size() << std::endl;
+    }
     
     // 1. 初始化参数 - 单层地图结构
     numLayers_ = 2; // 终点在第2层
@@ -1164,8 +1312,38 @@ void MapExploreState::createEndNode() {
     
     endNode.type = MapNode::NodeType::BOSS;
     endNode.accessible = true;
+    
+    // 根据当前层的地图类型设置对应的Boss标签
+    auto& ms = MapStore::instance();
+    std::string biome;
+    if ((int)ms.layerBiomes().size() > currentMapLayer_) {
+        biome = ms.layerBiomes()[currentMapLayer_];
+    }
+    
+    // 调试输出
+    std::cout << "[BOSS NODE] 当前层: " << currentMapLayer_ << std::endl;
+    std::cout << "[BOSS NODE] layerBiomes大小: " << ms.layerBiomes().size() << std::endl;
+    std::cout << "[BOSS NODE] 地图类型: '" << biome << "'" << std::endl;
+    
+    if (biome == u8"林地") {
+        endNode.label = u8"矿工Boss";
+        std::cout << "[BOSS NODE] 设置为矿工Boss" << std::endl;
+    } else if (biome == u8"湿地") {
+        endNode.label = u8"渔夫Boss";
+        std::cout << "[BOSS NODE] 设置为渔夫Boss" << std::endl;
+    } else if (biome == u8"雪原") {
+        endNode.label = u8"猎人Boss";
+        std::cout << "[BOSS NODE] 设置为猎人Boss" << std::endl;
+    } else {
+        // 默认矿工Boss（如果地图类型未设置或未知）
+        endNode.label = u8"矿工Boss";
+        std::cout << "[BOSS NODE] 设置为默认矿工Boss，biome为空或未知" << std::endl;
+    }
+    
     layerNodes_[numLayers_].push_back(endNode);
     bossNodeIdx_ = 0;
+    
+    // 向上道路节点现在在onEnter中的boss胜利返回逻辑中创建
     
     SDL_Log("Created end node at layer %d, x=%d, y=%d (map layer %d)", 
             numLayers_, endNode.x, endNode.y, currentMapLayer_);
@@ -1748,8 +1926,30 @@ void MapExploreState::renderMap(SDL_Renderer* renderer) {
         int sx = mapOffsetX_ + static_cast<int>(px);
         int sy = mapOffsetY_ + static_cast<int>(py + scrollY_);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_Rect r{ sx - 6, sy - 6, 12, 12 };
+        SDL_Rect r{ sx - 10, sy - 10, 20, 20 };  // 从12x12增大到20x20
         SDL_RenderFillRect(renderer, &r);
+    }
+    
+    // 绘制玩家移动动画（Boss战胜利后的向上移动）
+    if (isPlayerMoving_) {
+        float t = std::min(1.0f, playerMoveTime_ / playerMoveDuration_);
+        float tEase = (1.0f - std::cos(3.1415926f * t)) * 0.5f;
+        
+        // 插值世界坐标
+        float px = playerMoveStartX_ + (playerMoveEndX_ - playerMoveStartX_) * tEase;
+        float py = playerMoveStartY_ + (playerMoveEndY_ - playerMoveStartY_) * tEase;
+        int sx = mapOffsetX_ + static_cast<int>(px);
+        int sy = mapOffsetY_ + static_cast<int>(py + scrollY_);
+        
+        // 绘制更大的白色圆点表示玩家移动
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_Rect r{ sx - 15, sy - 15, 30, 30 };  // 更大的圆点
+        SDL_RenderFillRect(renderer, &r);
+        
+        // 添加一个发光效果
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 100);
+        SDL_Rect glow{ sx - 20, sy - 20, 40, 40 };
+        SDL_RenderFillRect(renderer, &glow);
     }
 }
 
@@ -1794,26 +1994,26 @@ void MapExploreState::renderNode(SDL_Renderer* renderer, const MapNode& node, in
     
     // 绘制边框 - 根据节点状态使用不同颜色
     if (isCurrentNode) {
-        // 当前节点：亮黄色粗边框
+        // 当前节点：亮黄色粗边框（增大边框范围，保持厚度）
         SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
         for (int i = 0; i < 4; ++i) {
             SDL_Rect borderRect = {
-                nodeRect.x - i,
-                nodeRect.y - i,
-                nodeRect.w + 2 * i,
-                nodeRect.h + 2 * i
+                nodeRect.x - i - 8,  // 向左扩展8像素
+                nodeRect.y - i - 8,  // 向上扩展8像素
+                nodeRect.w + 2 * i + 16,  // 宽度增加16像素
+                nodeRect.h + 2 * i + 16   // 高度增加16像素
             };
             SDL_RenderDrawRect(renderer, &borderRect);
         }
     } else if (isAccessible) {
-        // 可访问节点：亮绿色粗边框
+        // 可访问节点：亮绿色粗边框（增大边框范围，保持厚度）
         SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
         for (int i = 0; i < 3; ++i) {
             SDL_Rect borderRect = {
-                nodeRect.x - i,
-                nodeRect.y - i,
-                nodeRect.w + 2 * i,
-                nodeRect.h + 2 * i
+                nodeRect.x - i - 6,  // 向左扩展6像素
+                nodeRect.y - i - 6,  // 向上扩展6像素
+                nodeRect.w + 2 * i + 12,  // 宽度增加12像素
+                nodeRect.h + 2 * i + 12   // 高度增加12像素
             };
             SDL_RenderDrawRect(renderer, &borderRect);
         }
@@ -2131,6 +2331,63 @@ void MapExploreState::updateScrollBounds() {
     }
 }
 
+void MapExploreState::updateAutoScrollToPlayer() {
+    if (playerCurrentNode_ < 0) return;
+
+    // 获取玩家当前节点
+    const MapNode* playerNode = getNodeByGlobalIndex(playerCurrentNode_);
+    if (!playerNode) return;
+    
+    // 如果玩家位于Boss战节点，不需要自动滚动
+    if (playerNode->type == MapNode::NodeType::BOSS) {
+        SDL_Log("Auto scroll: player at BOSS node, no scroll needed");
+        return;
+    }
+    
+    // 计算玩家当前屏幕Y坐标
+    // 使用与nodeToScreenXY相同的逻辑
+    int playerScreenY = mapOffsetY_ + (playerNode->y + scrollY_);
+    
+    // 目标屏幕Y坐标：680像素
+    int targetScreenY = 680;
+    
+    // 判断玩家是否在第三行及以后
+    // 这里使用绝对Y坐标来判断，假设第三行及以后的节点Y坐标大于某个值
+    // 或者可以根据玩家的屏幕Y坐标来判断
+    bool shouldAutoScroll = (playerScreenY != targetScreenY);
+    
+    if (!shouldAutoScroll) {
+        SDL_Log("Auto scroll: player at Y=%d, screenY=%d, already at target", 
+                playerNode->y, playerScreenY);
+        return; // 玩家已经在目标位置
+    }
+    
+    // 计算需要的滚动量
+    // 目标：让玩家的屏幕Y坐标 = 680
+    // 当前玩家屏幕Y = mapOffsetY_ + (playerNode->y + scrollY_)
+    // 目标玩家屏幕Y = mapOffsetY_ + (playerNode->y + newScrollY_) = 680
+    // 所以：newScrollY = 680 - mapOffsetY_ - playerNode->y
+    int newScrollY = targetScreenY - mapOffsetY_ - playerNode->y;
+    
+    // 应用滚动边界限制
+    if (newScrollY < 0) newScrollY = 0;
+    if (newScrollY > maxScrollY_) newScrollY = maxScrollY_;
+    
+    // 更新滚动位置
+    int oldScrollY = scrollY_;
+    scrollY_ = newScrollY;
+    
+    // 保存到MapStore
+    auto& ms = MapStore::instance();
+    ms.scrollY() = scrollY_;
+    
+    // 验证滚动后的位置
+    int newPlayerScreenY = mapOffsetY_ + (playerNode->y + scrollY_);
+    
+    SDL_Log("Auto scroll: player at Y=%d, oldScrollY=%d, newScrollY=%d, oldScreenY=%d, newScreenY=%d, target=%d", 
+            playerNode->y, oldScrollY, scrollY_, playerScreenY, newPlayerScreenY, targetScreenY);
+}
+
 void MapExploreState::initializePlayer() {
     // 玩家初始位置在起点
     playerCurrentNode_ = getGlobalNodeIndex(0, 0);
@@ -2216,50 +2473,85 @@ void MapExploreState::movePlayerToNode(int nodeIndex) {
     
     playerCurrentNode_ = nodeIndex;
     updateAccessibleNodes();
+    
+    // 检查是否需要自动滚动到玩家位置
+    updateAutoScrollToPlayer();
+    
     // 将当前位置与可达节点写入全局存储，保持跨界面一致
     auto& ms = MapStore::instance();
     ms.playerCurrentNode() = playerCurrentNode_;
     ms.accessibleNodes() = accessibleNodes_;
     
-    // 根据节点标签进入对应界面
+    // 根据节点类型和标签进入对应界面
     const MapNode* node = getNodeByGlobalIndex(nodeIndex);
-    if (node && !node->label.empty()) {
-        if (node->label == u8"诗剑之争" || node->label == u8"意境之斗") {
-            pendingGoBattle_ = true;
-        } else if (node->label == u8"以物易物") {
-            pendingGoBarter_ = true;
-        } else if (node->label == u8"意境刻画") {
-            pendingGoEngrave_ = true;
-        } else if (node->label == u8"文脉传承") {
-            pendingGoHeritage_ = true;
-        } else if (node->label == u8"墨坊") {
-            pendingGoInkWorkshop_ = true;
-        } else if (node->label == u8"墨鬼") {
-            pendingGoInkGhost_ = true;
-        } else if (node->label == u8"记忆修复" || 
-                   node->label == u8"记忆修复(随机)" || 
-                   node->label == u8"记忆修复(已知部族)" || 
-                   node->label == u8"记忆修复(已知消耗)") {
-            // 根据地图标签设置记忆修复的提示类型
-            if (node->label == u8"记忆修复(随机)") {
-                MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::Unknown);
-            } else if (node->label == u8"记忆修复(已知部族)") {
-                MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::KnownTribe);
-            } else if (node->label == u8"记忆修复(已知消耗)") {
-                MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::KnownCost);
+    if (node) {
+        // 检查是否为Boss战节点
+        if (node->type == MapNode::NodeType::BOSS) {
+            // 根据Boss节点标签进入对应的Boss战
+            std::cout << "[BOSS NODE] 玩家到达Boss战节点，准备进入Boss战" << std::endl;
+            std::cout << "[BOSS NODE] 节点标签: '" << node->label << "'" << std::endl;
+            if (!node->label.empty()) {
+                if (node->label == u8"矿工Boss" || node->label == u8"矿工") {
+                    std::cout << "[BOSS NODE] 匹配矿工Boss，设置pendingGoMinerBoss_" << std::endl;
+                    pendingGoMinerBoss_ = true;
+                } else if (node->label == u8"渔夫Boss" || node->label == u8"渔夫") {
+                    std::cout << "[BOSS NODE] 匹配渔夫Boss，设置pendingGoFishermanBoss_" << std::endl;
+                    pendingGoFishermanBoss_ = true;
+                } else if (node->label == u8"猎人Boss" || node->label == u8"猎人") {
+                    std::cout << "[BOSS NODE] 匹配猎人Boss，设置pendingGoHunterBoss_" << std::endl;
+                    pendingGoHunterBoss_ = true;
+                } else {
+                    // 默认Boss战
+                    std::cout << "[BOSS NODE] 未匹配任何Boss，设置pendingGoBattle_" << std::endl;
+                    pendingGoBattle_ = true;
+                }
             } else {
-                // 默认情况（u8"记忆修复"）随机选择
-                MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::Unknown);
+                // 没有标签的Boss节点，使用默认Boss战
+                std::cout << "[BOSS NODE] 节点标签为空，设置pendingGoBattle_" << std::endl;
+                pendingGoBattle_ = true;
             }
-            pendingGoMemoryRepair_ = true;
-        } else if (node->label == u8"墨宝拾遗") {
-            pendingGoRelicPickup_ = true;
-        } else if (node->label == u8"寻物人") {
-            pendingGoSeeker_ = true;
-        } else if (node->label == u8"淬炼") {
-            pendingGoTemper_ = true;
+            return;
         }
-        // 其他事件（如"文心试炼"、"墨鬼"、"焚书"、"合卷"）暂时不处理
+        
+        // 根据节点标签进入对应界面
+        if (!node->label.empty()) {
+            if (node->label == u8"诗剑之争" || node->label == u8"意境之斗") {
+                pendingGoBattle_ = true;
+            } else if (node->label == u8"以物易物") {
+                pendingGoBarter_ = true;
+            } else if (node->label == u8"意境刻画") {
+                pendingGoEngrave_ = true;
+            } else if (node->label == u8"文脉传承") {
+                pendingGoHeritage_ = true;
+            } else if (node->label == u8"墨坊") {
+                pendingGoInkWorkshop_ = true;
+            } else if (node->label == u8"墨鬼") {
+                pendingGoInkGhost_ = true;
+            } else if (node->label == u8"记忆修复" || 
+                       node->label == u8"记忆修复(随机)" || 
+                       node->label == u8"记忆修复(已知部族)" || 
+                       node->label == u8"记忆修复(已知消耗)") {
+                // 根据地图标签设置记忆修复的提示类型
+                if (node->label == u8"记忆修复(随机)") {
+                    MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::Unknown);
+                } else if (node->label == u8"记忆修复(已知部族)") {
+                    MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::KnownTribe);
+                } else if (node->label == u8"记忆修复(已知消耗)") {
+                    MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::KnownCost);
+                } else {
+                    // 默认情况（u8"记忆修复"）随机选择
+                    MemoryRepairState::setMapHintType(MemoryRepairState::BackHintType::Unknown);
+                }
+                pendingGoMemoryRepair_ = true;
+            } else if (node->label == u8"墨宝拾遗") {
+                pendingGoRelicPickup_ = true;
+            } else if (node->label == u8"寻物人") {
+                pendingGoSeeker_ = true;
+            } else if (node->label == u8"淬炼") {
+                pendingGoTemper_ = true;
+            }
+            // 其他事件（如"文心试炼"、"墨鬼"、"焚书"、"合卷"）暂时不处理
+        }
     }
     
     SDL_Log("Player moved to node %d with label '%s'", nodeIndex, node ? node->label.c_str() : "null");
@@ -2385,6 +2677,131 @@ void MapExploreState::renderLeftSideUI(SDL_Renderer* renderer) {
                 SDL_DestroyTexture(tipTexture);
             }
             SDL_FreeSurface(tipSurface);
+        }
+    }
+}
+
+// 启动玩家移动动画
+void MapExploreState::startPlayerMoveAnimation(int fromNode, int toNode) {
+    std::cout << "[PLAYER MOVE] 启动玩家移动动画: " << fromNode << " -> " << toNode << std::endl;
+    
+    isPlayerMoving_ = true;
+    playerMoveTime_ = 0.0f;
+    playerMoveFromNode_ = fromNode;
+    playerMoveToNode_ = toNode;
+    
+    // 获取起始和结束坐标
+    const MapNode* fromNodePtr = getNodeByGlobalIndex(fromNode);
+    const MapNode* toNodePtr = getNodeByGlobalIndex(toNode);
+    
+    if (fromNodePtr && toNodePtr) {
+        playerMoveStartX_ = static_cast<float>(fromNodePtr->x);
+        playerMoveStartY_ = static_cast<float>(fromNodePtr->y);
+        playerMoveEndX_ = static_cast<float>(toNodePtr->x);
+        playerMoveEndY_ = static_cast<float>(toNodePtr->y);
+        
+        std::cout << "[PLAYER MOVE] 起始坐标: (" << playerMoveStartX_ << ", " << playerMoveStartY_ << ")" << std::endl;
+        std::cout << "[PLAYER MOVE] 结束坐标: (" << playerMoveEndX_ << ", " << playerMoveEndY_ << ")" << std::endl;
+    }
+}
+
+// 更新玩家移动动画
+void MapExploreState::updatePlayerMoveAnimation(float dt) {
+    if (!isPlayerMoving_) return;
+    
+    playerMoveTime_ += dt;
+    float t = std::min(1.0f, playerMoveTime_ / playerMoveDuration_);
+    
+    // 使用缓动函数
+    float tEase = (1.0f - std::cos(3.1415926f * t)) * 0.5f;
+    
+    if (t >= 1.0f) {
+        // 动画完成
+        isPlayerMoving_ = false;
+        std::cout << "[PLAYER MOVE] 移动动画完成" << std::endl;
+        
+        // 正式移动玩家到目标节点
+        if (playerMoveToNode_ != -1) {
+            movePlayerToNode(playerMoveToNode_);
+            std::cout << "[PLAYER MOVE] 玩家已移动到节点: " << playerMoveToNode_ << std::endl;
+            
+            // 检查是否到达了向上道路节点，如果是，则进入下一层
+            const MapNode* targetNode = getNodeByGlobalIndex(playerMoveToNode_);
+            if (targetNode && targetNode->label == u8"通往下一层") {
+                std::cout << "[PLAYER MOVE] 到达向上道路节点，准备进入下一层" << std::endl;
+                
+                // 进入下一层
+                if (currentMapLayer_ < 4) {
+                    currentMapLayer_++;
+                    std::cout << "[PLAYER MOVE] 进入第" << currentMapLayer_ << "层" << std::endl;
+                    
+                    // 生成新层的地图
+                    generateMapForLayer(currentMapLayer_);
+                    s_mapGenerated_ = true;
+                    
+                    // 更新全局当前层
+                    auto& ms = MapStore::instance();
+                    ms.currentMapLayer() = currentMapLayer_;
+                    
+                    // 将新地图数据写入全局存储
+                    ms.layerNodes().clear();
+                    ms.layerNodes().resize(layerNodes_.size());
+                    for (size_t i = 0; i < layerNodes_.size(); ++i) {
+                        ms.layerNodes()[i].clear();
+                        ms.layerNodes()[i].reserve(layerNodes_[i].size());
+                        for (size_t j = 0; j < layerNodes_[i].size(); ++j) {
+                            const auto& n = layerNodes_[i][j];
+                            MapStore::MapNodeData d;
+                            d.layer = n.layer; d.x = n.x; d.y = n.y; d.size = n.size; d.label = n.label;
+                            d.visited = n.visited; d.accessible = n.accessible; d.connections = n.connections;
+                            // 保存随机位移数据
+                            int globalIdx = getGlobalNodeIndex(static_cast<int>(i), static_cast<int>(j));
+                            if (globalIdx >= 0 && globalIdx < static_cast<int>(nodeDisplayOffset_.size())) {
+                                d.displayOffsetX = nodeDisplayOffset_[globalIdx].x;
+                                d.displayOffsetY = nodeDisplayOffset_[globalIdx].y;
+                            }
+                            switch (n.type) {
+                            case MapNode::NodeType::START: d.type = MapStore::MapNodeData::NodeType::START; break;
+                            case MapNode::NodeType::NORMAL: d.type = MapStore::MapNodeData::NodeType::NORMAL; break;
+                            case MapNode::NodeType::BOSS: d.type = MapStore::MapNodeData::NodeType::BOSS; break;
+                            case MapNode::NodeType::ELITE: d.type = MapStore::MapNodeData::NodeType::ELITE; break;
+                            case MapNode::NodeType::SHOP: d.type = MapStore::MapNodeData::NodeType::SHOP; break;
+                            case MapNode::NodeType::EVENT: d.type = MapStore::MapNodeData::NodeType::EVENT; break;
+                            }
+                            ms.layerNodes()[i].push_back(d);
+                        }
+                    }
+                    ms.numLayers() = numLayers_;
+                    ms.startNodeIdx() = startNodeIdx_;
+                    ms.bossNodeIdx() = bossNodeIdx_;
+                    ms.playerCurrentNode() = playerCurrentNode_;
+                    ms.accessibleNodes() = accessibleNodes_;
+                    ms.generated() = true;
+                    
+                    // 初始化玩家位置（新层的起点）
+                    initializePlayer();
+                    updateScrollBounds();
+                    
+                    // 动态水平居中
+                    if (layerNodes_.size() > 1 && !layerNodes_[1].empty()) {
+                        int minX = layerNodes_[1][0].x;
+                        int maxX = layerNodes_[1][0].x;
+                        for (const auto& n : layerNodes_[1]) {
+                            if (n.x < minX) minX = n.x;
+                            if (n.x > maxX) maxX = n.x;
+                        }
+                        int contentWidth = (maxX - minX) + 400;
+                        if (contentWidth < 1) contentWidth = 1;
+                        int desiredOffsetX = (screenW_ - contentWidth) / 2 - minX + 200;
+                        if (desiredOffsetX < 0) desiredOffsetX = 0;
+                        mapOffsetX_ = desiredOffsetX;
+                    }
+                    
+                    std::cout << "[PLAYER MOVE] 已进入下一层，玩家位置: " << playerCurrentNode_ << std::endl;
+                } else {
+                    std::cout << "[PLAYER MOVE] 已经是最后一层，无法继续前进" << std::endl;
+                }
+            }
         }
     }
 }
