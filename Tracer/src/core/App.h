@@ -40,6 +40,9 @@ public:
 	static void extinguishCandle() { 
 		if (remainingCandles_ > 0) remainingCandles_--; 
 	}
+	static void restoreCandle() { 
+		if (remainingCandles_ < 2) remainingCandles_++; 
+	}
 	static void resetCandles() { remainingCandles_ = 2; }
 
 private:

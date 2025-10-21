@@ -96,7 +96,18 @@ static const std::vector<EnemyPresetRow> BOSS_MINER_MATRIX = {
     {{"",               "",               "",               ""}, -1},
     {{"panshi",         "",               "",               ""}, 0},
 };
-
+static const std::vector<EnemyPresetRow> BOSS_MINER_PHASE2_MATRIX = {
+    // 矿工二阶段：更强大的地面单位
+    {{"",               "",               "",               ""}, 0 },
+    {{"",               "",               "",               ""}, 0 },
+    {{"bashe",               "canglang_youhun","",              ""}, 1 },
+    {{"bashe",               "canglang_youhun","",               ""}, 1 },
+    {{"bashe",                "canglang_youhun",               "",               ""}, 1 },
+    {{"",               "",               "",               ""}, 1 },
+    {{"xuezong_xiquan",               "",               "",               ""}, 0},
+    {{"",               "",               "",               ""}, -1},
+    {{"",               "",               "",               ""}, -1},
+};
 static const std::vector<EnemyPresetRow> BOSS_FISHERMAN_MATRIX = {
     // 渔夫（湿地Boss）：偏重水域单位
     {{"",               "",               "",               ""}, 0 },
@@ -109,6 +120,18 @@ static const std::vector<EnemyPresetRow> BOSS_FISHERMAN_MATRIX = {
     {{"",               "",               "",               ""}, 0},
     {{"panshi",         "panshi",         "panshi",         ""}, -1},
     {{"panshi",         "panshi",         "",               ""}, -1},
+};
+static const std::vector<EnemyPresetRow> BOSS_FISHERMAN_PHASE2_MATRIX = {
+    // 更多水域生物与召唤
+    {{"",               "",               "",               ""}, 0 },
+    {{"",               "",               "",               ""}, 0 },
+    {{"",               "",               "",               ""}, 0 },
+    {{"",               "",               "",               ""}, 0 },
+    {{"",               "",               "",               ""}, 0 },
+    {{"",               "",               "",               ""}, 0 },
+    {{"",               "",               "",               ""}, 0},
+    {{"",               "",               "",               ""}, 0},
+    {{"panshi",         "",               "",               ""}, 0},
 };
 
 static const std::vector<EnemyPresetRow> BOSS_HUNTER_MATRIX = {
@@ -124,31 +147,8 @@ static const std::vector<EnemyPresetRow> BOSS_HUNTER_MATRIX = {
     {{"panshi",         "",               "",               ""}, -1},
 };
 
-static const std::vector<EnemyPresetRow> BOSS_MINER_PHASE2_MATRIX = {
-    // 矿工二阶段：更强大的地面单位
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0},
-    {{"",               "",               "",               ""}, 0},
-    {{"panshi",         "",               "",               ""}, 0},
-};
 
-static const std::vector<EnemyPresetRow> BOSS_FISHERMAN_PHASE2_MATRIX = {
-    // 更多水域生物与召唤
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0},
-    {{"",               "",               "",               ""}, 0},
-    {{"panshi",         "",               "",               ""}, 0},
-};
+
 
 EnemyPresetMatrix EnemyPresetManager::getMatrix(int battleId) const {
     EnemyPresetMatrix m;

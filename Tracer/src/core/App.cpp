@@ -45,8 +45,7 @@ bool App::init(const char* title, int width, int height) {
 	// 加载内置卡牌数据库
 	CardDB::instance().loadBuiltinCards();
 	
-	// 初始化全局玩家牌堆
-	DeckStore::instance().initializePlayerDeck();
+	// 注意：不在这里初始化玩家牌堆，等用户选择牌组后再初始化
 
 	running_ = true;
 	return true;

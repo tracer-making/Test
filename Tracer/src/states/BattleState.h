@@ -27,6 +27,15 @@ public:
 	static const std::vector<std::string>& getAvailableItems();
 
 private:
+	// Boss阶段切换
+	void switchToBossPhase2();
+	
+	// 矿工Boss死亡转阶段
+	void triggerMinerBossDeathPhase();
+	void generateJinkuai();  // 生成金块
+	void updateMinerBossTransform(float dt);  // 更新矿工Boss转阶段动画
+
+private:
 	// 游戏状态
 	enum class GamePhase {
 		PlayerTurn,    // 玩家回合
@@ -39,6 +48,22 @@ private:
 	int currentTurn_ = 1;
 	int playerHealth_ = 20;
 	int enemyHealth_ = 100;
+
+	// Boss阶段系统
+	int currentBossPhase_ = 1;  // 当前Boss阶段（1或2）
+	bool isBossBattle_ = false;  // 是否为Boss战
+	bool isGeneratingJinkuai_ = false;  // 是否正在生成金块
+	
+    // 矿工Boss转阶段动画
+    bool isMinerBossTransforming_ = false;  // 是否正在转阶段
+    float minerBossTransformTime_ = 0.0f;  // 转阶段动画时间
+    float minerBossTransformDuration_ = 2.0f;  // 转阶段动画持续时间
+    int minerBossTransformStep_ = 0;  // 当前处理步骤
+    std::vector<int> minerBossTransformCards_;  // 需要转换的卡牌索引
+    
+    // 转阶段完成后的延时
+    bool isMinerBossTransformComplete_ = false;  // 转阶段是否完成
+    float minerBossTransformCompleteTime_ = 0.0f;  // 转阶段完成后的延时时间
 
 	// 上帝模式：锁血与墨尺
 	bool lockPlayerHealth_ = false;
@@ -387,6 +412,11 @@ private:
 	bool isDefeatAnimating_ = false;  // 是否正在播放失败动画
 	float defeatAnimTime_ = 0.0f;    // 失败动画时间
 	float defeatAnimDuration_ = 2.0f; // 失败动画持续时间（2秒）
+	
+	// Boss战入场动画
+	bool isBossEntryAnimating_ = false;  // 是否正在播放Boss战入场动画
+	float bossEntryAnimTime_ = 0.0f;  // Boss战入场动画时间
+	float bossEntryAnimDuration_ = 3.0f;  // Boss战入场动画持续时间
 
 	// 攻击动画系统
 	bool isAttackAnimating_ = false;   // 是否正在播放攻击动画
@@ -467,6 +497,7 @@ private:
 	// 失败动画相关方法
 	void startDefeatAnimation();
 	void updateDefeatAnimation(float dt);
+	void updateBossEntryAnimation(float dt);
 
     // 掘墓人：回合结束时结算骨头增益（仅统计一方）
     // countEnemySide=false 统计我方；true 统计敌方

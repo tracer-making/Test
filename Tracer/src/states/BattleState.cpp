@@ -33,6 +33,11 @@ const std::vector<std::string>& BattleState::getAvailableItems() {
 #include "../core/WenMaiStore.h"
 
 BattleState::BattleState(int battleId) : currentBattleId_(battleId) {
+	// 判断是否为Boss战（ID >= 100）
+	isBossBattle_ = (battleId >= 100);
+	currentBossPhase_ = 1;  // 初始为第一阶段
+	
+	// Boss战入场费将在onEnter函数中处理
 }
 
 
@@ -1550,6 +1555,50 @@ void BattleState::update(App& app, float dt) {
 		}
 	}
 
+	// 处理矿工Boss转阶段动画
+	updateMinerBossTransform(dt);
+	
+	// 处理矿工Boss转阶段完成后的延时
+	if (isMinerBossTransformComplete_) {
+		minerBossTransformCompleteTime_ += dt;
+		
+		// 延时1.5秒后进入预设
+		if (minerBossTransformCompleteTime_ >= 1.5f) {
+			isMinerBossTransformComplete_ = false;
+			statusMessage_ = "进入Boss二阶段！";
+			std::cout << "[MINER BOSS TRANSFORM] 延时结束，进入预设" << std::endl;
+			
+            // 设置Boss二阶段和墨尺归零
+            currentBossPhase_ = 2;
+            meterActualPos_ = 0;  // 墨尺归零
+            meterTargetPos_ = 0;
+            
+            // 启动墨尺动画，让显示位置正确更新到0
+            meterStartPos_ = meterDisplayPos_;
+            isMeterAnimating_ = true;
+            meterAnimTime_ = 0.0f;
+            
+            // 保存第二行状态（矿工Boss转阶段时第二行应该保持不变）
+            std::vector<BattlefieldCard> savedRow2;
+            for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                int idx = 1 * BATTLEFIELD_COLS + col;  // 第二行
+                savedRow2.push_back(battlefield_[idx]);
+            }
+            
+            // 现在才进入预设
+            switchToBossPhase2();
+            
+            // 恢复第二行状态
+            for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                int idx = 1 * BATTLEFIELD_COLS + col;  // 第二行
+                battlefield_[idx] = savedRow2[col];
+            }
+            
+            // 立即结束敌人回合，进入玩家回合
+            currentPhase_ = GamePhase::PlayerTurn;
+		}
+	}
+
 	// 处理冲刺能手动画
 	updateRushing(dt);
 
@@ -1565,6 +1614,9 @@ void BattleState::update(App& app, float dt) {
 
 	// 处理失败动画
 	updateDefeatAnimation(dt);
+	
+	// 处理Boss战入场动画
+	updateBossEntryAnimation(dt);
 
 	// 检测卡牌死亡，获得魂骨
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
@@ -1842,8 +1894,8 @@ void BattleState::initializeBattle() {
 	selectedHandCard_ = -1;
 	statusMessage_ = "战斗开始！";
 	
-	// 重置蜡烛（每场战斗开始时确保蜡烛状态正确）
-	App::resetCandles();
+	// 蜡烛是全局生命值，不应该在每场战斗开始时重置
+	// 蜡烛的消耗和恢复由战斗结果决定，不是每场战斗开始时重置
 
 	// 初始化护主翻面状态数组（默认不翻面）
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
@@ -1859,6 +1911,37 @@ void BattleState::initializeBattle() {
 	// 开局抽牌：1张墨锭 + 3张玩家牌
 	handCards_.clear();
 	battleDeck_.clear();
+	
+	// Boss战入场费：消耗蜡烛并添加骷髅烟
+	if (isBossBattle_) {
+		int beforeCandles = App::getRemainingCandles();
+		std::cout << "[DEBUG] 消耗蜡烛前：remainingCandles_=" << beforeCandles << std::endl;
+		App::extinguishCandle();
+		int afterCandles = App::getRemainingCandles();
+		std::cout << "[DEBUG] 消耗蜡烛后：remainingCandles_=" << afterCandles << std::endl;
+		std::cout << "[BOSS BATTLE] 进入Boss战，消耗一根蜡烛！剩余蜡烛: " << afterCandles << std::endl;
+		std::cout << "[DEBUG] 蜡烛数量变化：从" << beforeCandles << "变为" << afterCandles << std::endl;
+		
+		// 显示状态消息
+		statusMessage_ = "进入Boss战！消耗一根蜡烛，获得骷髅烟！";
+		
+		// 启动Boss战入场动画
+		isBossEntryAnimating_ = true;
+		bossEntryAnimTime_ = 0.0f;
+		
+		// 添加骷髅烟到手牌
+		Card skullSmoke = CardDB::instance().make("dulou_yan");
+		std::cout << "[BOSS BATTLE] 尝试创建卡牌: dulou_yan" << std::endl;
+		std::cout << "[BOSS BATTLE] 卡牌ID: " << skullSmoke.id << std::endl;
+		std::cout << "[BOSS BATTLE] 卡牌名称: " << skullSmoke.name << std::endl;
+		if (!skullSmoke.id.empty()) {
+			handCards_.push_back(skullSmoke);
+			layoutHandCards();
+			std::cout << "[BOSS BATTLE] 成功添加卡牌到手牌，当前手牌数量: " << handCards_.size() << std::endl;
+		} else {
+			std::cout << "[BOSS BATTLE] 错误：无法创建卡牌 dulou_yan" << std::endl;
+		}
+	}
 
 	// 初始化随机数种子
 	srand(static_cast<unsigned int>(time(nullptr)));
@@ -3038,25 +3121,459 @@ void BattleState::executeEnemyAdvance() {
 	enemyAdvanceSteps_.clear();
 }
 
+void BattleState::updateMinerBossTransform(float dt) {
+	if (!isMinerBossTransforming_) return;
+	
+	minerBossTransformTime_ += dt;
+	
+	// 每0.5秒处理一个造物
+	float stepInterval = 0.5f;
+	int targetStep = static_cast<int>(minerBossTransformTime_ / stepInterval);
+	
+	// 处理新的步骤
+	while (minerBossTransformStep_ < targetStep && minerBossTransformStep_ < static_cast<int>(minerBossTransformCards_.size())) {
+		int cardIdx = minerBossTransformCards_[minerBossTransformStep_];
+		
+		if (battlefield_[cardIdx].isAlive && battlefield_[cardIdx].isPlayer) {
+			std::cout << "[MINER BOSS TRANSFORM] 步骤" << minerBossTransformStep_ << ": 转换卡牌 " << battlefield_[cardIdx].card.name << std::endl;
+			statusMessage_ = "正在转换: " + battlefield_[cardIdx].card.name + " -> 金块";
+			
+			// 杀死卡牌并增加魂骨
+			battlefield_[cardIdx].health = 0;
+			battlefield_[cardIdx].isAlive = false;
+			battlefield_[cardIdx].isMovedToDeath = false;
+			
+			// 增加魂骨
+			boneCount_++;
+			if (hasMark(battlefield_[cardIdx].card, std::string(u8"骨王"))) {
+				boneCount_ += 3;
+			}
+			
+			// 检查食尸鬼印记
+			int ghoulHandIdx = -1;
+			for (size_t h = 0; h < handCards_.size(); ++h) {
+				for (const auto& mk : handCards_[h].marks) {
+					if (mk == std::string(u8"食尸鬼")) { 
+						ghoulHandIdx = static_cast<int>(h); 
+						break; 
+					}
+				}
+				if (ghoulHandIdx != -1) break;
+			}
+			
+			if (ghoulHandIdx != -1) {
+				// 食尸鬼占位
+				Card ghoul = handCards_[ghoulHandIdx];
+				handCards_.erase(handCards_.begin() + ghoulHandIdx);
+				layoutHandCards();
+				battlefield_[cardIdx].card = ghoul;
+				battlefield_[cardIdx].isAlive = true;
+				battlefield_[cardIdx].health = ghoul.health;
+				battlefield_[cardIdx].isPlayer = true;
+				battlefield_[cardIdx].placedTurn = currentTurn_;
+				battlefield_[cardIdx].oneTurnGrowthApplied = false;
+				std::cout << "[MINER BOSS TRANSFORM] 食尸鬼自动登场：" << ghoul.name << std::endl;
+			} else {
+				// 生成金块
+				Card jinkuaiCard = CardDB::instance().make("jinkuai");
+				if (!jinkuaiCard.id.empty()) {
+					battlefield_[cardIdx].card = jinkuaiCard;
+					battlefield_[cardIdx].health = jinkuaiCard.health;
+					battlefield_[cardIdx].isAlive = true;
+					battlefield_[cardIdx].isPlayer = true;
+					battlefield_[cardIdx].moveDirection = 0;
+					battlefield_[cardIdx].isMovedToDeath = false;
+					std::cout << "[MINER BOSS TRANSFORM] 成功生成金块" << std::endl;
+				}
+			}
+		}
+		
+		minerBossTransformStep_++;
+	}
+	
+        // 检查是否完成所有转换
+        if (minerBossTransformStep_ >= static_cast<int>(minerBossTransformCards_.size())) {
+            isMinerBossTransforming_ = false;
+            statusMessage_ = "矿工Boss转阶段完成！第三行造物已转化为金块！";
+            std::cout << "[MINER BOSS TRANSFORM] 转阶段完成" << std::endl;
+            
+            // 设置延时标记，等待一段时间后再进入预设
+            isMinerBossTransformComplete_ = true;
+            minerBossTransformCompleteTime_ = 0.0f;
+            std::cout << "[MINER BOSS TRANSFORM] 开始延时，等待进入预设" << std::endl;
+        }
+}
+
+void BattleState::switchToBossPhase2() {
+	// 切换到Boss二阶段预设
+	int phase2BattleId = currentBattleId_ + 1;  // 二阶段ID = 一阶段ID + 1
+	currentBattleId_ = phase2BattleId;
+	
+	// 清空当前战场上的敌人卡牌
+	for (int i = 0; i < BATTLEFIELD_ROWS * BATTLEFIELD_COLS; ++i) {
+		if (!battlefield_[i].isPlayer) {
+			battlefield_[i].isAlive = false;
+			battlefield_[i].health = 0;
+		}
+	}
+	
+	// 重新初始化Boss二阶段预设
+	auto matrix = EnemyPresetManager::instance().getMatrix(currentBattleId_);
+	
+	// 初始化战斗区域第三行 (player side)
+	int initRow3 = matrix.rows.size() - 1;
+	if (initRow3 >= 0 && matrix.rows.size() > initRow3) {
+		const auto& row = matrix.rows[initRow3];
+		// 根据placementType决定放置方式
+		std::vector<std::string> ids;
+		if (row.placementType == -1) {
+			// 固定造物 + 固定位置
+			for (const auto& id : row.cards) {
+				if (!id.empty()) {
+					ids.push_back(id);
+				}
+			}
+		} else if (row.placementType == 0) {
+			// 固定造物 + 随机位置
+			for (const auto& id : row.cards) {
+				if (!id.empty()) {
+					ids.push_back(id);
+				}
+			}
+		} else {
+			// 概率造物 + 随机位置（基于预期生成数量）
+			int expectedCount = row.placementType;
+			std::vector<std::string> availableCards;
+			for (const auto& id : row.cards) {
+				if (!id.empty()) {
+					availableCards.push_back(id);
+				}
+			}
+			
+			if (!availableCards.empty() && expectedCount > 0) {
+				// 计算每个卡牌的概率：预期数量 / 可用卡牌数量
+				float probability = (float)expectedCount / (float)availableCards.size();
+				std::random_device rd;
+				std::mt19937 g(rd());
+				std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+				
+				for (const auto& id : availableCards) {
+					if (dis(g) < probability) {
+						ids.push_back(id);
+					}
+				}
+			}
+		}
+		
+		if (!ids.empty()) {
+			if (row.placementType == -1) {
+				// 固定位置放置
+				for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+					const std::string& id = row.cards[col];
+					if (!id.empty()) {
+						int idx = 2 * BATTLEFIELD_COLS + col;
+						if (!battlefield_[idx].isAlive) {
+							Card c = CardDB::instance().make(id);
+							if (!c.id.empty()) {
+								battlefield_[idx].card = c;
+								battlefield_[idx].isPlayer = true;
+								battlefield_[idx].health = c.health;
+								battlefield_[idx].isAlive = true;
+								battlefield_[idx].moveDirection = 0;
+							}
+						}
+					}
+				}
+			} else {
+				// 随机位置放置
+				std::vector<int> emptyCols;
+				for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+					int idx = 2 * BATTLEFIELD_COLS + col;
+					if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+				}
+				std::random_device rd; std::mt19937 gen(rd());
+				for (const auto& id : ids) {
+					if (emptyCols.empty()) break;
+					std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+					int choose = pick(gen);
+					int col = emptyCols[choose];
+					emptyCols.erase(emptyCols.begin() + choose);
+					int idx = 2 * BATTLEFIELD_COLS + col;
+					Card c = CardDB::instance().make(id);
+					if (!c.id.empty()) {
+						battlefield_[idx].card = c;
+						battlefield_[idx].isPlayer = true;
+						battlefield_[idx].health = c.health;
+						battlefield_[idx].isAlive = true;
+						battlefield_[idx].moveDirection = 0;
+					}
+				}
+			}
+		}
+	}
+	
+	// 初始化战斗区域第二行 (enemy side)
+	int initRow2 = matrix.rows.size() - 2;
+	if (initRow2 >= 0 && matrix.rows.size() > initRow2) {
+		const auto& row = matrix.rows[initRow2];
+		// 根据placementType决定放置方式
+		std::vector<std::string> ids;
+		if (row.placementType == -1) {
+			// 固定造物 + 固定位置
+			for (const auto& id : row.cards) {
+				if (!id.empty()) {
+					ids.push_back(id);
+				}
+			}
+		} else if (row.placementType == 0) {
+			// 固定造物 + 随机位置
+			for (const auto& id : row.cards) {
+				if (!id.empty()) {
+					ids.push_back(id);
+				}
+			}
+		} else {
+			// 概率造物 + 随机位置（基于预期生成数量）
+			int expectedCount = row.placementType;
+			std::vector<std::string> availableCards;
+			for (const auto& id : row.cards) {
+				if (!id.empty()) {
+					availableCards.push_back(id);
+				}
+			}
+			
+			if (!availableCards.empty() && expectedCount > 0) {
+				// 计算每个卡牌的概率：预期数量 / 可用卡牌数量
+				float probability = (float)expectedCount / (float)availableCards.size();
+				std::random_device rd;
+				std::mt19937 g(rd());
+				std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+				
+				for (const auto& id : availableCards) {
+					if (dis(g) < probability) {
+						ids.push_back(id);
+					}
+				}
+			}
+		}
+		
+		if (!ids.empty()) {
+			if (row.placementType == -1) {
+				// 固定位置放置
+				for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+					const std::string& id = row.cards[col];
+					if (!id.empty()) {
+						int idx = 1 * BATTLEFIELD_COLS + col;
+						if (!battlefield_[idx].isAlive) {
+							Card c = CardDB::instance().make(id);
+							if (!c.id.empty()) {
+								battlefield_[idx].card = c;
+								battlefield_[idx].isPlayer = false;
+								battlefield_[idx].health = c.health;
+								battlefield_[idx].isAlive = true;
+								battlefield_[idx].moveDirection = 0;
+							}
+						}
+					}
+				}
+			} else {
+				// 随机位置放置
+				std::vector<int> emptyCols;
+				for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+					int idx = 1 * BATTLEFIELD_COLS + col;
+					if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+				}
+				std::random_device rd; std::mt19937 gen(rd());
+				for (const auto& id : ids) {
+					if (emptyCols.empty()) break;
+					std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+					int choose = pick(gen);
+					int col = emptyCols[choose];
+					emptyCols.erase(emptyCols.begin() + choose);
+					int idx = 1 * BATTLEFIELD_COLS + col;
+					Card c = CardDB::instance().make(id);
+					if (!c.id.empty()) {
+						battlefield_[idx].card = c;
+						battlefield_[idx].isPlayer = false;
+						battlefield_[idx].health = c.health;
+						battlefield_[idx].isAlive = true;
+						battlefield_[idx].moveDirection = 0;
+					}
+				}
+			}
+		}
+	}
+	
+	// 初始化敌人第一行 (enemy side)
+	int initRow1 = matrix.rows.size() - 3;
+	if (initRow1 >= 0 && matrix.rows.size() > initRow1) {
+		const auto& row = matrix.rows[initRow1];
+		// 根据placementType决定放置方式
+		std::vector<std::string> ids;
+		if (row.placementType == -1) {
+			// 固定造物 + 固定位置
+			for (const auto& id : row.cards) {
+				if (!id.empty()) {
+					ids.push_back(id);
+				}
+			}
+		} else if (row.placementType == 0) {
+			// 固定造物 + 随机位置
+			for (const auto& id : row.cards) {
+				if (!id.empty()) {
+					ids.push_back(id);
+				}
+			}
+		} else {
+			// 概率造物 + 随机位置（基于预期生成数量）
+			int expectedCount = row.placementType;
+			std::vector<std::string> availableCards;
+			for (const auto& id : row.cards) {
+				if (!id.empty()) {
+					availableCards.push_back(id);
+				}
+			}
+			
+			if (!availableCards.empty() && expectedCount > 0) {
+				// 计算每个卡牌的概率：预期数量 / 可用卡牌数量
+				float probability = (float)expectedCount / (float)availableCards.size();
+				std::random_device rd;
+				std::mt19937 g(rd());
+				std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+				
+				for (const auto& id : availableCards) {
+					if (dis(g) < probability) {
+						ids.push_back(id);
+					}
+				}
+			}
+		}
+		
+		if (!ids.empty()) {
+			if (row.placementType == -1) {
+				// 固定位置放置
+				for (int col = 0; col < std::min((int)row.cards.size(), BATTLEFIELD_COLS); ++col) {
+					const std::string& id = row.cards[col];
+					if (!id.empty()) {
+						int idx = 0 * BATTLEFIELD_COLS + col;
+						if (!battlefield_[idx].isAlive) {
+							Card c = CardDB::instance().make(id);
+							if (!c.id.empty()) {
+								battlefield_[idx].card = c;
+								battlefield_[idx].isPlayer = false;
+								battlefield_[idx].health = c.health;
+								battlefield_[idx].isAlive = true;
+								battlefield_[idx].moveDirection = 0;
+							}
+						}
+					}
+				}
+			} else {
+				// 随机位置放置
+				std::vector<int> emptyCols;
+				for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+					int idx = 0 * BATTLEFIELD_COLS + col;
+					if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+				}
+				std::random_device rd; std::mt19937 gen(rd());
+				for (const auto& id : ids) {
+					if (emptyCols.empty()) break;
+					std::uniform_int_distribution<int> pick(0, (int)emptyCols.size() - 1);
+					int choose = pick(gen);
+					int col = emptyCols[choose];
+					emptyCols.erase(emptyCols.begin() + choose);
+					int idx = 0 * BATTLEFIELD_COLS + col;
+					Card c = CardDB::instance().make(id);
+					if (!c.id.empty()) {
+						battlefield_[idx].card = c;
+						battlefield_[idx].isPlayer = false;
+						battlefield_[idx].health = c.health;
+						battlefield_[idx].isAlive = true;
+						battlefield_[idx].moveDirection = 0;
+					}
+				}
+			}
+		}
+	}
+}
+
 void BattleState::checkGameOver() {
     // 调试日志：检查墨尺数值
     std::cout << "[METER] check actualPos=" << meterActualPos_ << " displayPos=" << meterTargetPos_ << std::endl;
 
     // 胜利：实际墨尺 >= 5
     if (meterActualPos_ >= 5) {
+        // 检查是否为Boss战且还在第一阶段
+        if (isBossBattle_ && currentBossPhase_ == 1) {
+            // 检查是否为矿工Boss（战斗ID 100）- 特殊死亡转阶段
+            if (currentBattleId_ == 100) {
+                std::cout << "[MINER BOSS DEATH] 开始矿工Boss死亡转阶段" << std::endl;
+                statusMessage_ = "矿工Boss死亡！第三行造物正在转化为金块...";
+                
+                // 设置转阶段动画标记
+                isMinerBossTransforming_ = true;
+                minerBossTransformTime_ = 0.0f;
+                minerBossTransformDuration_ = 2.0f; // 2秒转阶段动画
+                minerBossTransformStep_ = 0; // 当前处理步骤
+                
+                // 收集需要转换的造物
+                minerBossTransformCards_.clear();
+                for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                    int idx = 2 * BATTLEFIELD_COLS + col;  // 第三行
+                    if (battlefield_[idx].isAlive && battlefield_[idx].isPlayer) {
+                        minerBossTransformCards_.push_back(idx);
+                    }
+                }
+                
+                // 清空敌人第一行卡牌
+                for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                    int idx = 0 * BATTLEFIELD_COLS + col;  // 第一行
+                    if (battlefield_[idx].isAlive && !battlefield_[idx].isPlayer) {
+                        battlefield_[idx].isAlive = false;
+                        battlefield_[idx].health = 0;
+                    }
+                }
+            }
+            
+                    // 对于矿工Boss，转阶段动画会处理预设切换
+                    // 对于其他Boss，立即进入二阶段
+                    if (currentBattleId_ != 100) {
+                        currentBossPhase_ = 2;
+                        meterActualPos_ = 0;  // 墨尺归零
+                        meterTargetPos_ = 0;
+                        statusMessage_ = "Boss进入二阶段！墨尺归零！";
+                        std::cout << "[BOSS PHASE 2] Boss进入二阶段，墨尺归零" << std::endl;
+                        
+                        // 切换到Boss二阶段预设
+                        switchToBossPhase2();
+                        return;
+                    }
+                    // 矿工Boss的转阶段动画会处理后续的预设切换
+        } else {
+            // 普通胜利或Boss二阶段胜利
         int wenmaiGained = meterActualPos_ - 5;
         currentPhase_ = GamePhase::GameOver;
         std::cout << "[VICTORY] 墨尺胜利！actualPos=" << meterActualPos_ << ", wenmaiGained=" << wenmaiGained << std::endl;
-        if (wenmaiGained > 0) {
+            
+            // 只有非Boss战或Boss二阶段才获得文脉
+            if (wenmaiGained > 0 && (!isBossBattle_ || currentBossPhase_ == 2)) {
             // 添加文脉到全局存储
             WenMaiStore::instance().add(wenmaiGained);
             statusMessage_ = "胜利！获得 " + std::to_string(wenmaiGained) + " 文脉！";
         } else {
             statusMessage_ = "胜利！";
         }
+        // Boss战二阶段胜利时恢复一根蜡烛
+        if (isBossBattle_ && currentBossPhase_ == 2) {
+            App::restoreCandle();
+            statusMessage_ = "Boss战胜利！恢复一根蜡烛！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
+            std::cout << "[VICTORY] Boss战二阶段胜利，恢复一根蜡烛！剩余蜡烛: " << App::getRemainingCandles() << std::endl;
+        }
+        
         // 启动胜利动画
         startVictoryAnimation();
         return;
+        }
     }
 
     // 失败：实际墨尺 <= -5
@@ -3092,7 +3609,16 @@ void BattleState::checkGameOver() {
 	else if (enemyHealth_ <= 0) {
 		currentPhase_ = GamePhase::GameOver;
 		std::cout << "[VICTORY] 敌方血量胜利！enemyHealth=" << enemyHealth_ << std::endl;
-		statusMessage_ = "胜利！";
+		
+		// Boss战二阶段胜利时恢复一根蜡烛
+		if (isBossBattle_ && currentBossPhase_ == 2) {
+			App::restoreCandle();
+			statusMessage_ = "Boss战胜利！恢复一根蜡烛！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
+			std::cout << "[VICTORY] Boss战二阶段胜利，恢复一根蜡烛！剩余蜡烛: " << App::getRemainingCandles() << std::endl;
+		} else {
+			statusMessage_ = "胜利！";
+		}
+		
 		// 启动胜利动画
 		startVictoryAnimation();
 		return;
@@ -4538,11 +5064,14 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 
 	// 检查目标是否有效
 	if (!target.isAlive) {
-		// 守护者印记：空位被攻击时，守护者移动到该位置承伤
+		// 守护者印记：空位被攻击时，守护者移动到该位置承伤（只搜索同一行）
 		bool guardianMoved = false;
+		int targetRow = targetIndex / BATTLEFIELD_COLS;  // 获取目标位置所在行
+		
 		if (attacker.isPlayer) {
-			// 玩家攻击敌方空位，寻找敌方守护者
-			for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+			// 玩家攻击敌方空位，寻找敌方守护者（只在同一行）
+			for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+				int i = targetRow * BATTLEFIELD_COLS + col;
 				if (battlefield_[i].isAlive && !battlefield_[i].isPlayer && hasMark(battlefield_[i].card, std::string(u8"守护者"))) {
 					// 找到敌方守护者，移动到空位承伤
 					SDL_Rect targetRect = battlefield_[targetIndex].rect;
@@ -4555,8 +5084,9 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 				}
 			}
 		} else {
-			// 敌方攻击玩家空位，寻找玩家守护者
-			for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+			// 敌方攻击玩家空位，寻找玩家守护者（只在同一行）
+			for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+				int i = targetRow * BATTLEFIELD_COLS + col;
 				if (battlefield_[i].isAlive && battlefield_[i].isPlayer && hasMark(battlefield_[i].card, std::string(u8"守护者"))) {
 					// 找到玩家守护者，移动到空位承伤
 					SDL_Rect targetRect = battlefield_[targetIndex].rect;
@@ -6878,6 +7408,19 @@ void BattleState::updateDefeatAnimation(float dt) {
 	}
 }
 
+void BattleState::updateBossEntryAnimation(float dt) {
+	if (!isBossEntryAnimating_) return;
+	
+	bossEntryAnimTime_ += dt;
+	
+	// 动画完成
+	if (bossEntryAnimTime_ >= bossEntryAnimDuration_) {
+		isBossEntryAnimating_ = false;
+		bossEntryAnimTime_ = 0.0f;
+		std::cout << "[BOSS ENTRY] Boss战入场动画完成！" << std::endl;
+	}
+}
+
 void BattleState::renderHealthCandles(SDL_Renderer* r) {
 	// 蜡烛位置：卡牌介绍区域左侧
 	int candleAreaX = cardInfoRect_.x - 120; // 卡牌介绍区域左侧120像素
@@ -6889,6 +7432,13 @@ void BattleState::renderHealthCandles(SDL_Renderer* r) {
 	// 固定两只蜡烛，代表整局游戏生命值
 	int totalCandles = 2; // 总蜡烛数
 	int remainingCandles = App::getRemainingCandles(); // 剩余蜡烛数（从全局状态获取）
+	
+	// 调试输出：检查蜡烛渲染时的数量
+	static int lastRenderCandles = -1;
+	if (remainingCandles != lastRenderCandles) {
+		std::cout << "[CANDLE RENDER] 渲染蜡烛数量: " << remainingCandles << std::endl;
+		lastRenderCandles = remainingCandles;
+	}
 	
 	// 绘制蜡烛背景区域（调整为两只蜡烛的大小）
 	SDL_SetRenderDrawColor(r, 15, 15, 15, 180);
@@ -6902,6 +7452,9 @@ void BattleState::renderHealthCandles(SDL_Renderer* r) {
 		int candleX = candleAreaX + i * (candleWidth + candleSpacing);
 		int candleY = candleAreaY;
 		bool isLit = (i < remainingCandles); // 前remainingCandles根蜡烛是点燃的
+		
+		// 调试输出：检查每根蜡烛的状态
+		std::cout << "[CANDLE RENDER] 蜡烛" << i << ": isLit=" << isLit << " (remainingCandles=" << remainingCandles << ")" << std::endl;
 		
 		// 蜡烛主体（白色）
 		SDL_SetRenderDrawColor(r, 255, 255, 255, 255);

@@ -542,6 +542,8 @@ void MapExploreState::update(App& app, float dt) {
     
     if (pendingGoMinerBoss_) {
         pendingGoMinerBoss_ = false;
+        std::cout << "[MINER TEST] 矿工测试按钮被点击，进入Boss战（ID: 100）" << std::endl;
+        std::cout << "[MINER TEST] 当前蜡烛数量: " << App::getRemainingCandles() << std::endl;
         // 设置矿工Boss战（ID: 100）
         auto* battleState = new BattleState(100);
         app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));

@@ -53,10 +53,7 @@ void DeckSelectState::handleEvent(App& app, const SDL_Event& e) {
     if (viewingDeck_) {
         // 查看牌组内容时的处理
         if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_s) {
-            // S键记住选择的牌组并进入地图
-            if (selectedDeckIndex_ >= 0 && selectedDeckIndex_ < static_cast<int>(initialDecks_.size())) {
-                App::setSelectedInitialDeck(initialDecks_[selectedDeckIndex_].id);
-            }
+            // S键进入地图（牌组已经在点击时设置）
             pendingGoMapExplore_ = true;
             return;
         }
@@ -77,6 +74,10 @@ void DeckSelectState::handleEvent(App& app, const SDL_Event& e) {
                 if (mx >= rect.x && mx <= rect.x + rect.w && 
                     my >= rect.y && my <= rect.y + rect.h) {
                     selectedDeckIndex_ = static_cast<int>(i);
+                    // 立即设置选择的牌组
+                    App::setSelectedInitialDeck(initialDecks_[i].id);
+                    // 立即初始化玩家牌库
+                    DeckStore::instance().initializePlayerDeck();
                     viewingDeck_ = true;
                     break;
                 }
