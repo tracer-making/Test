@@ -34,6 +34,17 @@ private:
 	void triggerMinerBossDeathPhase();
 	void generateJinkuai();  // 生成金块
 	void updateMinerBossTransform(float dt);  // 更新矿工Boss转阶段动画
+	void updateFishermanBossTransform(float dt);  // 更新渔夫Boss转阶段动画
+	void updateFishermanBossFuhunsuoAnimation(float dt);  // 更新渔夫Boss缚魂索移动动画
+	void completeFishermanBossFuhunsuoMove();  // 完成渔夫Boss缚魂索移动
+	
+	// 猎人Boss转阶段
+	void updateHunterBossTransform(float dt);  // 更新猎人Boss转阶段动画
+	void generateHunterBossExchangeCards();  // 生成猎人Boss交换卡牌
+	void addRandomMarksToCard(Card& card, bool isRare);  // 给卡牌添加随机印记
+	int countPlayerFurCards();  // 统计玩家手牌中的毛皮数量
+	void startHunterBossFurExchange();  // 开始猎人Boss毛皮交换
+	void completeHunterBossFurExchange();  // 完成猎人Boss毛皮交换
 
 private:
 	// 游戏状态
@@ -64,6 +75,45 @@ private:
     // 转阶段完成后的延时
     bool isMinerBossTransformComplete_ = false;  // 转阶段是否完成
     float minerBossTransformCompleteTime_ = 0.0f;  // 转阶段完成后的延时时间
+    
+    // 渔夫Boss转阶段动画
+    bool isFishermanBossTransforming_ = false;  // 是否正在转阶段
+    float fishermanBossTransformTime_ = 0.0f;  // 转阶段动画时间
+    float fishermanBossTransformDuration_ = 2.0f;  // 转阶段动画持续时间
+    int fishermanBossTransformStep_ = 0;  // 当前处理步骤
+    std::vector<int> fishermanBossTransformCards_;  // 我方造物位置索引
+    
+	// 渔夫转阶段完成后的延时
+	bool isFishermanBossTransformComplete_ = false;  // 转阶段是否完成
+	float fishermanBossTransformCompleteTime_ = 0.0f;  // 转阶段完成后的延时时间
+	
+	// 渔夫Boss缚魂索相关
+	bool isFishermanBossFuhunsuoActive_ = false;  // 渔夫Boss缚魂索是否激活
+	int fishermanBossFuhunsuoTarget_ = -1;  // 被缚魂索锁定的卡牌索引
+	int fishermanBossFuhunsuoTurn_ = 0;  // 缚魂索使用的回合数
+	std::vector<int> fuhunsuoCardStack_;  // 缚魂索卡牌栈，存储玩家打出的卡牌实例ID
+	
+	// 渔夫Boss缚魂索移动动画
+	bool isFishermanBossFuhunsuoAnimating_ = false;  // 是否正在播放渔夫Boss缚魂索移动动画
+	float fishermanBossFuhunsuoAnimTime_ = 0.0f;     // 渔夫Boss缚魂索动画时间
+	float fishermanBossFuhunsuoAnimDuration_ = 0.5f; // 渔夫Boss缚魂索动画持续时间
+	int fishermanBossFuhunsuoFromIndex_ = -1;        // 渔夫Boss缚魂索移动起始位置
+	int fishermanBossFuhunsuoToIndex_ = -1;          // 渔夫Boss缚魂索移动目标位置
+	SDL_Rect fishermanBossFuhunsuoFromRect_;         // 渔夫Boss缚魂索移动起始矩形
+	SDL_Rect fishermanBossFuhunsuoToRect_;           // 渔夫Boss缚魂索移动目标矩形
+	
+	// 猎人Boss转阶段动画
+	bool isHunterBossTransforming_ = false;  // 是否正在转阶段
+	float hunterBossTransformTime_ = 0.0f;  // 转阶段动画时间
+	float hunterBossTransformDuration_ = 2.0f;  // 转阶段动画持续时间
+	int hunterBossTransformStep_ = 0;  // 当前处理步骤
+	
+	// 猎人Boss转阶段完成后的毛皮交换
+	bool isHunterBossFurExchange_ = false;  // 是否进入毛皮交换状态
+	std::vector<Card> hunterBossExchangeCards_;  // 猎人Boss场上的8张交换卡牌
+	std::vector<int> hunterBossExchangeCardIndices_;  // 猎人Boss场上卡牌的索引
+	int selectedExchangeCard_ = -1;  // 当前选中的交换卡牌索引
+	int totalFurCount_ = 0;  // 玩家手牌中的毛皮总数
 
 	// 上帝模式：锁血与墨尺
 	bool lockPlayerHealth_ = false;
@@ -90,6 +140,8 @@ private:
 		int placedTurn = 0; // 放置（上场）时的回合数
 		bool oneTurnGrowthApplied = false; // 一回合成长是否已触发
 		bool isDiving = false; // 水袭印记：是否潜水状态
+		bool isJiaoyu = false; // 是否为鲛鱼（渔夫Boss转阶段生成）
+		bool isJiaolong = false; // 是否为鲛龙（鲛鱼死亡后生成）
 	};
 	std::array<BattlefieldCard, TOTAL_BATTLEFIELD_SLOTS> battlefield_;
 
@@ -134,6 +186,7 @@ private:
 	
 	// 状态切换
 	bool pendingGoMapExplore_ = false;  // 返回地图探索
+	bool pendingGoMemoryRepair_ = false;  // 跳转到记忆修复界面
 	int hoveredItemIndex_ = -1; // 当前悬停的道具索引
 	
 	// 风雅扇效果跟踪

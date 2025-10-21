@@ -6,6 +6,7 @@
 #include "MapExploreState.h"
 #include <random>
 #include <algorithm>
+#include <unordered_set>
 
 // 定义静态变量
 MemoryRepairState::BackHintType MemoryRepairState::mapHintType_ = BackHintType::Unknown;
@@ -28,6 +29,11 @@ static void drawBackIcon(SDL_Renderer* r, bool bone, int x, int y, int size) {
 }
 
 MemoryRepairState::MemoryRepairState() {
+	backButton_ = new Button();
+	rerollButton_ = new Button();
+}
+
+MemoryRepairState::MemoryRepairState(bool isBossVictory) : isBossVictory_(isBossVictory) {
 	backButton_ = new Button();
 	rerollButton_ = new Button();
 }
@@ -60,8 +66,8 @@ void MemoryRepairState::onEnter(App& app) {
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
 		});
 	}
-	// 重新抽卡按钮（位置在牌位下方）
-	if (rerollButton_) {
+	// 重新抽卡按钮（Boss战胜利时不显示）
+	if (rerollButton_ && !isBossVictory_) {
 		SDL_Rect rc{140,20,120,40}; // 临时位置，会在layoutCandidates后重新设置
 		rerollButton_->setRect(rc);
 		rerollButton_->setText(u8"重新抽卡");
@@ -112,8 +118,8 @@ void MemoryRepairState::onExit(App& app) {}
 void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
 	// 处理返回按钮事件
 	if (backButton_) backButton_->handleEvent(e);
-	// 处理重新抽卡按钮事件
-	if (rerollButton_ && !rerollUsed_) rerollButton_->handleEvent(e);
+	// 处理重新抽卡按钮事件（Boss战胜利时不处理）
+	if (rerollButton_ && !rerollUsed_ && !isBossVictory_) rerollButton_->handleEvent(e);
 	
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx = e.button.x, my = e.button.y;
@@ -147,7 +153,8 @@ void MemoryRepairState::render(App& app) {
 	// 标题
 	if (titleFont_) {
 		SDL_Color col{220,230,255,255};
-		SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, u8"记忆修复（三选一）", col);
+		const char* titleText = isBossVictory_ ? u8"Boss战胜利奖励（三选一）" : u8"记忆修复（三选一）";
+		SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, titleText, col);
 		if (s) {
 			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
 			SDL_Rect dst{ (screenW_-s->w)/2, 60, s->w, s->h };
@@ -159,8 +166,8 @@ void MemoryRepairState::render(App& app) {
 
 	// 返回按钮
 	if (backButton_) backButton_->render(r);
-	// 重新抽卡按钮（只有在未使用时才渲染）
-	if (rerollButton_ && !rerollUsed_) rerollButton_->render(r);
+	// 重新抽卡按钮（Boss战胜利时不渲染）
+	if (rerollButton_ && !rerollUsed_ && !isBossVictory_) rerollButton_->render(r);
 
     // 渲染三张候选卡（使用与战斗界面相近尺寸）
 	for (int i=0;i<(int)candidates_.size(); ++i) {
@@ -241,6 +248,53 @@ void MemoryRepairState::buildCandidates() {
 	if (ids.empty()) {
 		// 回退：使用一个已知ID占位
 		for (int i=0;i<3;++i) { Card c; c.id = "shulin_shucheng"; Candidate cand; cand.card = c; candidates_.push_back(cand); }
+		return;
+	}
+	
+	// Boss战胜利：专门生成稀有牌
+	if (isBossVictory_) {
+		std::vector<std::string> rareIds;
+		for (const auto& id : ids) {
+			Card c = CardDB::instance().make(id);
+			// 只选择稀有牌（obtainable == 2）且可获取的卡牌
+			if (c.obtainable == 2) {
+				rareIds.push_back(id);
+			}
+		}
+		
+		if (!rareIds.empty()) {
+			std::random_device rd; 
+			std::mt19937 gen(rd());
+			std::shuffle(rareIds.begin(), rareIds.end(), gen);
+			
+			// 取前3张稀有牌，确保不重复
+			std::unordered_set<std::string> usedIds;
+			for (const auto& id : rareIds) {
+				if (usedIds.find(id) == usedIds.end() && candidates_.size() < 3) {
+					Card c = CardDB::instance().make(id);
+					Candidate cand; 
+					cand.card = c; 
+					cand.hint = BackHintType::Unknown; // Boss战胜利不显示提示
+					candidates_.push_back(cand);
+					usedIds.insert(id);
+				}
+			}
+		}
+		
+		// 如果稀有牌不足3张，用普通牌补齐
+		while (candidates_.size() < 3 && !ids.empty()) {
+			std::random_device rd; 
+			std::mt19937 gen(rd());
+			std::uniform_int_distribution<int> dis(0, ids.size() - 1);
+			std::string randomId = ids[dis(gen)];
+			Card c = CardDB::instance().make(randomId);
+			if (c.obtainable > 0) {
+				Candidate cand; 
+				cand.card = c; 
+				cand.hint = BackHintType::Unknown;
+				candidates_.push_back(cand);
+			}
+		}
 		return;
 	}
 	std::random_device rd; std::mt19937 gen(rd());

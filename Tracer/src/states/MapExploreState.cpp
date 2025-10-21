@@ -41,6 +41,8 @@ MapExploreState::~MapExploreState() {
     difficultyButtons_.clear();
     delete backToTestButton_;
     delete testMinerButton_;
+    delete testFishermanButton_;
+    delete testHunterButton_;
 }
 
 void MapExploreState::onEnter(App& app) {
@@ -342,6 +344,30 @@ void MapExploreState::onEnter(App& app) {
             pendingGoMinerBoss_ = true;
         });
     }
+    
+    // 渔夫测试按钮（矿工测试按钮下方）
+    testFishermanButton_ = new Button();
+    if (testFishermanButton_) {
+        SDL_Rect r{ startX + 130, startY + btnH + 12 + 40, 120, 36 };
+        testFishermanButton_->setRect(r);
+        testFishermanButton_->setText(u8"渔夫测试");
+        if (smallFont_) testFishermanButton_->setFont(smallFont_, app.getRenderer());
+        testFishermanButton_->setOnClick([this]() {
+            pendingGoFishermanBoss_ = true;
+        });
+    }
+    
+    // 猎人测试按钮（渔夫测试按钮下方）
+    testHunterButton_ = new Button();
+    if (testHunterButton_) {
+        SDL_Rect r{ startX + 130, startY + btnH + 12 + 80, 120, 36 };
+        testHunterButton_->setRect(r);
+        testHunterButton_->setText(u8"猎人测试");
+        if (smallFont_) testHunterButton_->setFont(smallFont_, app.getRenderer());
+        testHunterButton_->setOnClick([this]() {
+            pendingGoHunterBoss_ = true;
+        });
+    }
     // 进入时更新滚动边界
     updateScrollBounds();
     
@@ -459,6 +485,8 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
     }
     if (backToTestButton_) backToTestButton_->handleEvent(e);
     if (testMinerButton_) testMinerButton_->handleEvent(e);
+    if (testFishermanButton_) testFishermanButton_->handleEvent(e);
+    if (testHunterButton_) testHunterButton_->handleEvent(e);
 
     // 滚轮滚动地图（仅在上帝模式下生效）
     if (e.type == SDL_MOUSEWHEEL && godMode_) {
@@ -547,6 +575,29 @@ void MapExploreState::update(App& app, float dt) {
         // 设置矿工Boss战（ID: 100）
         auto* battleState = new BattleState(100);
         app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
+        return;
+    }
+    
+    if (pendingGoFishermanBoss_) {
+        pendingGoFishermanBoss_ = false;
+        std::cout << "[FISHERMAN TEST] 渔夫测试按钮被点击，进入Boss战（ID: 102）" << std::endl;
+        std::cout << "[FISHERMAN TEST] 当前蜡烛数量: " << App::getRemainingCandles() << std::endl;
+        // 设置渔夫Boss战（ID: 102）
+        auto* battleState = new BattleState(102);
+        app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
+        return;
+    }
+    
+    if (pendingGoHunterBoss_) {
+        pendingGoHunterBoss_ = false;
+        std::cout << "[HUNTER TEST] 猎人测试按钮被点击，进入Boss战（ID: 104）" << std::endl;
+        std::cout << "[HUNTER TEST] 当前蜡烛数量: " << App::getRemainingCandles() << std::endl;
+        std::cout << "[HUNTER TEST] 正在创建BattleState(104)..." << std::endl;
+        // 设置猎人Boss战（ID: 104）
+        auto* battleState = new BattleState(104);
+        std::cout << "[HUNTER TEST] BattleState创建完成，正在切换状态..." << std::endl;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
+        std::cout << "[HUNTER TEST] 状态切换完成！" << std::endl;
         return;
     }
     
@@ -655,6 +706,12 @@ void MapExploreState::render(App& app) {
     }
     if (testMinerButton_) {
         try { testMinerButton_->render(r); } catch (...) {}
+    }
+    if (testFishermanButton_) {
+        try { testFishermanButton_->render(r); } catch (...) {}
+    }
+    if (testHunterButton_) {
+        try { testHunterButton_->render(r); } catch (...) {}
     }
 }
 

@@ -98,8 +98,9 @@ static const std::vector<EnemyPresetRow> BOSS_MINER_MATRIX = {
 };
 static const std::vector<EnemyPresetRow> BOSS_MINER_PHASE2_MATRIX = {
     // 矿工二阶段：更强大的地面单位
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
+    {{"bashe",               "canglang_youhun",               "shuomo_canglang",               "chuanfen_yanzi"}, 1 },
+    {{"bashe",               "canglang_youhun",               "shuomo_canglang",               "chuanfen_yanzi"}, 1 },
+    {{"bashe",               "canglang_youhun",               "shuomo_canglang",               "chuanfen_yanzi"}, 1 },
     {{"bashe",               "canglang_youhun","",              ""}, 1 },
     {{"bashe",               "canglang_youhun","",               ""}, 1 },
     {{"bashe",                "canglang_youhun",               "",               ""}, 1 },
@@ -110,41 +111,38 @@ static const std::vector<EnemyPresetRow> BOSS_MINER_PHASE2_MATRIX = {
 };
 static const std::vector<EnemyPresetRow> BOSS_FISHERMAN_MATRIX = {
     // 渔夫（湿地Boss）：偏重水域单位
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
+    {{"qingyu_cuishi",               "hegong_tuozi",               "",               ""}, 1},
+    {{"qingyu_cuishi",               "hegong_tuozi",               "",               ""}, 2},
+    {{"qingyu_cuishi",               "hegong_tuozi",               "",               ""}, 1},
+    {{"qingyu_cuishi",               "hegong_tuozi",               "",               ""}, 2},
+    {{"qingyu_cuishi",               "hegong_tuozi",               "",               ""}, 2},
+    {{"qingyu_cuishi",               "hegong_tuozi",               "",               ""}, 1},
     {{"",               "",               "",               ""}, 0},
     {{"",               "",               "",               ""}, 0},
-    {{"panshi",         "panshi",         "panshi",         ""}, -1},
-    {{"panshi",         "panshi",         "",               ""}, -1},
 };
 static const std::vector<EnemyPresetRow> BOSS_FISHERMAN_PHASE2_MATRIX = {
     // 更多水域生物与召唤
+    {{"jiaoyu",               "",               "",               ""}, 0 },
+    {{"jiaoyu",               "",               "",               ""}, 0 },
+    {{"jiaoyu",               "",               "",               ""}, 0 },
     {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
+    {{"jiaoyu",               "",               "",               ""}, 0 },
+    {{"jiaoyu",               "",               "",               ""}, 0 },
+    {{"jiaoyu",               "",               "",               ""}, 0 },
     {{"",               "",               "",               ""}, 0},
     {{"",               "",               "",               ""}, 0},
-    {{"panshi",         "",               "",               ""}, 0},
 };
 
 static const std::vector<EnemyPresetRow> BOSS_HUNTER_MATRIX = {
     // 猎人（雪原Boss）：偏重远程与追踪
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
-    {{"",               "",               "",               ""}, 0 },
+    {{"qi_qingwa",               "baimao_zi",               "",               ""}, 1 },
+    {{"qi_qingwa",               "baimao_zi",               "",               ""}, 1 },
+    {{"qi_qingwa",               "baimao_zi",               "",               ""}, 1 },
+    {{"bichan",               "",               "",               ""}, 0 },
+    {{"qi_qingwa",               "bichan",               "",               ""}, 1 },
+    {{"",               "bichan",               "",               ""}, -1},
+    {{"qi_qingwa",               "",               "qi_qingwa",               "tieshou_jia"}, -1},
     {{"",               "",               "",               ""}, 0},
-    {{"",               "",               "",               ""}, 0},
-    {{"panshi",         "",               "",               ""}, -1},
 };
 
 

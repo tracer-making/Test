@@ -30,11 +30,15 @@ private:
     std::vector<Button*> difficultyButtons_;
     Button* backToTestButton_ = nullptr;
     Button* testMinerButton_ = nullptr;
+    Button* testFishermanButton_ = nullptr;
+    Button* testHunterButton_ = nullptr;
     bool pendingGoTest_ = false;
     
     // 状态切换
     bool pendingGoBattle_ = false;
     bool pendingGoMinerBoss_ = false;
+    bool pendingGoFishermanBoss_ = false;
+    bool pendingGoHunterBoss_ = false;
     bool pendingGoBarter_ = false;
     bool pendingGoEngrave_ = false;
     bool pendingGoHeritage_ = false;

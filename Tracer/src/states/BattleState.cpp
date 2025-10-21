@@ -2,6 +2,7 @@
 #include "../core/EngraveStore.h"
 #include "TestState.h"
 #include "MapExploreState.h"
+#include "MemoryRepairState.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
 #include "../core/ItemStore.h"
@@ -36,6 +37,8 @@ BattleState::BattleState(int battleId) : currentBattleId_(battleId) {
 	// 判断是否为Boss战（ID >= 100）
 	isBossBattle_ = (battleId >= 100);
 	currentBossPhase_ = 1;  // 初始为第一阶段
+	
+	std::cout << "[BATTLESTATE] 创建BattleState，battleId=" << battleId << ", isBossBattle_=" << isBossBattle_ << std::endl;
 	
 	// Boss战入场费将在onEnter函数中处理
 }
@@ -674,6 +677,74 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				const auto& rect = battlefield_[i].rect;
 				if (mouseX >= rect.x && mouseX <= rect.x + rect.w &&
 					mouseY >= rect.y && mouseY <= rect.y + rect.h) {
+					
+					// 猎人Boss毛皮交换模式
+					if (isHunterBossFurExchange_) {
+						// 检查是否点击了交换卡牌
+						for (size_t j = 0; j < hunterBossExchangeCardIndices_.size(); ++j) {
+							if (hunterBossExchangeCardIndices_[j] == i) {
+								// 直接执行交换
+								if (totalFurCount_ > 0) {
+									// 执行交换
+									Card exchangeCard = hunterBossExchangeCards_[j];
+									int exchangeIndex = hunterBossExchangeCardIndices_[j];
+									
+									// 将交换的卡牌添加到玩家手牌
+									handCards_.push_back(exchangeCard);
+									DeckStore::instance().hand().push_back(exchangeCard);
+									layoutHandCards();
+									
+									// 消耗一张毛皮（从手牌中移除一张毛皮卡）
+									for (auto it = handCards_.begin(); it != handCards_.end(); ++it) {
+										// 检查卡牌ID是否为毛皮卡牌
+										if (it->id == "langpi" || it->id == "tuopi_mao" || it->id == "jinang_mao") {
+											// 同时从全局手牌中移除
+											for (auto globalIt = DeckStore::instance().hand().begin(); 
+												 globalIt != DeckStore::instance().hand().end(); ++globalIt) {
+												if (globalIt->id == it->id) {
+													DeckStore::instance().hand().erase(globalIt);
+													break;
+												}
+											}
+											handCards_.erase(it);
+											layoutHandCards();
+											break;
+										}
+									}
+									
+									// 从战场上移除交换的卡牌
+									battlefield_[exchangeIndex].isAlive = false;
+									battlefield_[exchangeIndex].health = 0;
+									
+									// 从交换列表中移除
+									hunterBossExchangeCards_.erase(hunterBossExchangeCards_.begin() + j);
+									hunterBossExchangeCardIndices_.erase(hunterBossExchangeCardIndices_.begin() + j);
+									
+									// 更新毛皮数量
+									totalFurCount_ = countPlayerFurCards();
+									
+									statusMessage_ = "交换成功！获得 " + exchangeCard.name + "，消耗1张毛皮";
+									std::cout << "[HUNTER BOSS] 交换成功: " << exchangeCard.name << std::endl;
+									
+									// 检查是否还有交换卡牌
+									if (hunterBossExchangeCards_.empty()) {
+										completeHunterBossFurExchange();
+									} else {
+										statusMessage_ += "，剩余毛皮: " + std::to_string(totalFurCount_);
+									}
+								} else {
+									statusMessage_ = "没有毛皮可以交换！毛皮交换完成";
+									// 没有毛皮时自动完成交换
+									completeHunterBossFurExchange();
+								}
+								return;
+							}
+						}
+						// 如果点击了其他位置，显示提示
+						statusMessage_ = "毛皮交换：点击场上的卡牌进行交换，剩余毛皮: " + std::to_string(totalFurCount_);
+						return;
+					}
+					
 					// 检查是否必须抽牌
 					if (mustDrawThisTurn_) {
 						statusMessage_ = "必须先抽牌才能进行其他操作！";
@@ -1090,6 +1161,12 @@ void BattleState::update(App& app, float dt) {
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
 		return;
 	}
+	
+	if (pendingGoMemoryRepair_) {
+		pendingGoMemoryRepair_ = false;
+		app.setState(std::unique_ptr<State>(static_cast<State*>(new MemoryRepairState(true))));
+		return;
+	}
 
 	// 敌人前进动画更新（若有）
 	updateEnemyAdvance(dt);
@@ -1263,6 +1340,7 @@ void BattleState::update(App& app, float dt) {
 						// 玩家回合结束，进行胜负判定
 						checkGameOver();
 						if (currentPhase_ == GamePhase::GameOver) return; // 游戏结束，不再继续
+						
 						
 						// 正常进入敌方回合
 					currentPhase_ = GamePhase::EnemyTurn;
@@ -1558,6 +1636,15 @@ void BattleState::update(App& app, float dt) {
 	// 处理矿工Boss转阶段动画
 	updateMinerBossTransform(dt);
 	
+	// 处理渔夫Boss转阶段动画
+	updateFishermanBossTransform(dt);
+	
+	// 处理渔夫Boss缚魂索移动动画
+	updateFishermanBossFuhunsuoAnimation(dt);
+	
+	// 处理猎人Boss转阶段动画
+	updateHunterBossTransform(dt);
+	
 	// 处理矿工Boss转阶段完成后的延时
 	if (isMinerBossTransformComplete_) {
 		minerBossTransformCompleteTime_ += dt;
@@ -1615,6 +1702,34 @@ void BattleState::update(App& app, float dt) {
 	// 处理失败动画
 	updateDefeatAnimation(dt);
 	
+	// 处理渔夫Boss转阶段完成后的延时
+	if (isFishermanBossTransformComplete_) {
+		fishermanBossTransformCompleteTime_ += dt;
+		
+		// 延时1.5秒后进入预设
+		if (fishermanBossTransformCompleteTime_ >= 1.5f) {
+			isFishermanBossTransformComplete_ = false;
+			statusMessage_ = "进入Boss二阶段！";
+			std::cout << "[FISHERMAN BOSS TRANSFORM] 延时结束，进入预设" << std::endl;
+			
+			// 设置Boss二阶段和墨尺归零
+			currentBossPhase_ = 2;
+			meterActualPos_ = 0;  // 墨尺归零
+			meterTargetPos_ = 0;
+			
+			// 启动墨尺动画，让显示位置正确更新到0
+			meterStartPos_ = meterDisplayPos_;
+			isMeterAnimating_ = true;
+			meterAnimTime_ = 0.0f;
+			
+			// 现在才进入预设
+			switchToBossPhase2();
+			
+			// 立即结束敌人回合，进入玩家回合
+			currentPhase_ = GamePhase::PlayerTurn;
+		}
+	}
+	
 	// 处理Boss战入场动画
 	updateBossEntryAnimation(dt);
 
@@ -1651,13 +1766,17 @@ void BattleState::update(App& app, float dt) {
 			if (!spawnCardId.empty()) {
 				Card spawnCard = CardDB::instance().make(spawnCardId);
 				if (!spawnCard.id.empty()) {
-					battlefield_[i].card = spawnCard;
-					battlefield_[i].isAlive = true;
-					battlefield_[i].health = spawnCard.health;
-					battlefield_[i].isPlayer = battlefield_[i].isPlayer; // 保持原有的玩家归属
-					battlefield_[i].moveDirection = 0;
-					statusMessage_ = deadCard.name + "死亡后生成" + spawnCard.name + "！";
-					continue; // 跳过后续的死亡处理
+				battlefield_[i].card = spawnCard;
+				battlefield_[i].isAlive = true;
+				battlefield_[i].health = spawnCard.health;
+				battlefield_[i].isPlayer = battlefield_[i].isPlayer; // 保持原有的玩家归属
+				battlefield_[i].moveDirection = 0;
+				// 如果是鲛鱼死亡生成鲛龙，标记为鲛龙
+				if (spawnCardId == "jiaolong") {
+					battlefield_[i].isJiaolong = true;
+				}
+				statusMessage_ = deadCard.name + "死亡后生成" + spawnCard.name + "！";
+				continue; // 跳过后续的死亡处理
 				}
 			}
 
@@ -1766,15 +1885,19 @@ void BattleState::update(App& app, float dt) {
 			if (!spawnCardId.empty()) {
 				Card spawnCard = CardDB::instance().make(spawnCardId);
 				if (!spawnCard.id.empty()) {
-					battlefield_[i].card = spawnCard;
-					battlefield_[i].isAlive = true;
-					battlefield_[i].health = spawnCard.health;
-					battlefield_[i].isPlayer = battlefield_[i].isPlayer; // 保持原有的玩家归属
-					battlefield_[i].moveDirection = 0;
-					statusMessage_ = deadCard.name + "死亡后生成" + spawnCard.name + "！";
-					// 更新敌方状态记录，因为卡牌重新活过来了
-					previousEnemyCardStates_[i] = true;
-					continue; // 跳过后续的死亡处理
+				battlefield_[i].card = spawnCard;
+				battlefield_[i].isAlive = true;
+				battlefield_[i].health = spawnCard.health;
+				battlefield_[i].isPlayer = battlefield_[i].isPlayer; // 保持原有的玩家归属
+				battlefield_[i].moveDirection = 0;
+				// 如果是鲛鱼死亡生成鲛龙，标记为鲛龙
+				if (spawnCardId == "jiaolong") {
+					battlefield_[i].isJiaolong = true;
+				}
+				statusMessage_ = deadCard.name + "死亡后生成" + spawnCard.name + "！";
+				// 更新敌方状态记录，因为卡牌重新活过来了
+				previousEnemyCardStates_[i] = true;
+				continue; // 跳过后续的死亡处理
 				}
 			}
 
@@ -2026,7 +2149,9 @@ void BattleState::initializeBattle() {
 	}
 
 	// 敌方出牌预设：根据矩阵执行初始化三行布置
+	std::cout << "[BATTLESTATE] 开始加载预设，currentBattleId_=" << currentBattleId_ << std::endl;
 	auto matrix = EnemyPresetManager::instance().getMatrix(currentBattleId_);
+	std::cout << "[BATTLESTATE] 预设加载完成，矩阵行数=" << matrix.rows.size() << std::endl;
     // 初始化战斗区域第三行 (player side)
     int initRow3 = matrix.rows.size() - 1; // 最后一行
     if (initRow3 >= 0 && matrix.rows.size() > initRow3) {
@@ -2511,6 +2636,20 @@ void BattleState::playCard(int handIndex, int battlefieldIndex) {
 	battlefield_[battlefieldIndex].isPlayer = true;
 	battlefield_[battlefieldIndex].placedTurn = currentTurn_;
 	battlefield_[battlefieldIndex].oneTurnGrowthApplied = false;
+	
+	// 缚魂索：玩家打出卡牌时入栈
+	if (currentBattleId_ == 102 && currentBossPhase_ == 1) {
+		try {
+			if (!card.instanceId.empty()) {
+				fuhunsuoCardStack_.push_back(std::stoi(card.instanceId));
+				std::cout << "[FUHUNSUO] 卡牌入栈: " << card.name << " (实例ID: " << card.instanceId << ")" << std::endl;
+			} else {
+				std::cout << "[FUHUNSUO] 警告：卡牌实例ID为空，跳过入栈: " << card.name << std::endl;
+			}
+		} catch (const std::exception& e) {
+			std::cout << "[FUHUNSUO] 错误：无法转换实例ID '" << card.instanceId << "' 为整数: " << e.what() << std::endl;
+		}
+	}
 
 	// 滋生寄生虫：打出时若对位为空，生成对位单位（10%玄乌之卵，否则破碎的卵）
 	if (hasMark(card, std::string(u8"滋生寄生虫"))) {
@@ -2760,6 +2899,69 @@ void BattleState::endTurn() {
 }
 
 void BattleState::enemyTurn() {
+	std::cout << "[ENEMY TURN] ========== 敌人回合开始 ==========" << std::endl;
+	
+	// 渔夫Boss缚魂索：在偶数敌人回合开始后，敌人卡牌前进前执行
+	std::cout << "[DEBUG] enemyTurn: currentBattleId_=" << currentBattleId_ << ", currentBossPhase_=" << currentBossPhase_ 
+		<< ", currentTurn_=" << currentTurn_ << ", isFishermanBossFuhunsuoActive_=" << isFishermanBossFuhunsuoActive_ 
+		<< ", fishermanBossFuhunsuoTarget_=" << fishermanBossFuhunsuoTarget_ << std::endl;
+		
+	if (currentBattleId_ == 102 && currentBossPhase_ == 1 && currentTurn_ % 2 == 1 && currentTurn_ > 2) {
+		std::cout << "[DEBUG] 缚魂索条件满足，检查激活状态" << std::endl;
+		if (isFishermanBossFuhunsuoActive_ && fishermanBossFuhunsuoTarget_ != -1) {
+			std::cout << "[DEBUG] 缚魂索激活，开始执行" << std::endl;
+			int targetCard = fishermanBossFuhunsuoTarget_;
+			
+			// 检查锁定的卡牌是否仍然有效
+			if (battlefield_[targetCard].isAlive && battlefield_[targetCard].isPlayer) {
+				std::cout << "[FISHERMAN BOSS] 缚魂索执行：勾取卡牌 " << battlefield_[targetCard].card.name 
+					<< " (索引: " << targetCard << ")" << std::endl;
+				
+				// 计算目标列（我方卡牌所在的列）
+				int targetCol = targetCard % BATTLEFIELD_COLS;
+				
+				// 获取我方卡牌信息
+				Card capturedCard = battlefield_[targetCard].card;
+				int capturedHealth = battlefield_[targetCard].health;
+				
+				// 缚魂索移动逻辑：将我方的卡牌勾到敌方阵营
+				int secondRowIndex = 1 * BATTLEFIELD_COLS + targetCol;
+				int firstRowIndex = 0 * BATTLEFIELD_COLS + targetCol;
+				
+				// 设置动画参数
+				fishermanBossFuhunsuoFromIndex_ = targetCard;
+				fishermanBossFuhunsuoToIndex_ = secondRowIndex;
+				fishermanBossFuhunsuoFromRect_ = battlefield_[targetCard].rect;
+				fishermanBossFuhunsuoToRect_ = battlefield_[secondRowIndex].rect;
+				
+				// 开始动画
+				isFishermanBossFuhunsuoAnimating_ = true;
+				fishermanBossFuhunsuoAnimTime_ = 0.0f;
+				
+				std::cout << "[FISHERMAN BOSS] 缚魂索开始移动动画: " << capturedCard.name << std::endl;
+				
+				// 从栈中移除已执行的卡牌
+				if (!fuhunsuoCardStack_.empty()) {
+					fuhunsuoCardStack_.pop_back();
+					std::cout << "[FUHUNSUO] 执行后移除卡牌，栈大小: " << fuhunsuoCardStack_.size() << std::endl;
+				}
+				
+				// 重置缚魂索状态
+				isFishermanBossFuhunsuoActive_ = false;
+				fishermanBossFuhunsuoTarget_ = -1;
+				
+				statusMessage_ = "渔夫Boss使用缚魂索将 " + capturedCard.name + " 勾到敌方阵营！";
+				std::cout << "[FISHERMAN BOSS] 缚魂索将我方卡牌勾到敌方: " << capturedCard.name 
+					<< " (移动到第二行索引: " << secondRowIndex << ")" << std::endl;
+			} else {
+				std::cout << "[FISHERMAN BOSS] 缚魂索目标卡牌无效，取消执行" << std::endl;
+				// 重置缚魂索状态
+				isFishermanBossFuhunsuoActive_ = false;
+				fishermanBossFuhunsuoTarget_ = -1;
+			}
+		}
+	}
+	
 	// 敌方攻击开始前：先完成敌人前进（若有）
 	if (startEnemyAdvanceIfAny()) {
 		return; // 动画完成后会回调进入敌方攻击
@@ -2934,6 +3136,9 @@ void BattleState::enemyTurn() {
 		}
 	}
 	fengyaShanAirstrikeSlots_.clear();
+	
+	
+		
 	
 		// 敌方回合结束，进行胜负判定
 		checkGameOver();
@@ -3210,10 +3415,13 @@ void BattleState::switchToBossPhase2() {
 	currentBattleId_ = phase2BattleId;
 	
 	// 清空当前战场上的敌人卡牌
-	for (int i = 0; i < BATTLEFIELD_ROWS * BATTLEFIELD_COLS; ++i) {
-		if (!battlefield_[i].isPlayer) {
-			battlefield_[i].isAlive = false;
-			battlefield_[i].health = 0;
+	// 但是渔夫Boss的鲛鱼不应该被清空
+	if (currentBattleId_ != 103) {  // 不是渔夫Boss二阶段
+		for (int i = 0; i < BATTLEFIELD_ROWS * BATTLEFIELD_COLS; ++i) {
+			if (!battlefield_[i].isPlayer && !battlefield_[i].isJiaoyu) {
+				battlefield_[i].isAlive = false;
+				battlefield_[i].health = 0;
+			}
 		}
 	}
 	
@@ -3534,10 +3742,115 @@ void BattleState::checkGameOver() {
                     }
                 }
             }
+            // 检查是否为渔夫Boss（战斗ID 102）- 特殊转阶段
+            else if (currentBattleId_ == 102) {
+                std::cout << "[FISHERMAN BOSS DEATH] 开始渔夫Boss死亡转阶段" << std::endl;
+                
+                // 在转阶段前，先检查是否有待执行的缚魂索
+                if (isFishermanBossFuhunsuoActive_ && fishermanBossFuhunsuoTarget_ != -1) {
+                    std::cout << "[FISHERMAN BOSS DEATH] 死亡前执行最后的缚魂索" << std::endl;
+                    int targetCard = fishermanBossFuhunsuoTarget_;
+                    
+                    // 检查锁定的卡牌是否仍然有效
+                    if (battlefield_[targetCard].isAlive && battlefield_[targetCard].isPlayer) {
+                        std::cout << "[FISHERMAN BOSS] 死亡前缚魂索执行：勾取卡牌 " << battlefield_[targetCard].card.name 
+                            << " (索引: " << targetCard << ")" << std::endl;
+                        
+                        // 计算目标列（我方卡牌所在的列）
+                        int targetCol = targetCard % BATTLEFIELD_COLS;
+                        
+                        // 获取我方卡牌信息
+                        Card capturedCard = battlefield_[targetCard].card;
+                        int capturedHealth = battlefield_[targetCard].health;
+                        
+                        // 缚魂索移动逻辑：将我方的卡牌勾到敌方阵营
+                        int secondRowIndex = 1 * BATTLEFIELD_COLS + targetCol;
+                        int firstRowIndex = 0 * BATTLEFIELD_COLS + targetCol;
+                        
+                        // 设置动画参数
+                        fishermanBossFuhunsuoFromIndex_ = targetCard;
+                        fishermanBossFuhunsuoToIndex_ = secondRowIndex;
+                        fishermanBossFuhunsuoFromRect_ = battlefield_[targetCard].rect;
+                        fishermanBossFuhunsuoToRect_ = battlefield_[secondRowIndex].rect;
+                        
+                        // 开始动画
+                        isFishermanBossFuhunsuoAnimating_ = true;
+                        fishermanBossFuhunsuoAnimTime_ = 0.0f;
+                        
+                        std::cout << "[FISHERMAN BOSS] 死亡前缚魂索开始移动动画: " << capturedCard.name << std::endl;
+                        
+                        // 移除执行后的卡牌从栈
+                        if (!fuhunsuoCardStack_.empty()) {
+                            fuhunsuoCardStack_.pop_back();
+                            std::cout << "[FUHUNSUO] 执行后移除卡牌，栈大小: " << fuhunsuoCardStack_.size() << std::endl;
+                        }
+                        
+                        // 重置缚魂索状态
+                        isFishermanBossFuhunsuoActive_ = false;
+                        fishermanBossFuhunsuoTarget_ = -1;
+                        
+                        statusMessage_ = "渔夫Boss死亡前使用缚魂索将 " + capturedCard.name + " 勾到敌方阵营！";
+                        std::cout << "[FISHERMAN BOSS] 死亡前缚魂索将我方卡牌勾到敌方: " << capturedCard.name
+                            << " (移动到第二行索引: " << secondRowIndex << ")" << std::endl;
+                    }
+                }
+                
+                statusMessage_ = "渔夫Boss死亡！清空战场，召唤鲛鱼...";
+                
+                // 设置转阶段动画标记
+                isFishermanBossTransforming_ = true;
+                fishermanBossTransformTime_ = 0.0f;
+                fishermanBossTransformDuration_ = 2.0f; // 2秒转阶段动画
+                fishermanBossTransformStep_ = 0; // 当前处理步骤
+                
+                // 收集我方造物位置
+                fishermanBossTransformCards_.clear();
+                for (int row = 0; row < 3; ++row) {  // 检查所有三行
+                    for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                        int idx = row * BATTLEFIELD_COLS + col;
+                        if (battlefield_[idx].isAlive && battlefield_[idx].isPlayer) {
+                            fishermanBossTransformCards_.push_back(idx);
+                        }
+                    }
+                }
+                
+                // 清空第一行和第二行（敌人区域）
+                for (int row = 0; row < 2; ++row) {
+                    for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                        int idx = row * BATTLEFIELD_COLS + col;
+                        if (battlefield_[idx].isAlive && !battlefield_[idx].isPlayer) {
+                            battlefield_[idx].isAlive = false;
+                            battlefield_[idx].health = 0;
+                        }
+                    }
+                }
+            }
+            // 检查是否为猎人Boss（战斗ID 104）- 特殊转阶段
+            else if (currentBattleId_ == 104) {
+                std::cout << "[HUNTER BOSS DEATH] 开始猎人Boss死亡转阶段" << std::endl;
+                statusMessage_ = "猎人Boss死亡！正在准备毛皮交换...";
+                
+                // 设置转阶段动画标记
+                isHunterBossTransforming_ = true;
+                hunterBossTransformTime_ = 0.0f;
+                hunterBossTransformDuration_ = 2.0f; // 2秒转阶段动画
+                hunterBossTransformStep_ = 0; // 当前处理步骤
+                
+                // 清空敌人第一行和第二行
+                for (int row = 0; row < 2; ++row) {
+                    for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+                        int idx = row * BATTLEFIELD_COLS + col;
+                        if (battlefield_[idx].isAlive && !battlefield_[idx].isPlayer) {
+                            battlefield_[idx].isAlive = false;
+                            battlefield_[idx].health = 0;
+                        }
+                    }
+                }
+            }
             
-                    // 对于矿工Boss，转阶段动画会处理预设切换
+                    // 对于矿工Boss、渔夫Boss和猎人Boss，转阶段动画会处理预设切换
                     // 对于其他Boss，立即进入二阶段
-                    if (currentBattleId_ != 100) {
+                    if (currentBattleId_ != 100 && currentBattleId_ != 102 && currentBattleId_ != 104) {
                         currentBossPhase_ = 2;
                         meterActualPos_ = 0;  // 墨尺归零
                         meterTargetPos_ = 0;
@@ -3563,13 +3876,19 @@ void BattleState::checkGameOver() {
         } else {
             statusMessage_ = "胜利！";
         }
-        // Boss战二阶段胜利时恢复一根蜡烛
-        if (isBossBattle_ && currentBossPhase_ == 2) {
-            App::restoreCandle();
-            statusMessage_ = "Boss战胜利！恢复一根蜡烛！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
-            std::cout << "[VICTORY] Boss战二阶段胜利，恢复一根蜡烛！剩余蜡烛: " << App::getRemainingCandles() << std::endl;
-        }
-        
+		// Boss战二阶段胜利时恢复一根蜡烛
+		if (isBossBattle_ && currentBossPhase_ == 2) {
+			App::restoreCandle();
+			statusMessage_ = "Boss战胜利！恢复一根蜡烛！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
+			std::cout << "[VICTORY] Boss战二阶段胜利，恢复一根蜡烛！剩余蜡烛: " << App::getRemainingCandles() << std::endl;
+			
+			// Boss战二阶段胜利后跳转到记忆修复界面
+			std::cout << "[VICTORY] Boss战二阶段胜利，跳转到记忆修复界面！" << std::endl;
+			// 设置跳转到记忆修复界面的标志
+			pendingGoMemoryRepair_ = true;
+			return;
+		}
+		
         // 启动胜利动画
         startVictoryAnimation();
         return;
@@ -3616,7 +3935,7 @@ void BattleState::checkGameOver() {
 			statusMessage_ = "Boss战胜利！恢复一根蜡烛！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
 			std::cout << "[VICTORY] Boss战二阶段胜利，恢复一根蜡烛！剩余蜡烛: " << App::getRemainingCandles() << std::endl;
 		} else {
-			statusMessage_ = "胜利！";
+		statusMessage_ = "胜利！";
 		}
 		
 		// 启动胜利动画
@@ -3821,6 +4140,18 @@ void BattleState::renderBattlefield(App& app) {
 				renderRect.h = newHeight;
 			}
 
+			// 检查是否是缚魂索动画中的卡牌
+			bool isFuhunsuoAnimating = false;
+			if (isFishermanBossFuhunsuoAnimating_ && i == fishermanBossFuhunsuoFromIndex_) {
+				isFuhunsuoAnimating = true;
+				float t = fishermanBossFuhunsuoAnimTime_ / fishermanBossFuhunsuoAnimDuration_;
+				t = std::min(1.0f, t);
+				
+				// 计算插值位置
+				renderRect.x = fishermanBossFuhunsuoFromRect_.x + (fishermanBossFuhunsuoToRect_.x - fishermanBossFuhunsuoFromRect_.x) * t;
+				renderRect.y = fishermanBossFuhunsuoFromRect_.y + (fishermanBossFuhunsuoToRect_.y - fishermanBossFuhunsuoFromRect_.y) * t;
+			}
+
 			// 检查是否是水袭卡牌且翻到反面
 			bool isWaterAttackFlipped = hasMark(bfCard.card, u8"水袭") && waterAttackFlipped_[i];
 			
@@ -3910,6 +4241,28 @@ void BattleState::renderBattlefield(App& app) {
 				SDL_Rect symbolRect{ centerX - symbolSize / 2 - 2, centerY - symbolSize / 2 - 2, symbolSize + 4, symbolSize + 4 };
 				SDL_RenderDrawRect(r, &symbolRect);
 			}
+			
+			// 显示缚魂索标记
+			if (bfCard.isAlive && bfCard.isPlayer && isFishermanBossFuhunsuoActive_ && fishermanBossFuhunsuoTarget_ == i) {
+				SDL_SetRenderDrawColor(r, 0, 100, 255, 255); // 蓝色
+				int centerX = renderRect.x + renderRect.w / 2;
+				int centerY = renderRect.y + renderRect.h / 2;
+				int symbolSize = 40; // 更大的钩子
+				
+				// 绘制J字体
+				SDL_Color textColor = {0, 100, 255, 50}; // 蓝色，半透明
+				SDL_Surface* textSurface = TTF_RenderText_Blended(cardNameFont_, "J", textColor);
+				if (textSurface) {
+					SDL_Texture* textTexture = SDL_CreateTextureFromSurface(r, textSurface);
+					if (textTexture) {
+						SDL_Rect textRect = {centerX - 35, centerY - 95, 70, 190};
+						SDL_RenderCopy(r, textTexture, nullptr, &textRect);
+						SDL_DestroyTexture(textTexture);
+					}
+					SDL_FreeSurface(textSurface);
+				}
+			}
+			
 		}
 		else {
 			SDL_SetRenderDrawColor(r, 60, 70, 80, 80);
@@ -6101,6 +6454,12 @@ void BattleState::renderUI(App& app) {
 		}
 		for (SDL_Surface* s : surfaces) if (s) SDL_FreeSurface(s);
 	}
+	
+	// 猎人Boss毛皮交换界面（简化版）
+	if (isHunterBossFurExchange_) {
+		// 只在状态消息中显示毛皮交换信息，不添加额外的视觉特效
+		// 毛皮交换的交互通过点击场上的卡牌直接完成
+	}
 }
 // 冲刺能手相关方法实现
 void BattleState::startRushing(int cardIndex) {
@@ -6693,7 +7052,7 @@ void BattleState::onMovementComplete() {
 			currentTurn_++; // 有移动时，从玩家回合切到敌方回合也需要递增回合数
 			hasDrawnThisTurn_ = false; // 重置抽牌状态
 			mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
-			std::cout << "1" << std::endl;
+			std::cout << "3" << std::endl;
 			// 延迟执行敌人回合
 			enemyTurn();
 		}
@@ -6850,6 +7209,46 @@ void BattleState::updateWaterAttackMarks() {
 	if (currentPhase_ == GamePhase::PlayerTurn) {
 		// 玩家回合：我方水袭卡牌浮出，敌方水袭卡牌潜水
 		applyWaterAttackSurfacing();
+
+		// 渔夫Boss缚魂索：在偶数玩家回合中持续检测栈顶卡牌并动态锁定
+		if (currentBattleId_ == 102 && currentBossPhase_ == 1 && currentTurn_ % 2 == 0 && currentTurn_ >1) {
+			std::cout << "[FUHUNSUO LOCK] size " << fuhunsuoCardStack_.size() << std::endl;
+			// 检查栈顶卡牌是否有效
+			while (!fuhunsuoCardStack_.empty()) {
+				int topCardInstanceId = fuhunsuoCardStack_.back();
+				
+				// 通过实例ID查找卡牌
+				int foundIndex = -1;
+				for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+			
+						if (!battlefield_[i].card.instanceId.empty() && 
+							std::stoi(battlefield_[i].card.instanceId) == topCardInstanceId && 
+							battlefield_[i].isAlive && battlefield_[i].isPlayer) {
+							foundIndex = i;
+							break;
+						}
+
+				}
+				
+				if (foundIndex != -1) {
+					// 栈顶卡牌有效，锁定它
+					fishermanBossFuhunsuoTarget_ = foundIndex;
+					isFishermanBossFuhunsuoActive_ = true;
+					std::cout << "[FUHUNSUO LOCK] successd: 索引=" << foundIndex << ", 卡牌=" << battlefield_[foundIndex].card.name << std::endl;
+					break;
+				} else {
+					// 栈顶卡牌无效，移除并继续检查下一个
+					fuhunsuoCardStack_.pop_back();
+					std::cout << "[FUHUNSUO] 移除无效卡牌 (实例ID: " << topCardInstanceId << ")，栈大小: " << fuhunsuoCardStack_.size() << std::endl;
+				}
+			}
+			
+			// 如果栈为空，取消锁定
+			if (fuhunsuoCardStack_.empty()) {
+				fishermanBossFuhunsuoTarget_ = -1;
+				isFishermanBossFuhunsuoActive_ = false;
+			}
+		}
 	}
 	else if (currentPhase_ == GamePhase::EnemyTurn) {
 		// 敌人回合：我方水袭卡牌潜水，敌方水袭卡牌浮出
@@ -6885,7 +7284,14 @@ void BattleState::applyWaterAttackDiving() {
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
 		auto& bf = battlefield_[i];
 		if (bf.isAlive && !bf.isPlayer && hasMark(bf.card, u8"水袭")) {
+			int row = i / BATTLEFIELD_COLS;
+			if (row == 0) {
+				// 第一行：总是浮出水面
+				bf.isDiving = false;
+			} else if (row == 1) {
+				// 第二行：在敌人回合浮出
 			bf.isDiving = false;
+			}
 		}
 	}
 }
@@ -6903,7 +7309,19 @@ void BattleState::applyWaterAttackSurfacing() {
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
 		auto& bf = battlefield_[i];
 		if (bf.isAlive && !bf.isPlayer && hasMark(bf.card, u8"水袭")) {
-			bf.isDiving = true;
+			int row = i / BATTLEFIELD_COLS;
+			if (row == 0) {
+				// 第一行：总是浮出水面
+				bf.isDiving = false;
+			} else if (row == 1) {
+				// 第二行：在玩家回合潜水
+				// 但是鲛龙在生成后的那个玩家回合不潜水
+				if (bf.isJiaolong) {
+					bf.isDiving = false;  // 鲛龙不潜水
+				} else {
+					bf.isDiving = true;   // 其他水袭卡牌潜水
+				}
+			}
 		}
 	}
 }
@@ -7436,7 +7854,6 @@ void BattleState::renderHealthCandles(SDL_Renderer* r) {
 	// 调试输出：检查蜡烛渲染时的数量
 	static int lastRenderCandles = -1;
 	if (remainingCandles != lastRenderCandles) {
-		std::cout << "[CANDLE RENDER] 渲染蜡烛数量: " << remainingCandles << std::endl;
 		lastRenderCandles = remainingCandles;
 	}
 	
@@ -7454,7 +7871,7 @@ void BattleState::renderHealthCandles(SDL_Renderer* r) {
 		bool isLit = (i < remainingCandles); // 前remainingCandles根蜡烛是点燃的
 		
 		// 调试输出：检查每根蜡烛的状态
-		std::cout << "[CANDLE RENDER] 蜡烛" << i << ": isLit=" << isLit << " (remainingCandles=" << remainingCandles << ")" << std::endl;
+		
 		
 		// 蜡烛主体（白色）
 		SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
@@ -7498,4 +7915,329 @@ void BattleState::renderHealthCandles(SDL_Renderer* r) {
 			SDL_FreeSurface(candleSurface);
 		}
 	}
+}
+
+void BattleState::updateFishermanBossFuhunsuoAnimation(float dt) {
+	// 更新渔夫Boss缚魂索移动动画
+	if (isFishermanBossFuhunsuoAnimating_) {
+		fishermanBossFuhunsuoAnimTime_ += dt;
+		
+		if (fishermanBossFuhunsuoAnimTime_ >= fishermanBossFuhunsuoAnimDuration_) {
+			// 动画完成，执行实际的移动
+			completeFishermanBossFuhunsuoMove();
+		}
+	}
+}
+
+void BattleState::completeFishermanBossFuhunsuoMove() {
+	// 获取卡牌信息
+	Card capturedCard = battlefield_[fishermanBossFuhunsuoFromIndex_].card;
+	int capturedHealth = battlefield_[fishermanBossFuhunsuoFromIndex_].health;
+	
+	// 计算目标列
+	int targetCol = fishermanBossFuhunsuoFromIndex_ % BATTLEFIELD_COLS;
+	int secondRowIndex = 1 * BATTLEFIELD_COLS + targetCol;
+	int firstRowIndex = 0 * BATTLEFIELD_COLS + targetCol;
+	
+	// 如果第二行有牌，将第二行的牌移动到第一行
+	if (battlefield_[secondRowIndex].isAlive) {
+		BattlefieldCard secondRowData = battlefield_[secondRowIndex];
+		
+		// 将第二行的数据放到第一行
+		battlefield_[firstRowIndex] = secondRowData;
+		battlefield_[firstRowIndex].rect = secondRowData.rect;
+		std::cout << "[FISHERMAN BOSS] 第二行卡牌移动到第一行: " << secondRowData.card.name << std::endl;
+	}
+	
+	// 将我方的卡牌移动到第二行，变成敌方卡牌
+	battlefield_[secondRowIndex].card = capturedCard;
+	battlefield_[secondRowIndex].health = capturedHealth;
+	battlefield_[secondRowIndex].isAlive = true;
+	battlefield_[secondRowIndex].isPlayer = false;  // 变成敌方卡牌
+	battlefield_[secondRowIndex].moveDirection = 0;
+	battlefield_[secondRowIndex].isMovedToDeath = false;
+	battlefield_[secondRowIndex].placedTurn = currentTurn_;
+	
+	// 清空原位置
+	battlefield_[fishermanBossFuhunsuoFromIndex_].isAlive = false;
+	battlefield_[fishermanBossFuhunsuoFromIndex_].health = 0;
+	
+	// 结束动画
+	isFishermanBossFuhunsuoAnimating_ = false;
+	
+	std::cout << "[FISHERMAN BOSS] 缚魂索移动完成: " << capturedCard.name << std::endl;
+}
+
+void BattleState::updateFishermanBossTransform(float dt) {
+	if (!isFishermanBossTransforming_) return;
+	
+	fishermanBossTransformTime_ += dt;
+	
+	// 每0.5秒处理一个造物
+	float stepInterval = 0.5f;
+	int targetStep = static_cast<int>(fishermanBossTransformTime_ / stepInterval);
+	
+	// 处理新的步骤
+	while (fishermanBossTransformStep_ < targetStep && fishermanBossTransformStep_ < static_cast<int>(fishermanBossTransformCards_.size())) {
+		int cardIdx = fishermanBossTransformCards_[fishermanBossTransformStep_];
+		
+		if (battlefield_[cardIdx].isAlive && battlefield_[cardIdx].isPlayer) {
+			std::cout << "[FISHERMAN BOSS TRANSFORM] 步骤" << fishermanBossTransformStep_ << ": 在我方造物对位生成鲛鱼" << std::endl;
+			statusMessage_ = "在我方造物对位生成鲛鱼...";
+			
+			// 计算对位位置（第二行对应位置）
+			int row = cardIdx / BATTLEFIELD_COLS;
+			int col = cardIdx % BATTLEFIELD_COLS;
+			int oppositeIdx = 1 * BATTLEFIELD_COLS + col;  // 第二行对应列
+			
+			// 生成鲛鱼在对位位置
+			Card jiaoyuCard = CardDB::instance().make("jiaoyu");
+			if (!jiaoyuCard.id.empty()) {
+				battlefield_[oppositeIdx].card = jiaoyuCard;
+				battlefield_[oppositeIdx].health = jiaoyuCard.health;
+				battlefield_[oppositeIdx].isAlive = true;
+				battlefield_[oppositeIdx].isPlayer = false;  // 敌方单位
+				battlefield_[oppositeIdx].moveDirection = 0;
+				battlefield_[oppositeIdx].isMovedToDeath = false;
+				battlefield_[oppositeIdx].isJiaoyu = true;  // 标记为鲛鱼
+				std::cout << "[FISHERMAN BOSS TRANSFORM] 成功在对位生成鲛鱼" << std::endl;
+			}
+		}
+		
+		fishermanBossTransformStep_++;
+	}
+	
+	// 检查是否完成所有转换
+	if (fishermanBossTransformStep_ >= static_cast<int>(fishermanBossTransformCards_.size())) {
+		isFishermanBossTransforming_ = false;
+		statusMessage_ = "渔夫Boss转阶段完成！鲛鱼已在对位生成！";
+		std::cout << "[FISHERMAN BOSS TRANSFORM] 转阶段完成" << std::endl;
+		
+		// 设置延时标记，等待一段时间后再进入预设
+		isFishermanBossTransformComplete_ = true;
+		fishermanBossTransformCompleteTime_ = 0.0f;
+		std::cout << "[FISHERMAN BOSS TRANSFORM] 开始延时，等待进入预设" << std::endl;
+	}
+}
+
+// 猎人Boss转阶段动画更新
+void BattleState::updateHunterBossTransform(float dt) {
+	if (!isHunterBossTransforming_) return;
+	
+	hunterBossTransformTime_ += dt;
+	
+	// 每0.5秒处理一个步骤
+	float stepInterval = 0.5f;
+	int targetStep = static_cast<int>(hunterBossTransformTime_ / stepInterval);
+	
+	// 处理新的步骤
+	while (hunterBossTransformStep_ < targetStep) {
+		switch (hunterBossTransformStep_) {
+			case 0: {
+				// 步骤1：给予玩家狼皮
+				std::cout << "[HUNTER BOSS TRANSFORM] 步骤1: 给予玩家狼皮" << std::endl;
+				statusMessage_ = "猎人Boss给予你一张狼皮...";
+				
+				Card wolfSkinCard = CardDB::instance().make("langpi");
+				if (!wolfSkinCard.id.empty()) {
+					handCards_.push_back(wolfSkinCard);
+					// 同时添加到全局手牌
+					DeckStore::instance().hand().push_back(wolfSkinCard);
+					layoutHandCards();
+					std::cout << "[HUNTER BOSS TRANSFORM] 成功给予狼皮" << std::endl;
+				}
+				break;
+			}
+			case 1: {
+				// 步骤2：生成8张随机卡牌
+				std::cout << "[HUNTER BOSS TRANSFORM] 步骤2: 生成8张随机卡牌" << std::endl;
+				statusMessage_ = "猎人Boss正在准备交换卡牌...";
+				generateHunterBossExchangeCards();
+				break;
+			}
+			case 2: {
+				// 步骤3：开始毛皮交换
+				std::cout << "[HUNTER BOSS TRANSFORM] 步骤3: 开始毛皮交换" << std::endl;
+				startHunterBossFurExchange();
+				// 注意：startHunterBossFurExchange() 内部已经设置了状态消息，这里不需要重复设置
+				break;
+			}
+		}
+		
+		hunterBossTransformStep_++;
+	}
+	
+	// 转阶段完成
+	if (hunterBossTransformTime_ >= hunterBossTransformDuration_) {
+		isHunterBossTransforming_ = false;
+		std::cout << "[HUNTER BOSS TRANSFORM] 转阶段完成" << std::endl;
+	}
+}
+
+// 生成猎人Boss交换卡牌
+void BattleState::generateHunterBossExchangeCards() {
+	std::cout << "[HUNTER BOSS] 开始生成8张随机交换卡牌" << std::endl;
+	
+	// 获取所有可获取的卡牌ID
+	auto allIds = CardDB::instance().allIds();
+	std::vector<std::string> availableIds;
+	
+	for (const auto& id : allIds) {
+		Card c = CardDB::instance().make(id);
+		if (c.obtainable > 0) {  // 只选择可获取的卡牌
+			availableIds.push_back(id);
+		}
+	}
+	
+	if (availableIds.empty()) {
+		std::cout << "[HUNTER BOSS] 警告：没有可获取的卡牌" << std::endl;
+		return;
+	}
+	
+	// 随机选择8张卡牌
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::shuffle(availableIds.begin(), availableIds.end(), gen);
+	
+	hunterBossExchangeCards_.clear();
+	hunterBossExchangeCardIndices_.clear();
+	
+	// 在第一行和第二行生成8张卡牌
+	for (int i = 0; i < 8 && i < availableIds.size(); ++i) {
+		std::string cardId = availableIds[i];
+		Card card = CardDB::instance().make(cardId);
+		
+		if (!card.id.empty()) {
+			// 判断是否为稀有卡
+			bool isRare = (card.obtainable == 2);
+			
+			// 添加随机印记
+			addRandomMarksToCard(card, isRare);
+			
+			// 计算放置位置（第一行和第二行）
+			int row = i / BATTLEFIELD_COLS;  // 0或1
+			int col = i % BATTLEFIELD_COLS;
+			int idx = row * BATTLEFIELD_COLS + col;
+			
+			// 放置卡牌到战场
+			battlefield_[idx].card = card;
+			battlefield_[idx].health = card.health;
+			battlefield_[idx].isAlive = true;
+			battlefield_[idx].isPlayer = false;  // 敌方单位
+			battlefield_[idx].moveDirection = 0;
+			battlefield_[idx].isMovedToDeath = false;
+			battlefield_[idx].placedTurn = currentTurn_;
+			
+			// 保存到交换列表
+			hunterBossExchangeCards_.push_back(card);
+			hunterBossExchangeCardIndices_.push_back(idx);
+			
+			std::cout << "[HUNTER BOSS] 生成交换卡牌: " << card.name 
+				<< " (稀有: " << (isRare ? "是" : "否") << ")" << std::endl;
+		}
+	}
+	
+	std::cout << "[HUNTER BOSS] 成功生成 " << hunterBossExchangeCards_.size() << " 张交换卡牌" << std::endl;
+}
+
+// 给卡牌添加随机印记
+void BattleState::addRandomMarksToCard(Card& card, bool isRare) {
+	// 可用的印记列表
+	std::vector<std::string> availableMarks = {
+		u8"狼皮", u8"兔皮", u8"金羊皮", u8"骨王", u8"掘墓人", u8"食尸鬼", 
+		u8"不死", u8"冲刺能手", u8"蛮力", u8"护主", u8"水袭", u8"成长"
+	};
+	
+	// 稀有卡必定1个印记，普通卡1-2个印记
+	int markCount = isRare ? 1 : (rand() % 2 + 1);
+	
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	
+	for (int i = 0; i < markCount; ++i) {
+		if (availableMarks.empty()) break;
+		
+		std::uniform_int_distribution<int> dis(0, availableMarks.size() - 1);
+		int markIndex = dis(gen);
+		std::string mark = availableMarks[markIndex];
+		
+		// 避免重复印记
+		bool alreadyHas = false;
+		for (const auto& existingMark : card.marks) {
+			if (existingMark == mark) {
+				alreadyHas = true;
+				break;
+			}
+		}
+		
+		if (!alreadyHas) {
+			card.marks.push_back(mark);
+			std::cout << "[HUNTER BOSS] 给卡牌 " << card.name << " 添加印记: " << mark << std::endl;
+		}
+		
+		// 移除已使用的印记，避免重复
+		availableMarks.erase(availableMarks.begin() + markIndex);
+	}
+}
+
+// 统计玩家手牌中的毛皮数量
+int BattleState::countPlayerFurCards() {
+	int furCount = 0;
+	
+	for (const auto& card : handCards_) {
+		
+		// 检查卡牌ID是否为毛皮卡牌
+		if (card.id == "langpi" || card.id == "tuopi_mao" || card.id == "jinang_mao") {
+			furCount++;
+		}
+		
+	}
+	
+	return furCount;
+}
+
+// 开始猎人Boss毛皮交换
+void BattleState::startHunterBossFurExchange() {
+	std::cout << "[HUNTER BOSS] 开始毛皮交换" << std::endl;
+	
+	// 统计玩家毛皮数量
+	totalFurCount_ = countPlayerFurCards();
+	
+	// 进入毛皮交换状态
+	isHunterBossFurExchange_ = true;
+	selectedExchangeCard_ = -1;
+	
+	statusMessage_ = "毛皮交换开始！你有 " + std::to_string(totalFurCount_) + " 张毛皮，可以交换场上的卡牌";
+	
+	std::cout << "[HUNTER BOSS] 玩家有 " << totalFurCount_ << " 张毛皮" << std::endl;
+	std::cout << "[HUNTER BOSS] 场上有 " << hunterBossExchangeCards_.size() << " 张交换卡牌" << std::endl;
+}
+
+// 完成猎人Boss毛皮交换
+void BattleState::completeHunterBossFurExchange() {
+	std::cout << "[HUNTER BOSS] 完成毛皮交换" << std::endl;
+	
+	// 退出毛皮交换状态
+	isHunterBossFurExchange_ = false;
+	selectedExchangeCard_ = -1;
+	
+	// 设置Boss二阶段
+	currentBossPhase_ = 2;
+	meterActualPos_ = 0;  // 墨尺归零
+	meterTargetPos_ = 0;
+	meterDisplayPos_ = 0.0f;  // 显示位置也归零
+	
+	// 启动墨尺动画，让显示位置正确更新到0
+	meterStartPos_ = meterDisplayPos_;
+	isMeterAnimating_ = true;
+	meterAnimTime_ = 0.0f;
+	
+	// 进入玩家回合
+	currentPhase_ = GamePhase::PlayerTurn;
+	
+	statusMessage_ = "毛皮交换完成！Boss进入二阶段，墨尺归零！现在是你的回合";
+	
+	// 强制刷新状态消息显示
+	std::cout << "[HUNTER BOSS] 毛皮交换完成，Boss进入二阶段，墨尺归零" << std::endl;
+	std::cout << "[HUNTER BOSS] 状态消息: " << statusMessage_ << std::endl;
 }

@@ -13,6 +13,7 @@
 class MemoryRepairState : public State {
 public:
 	MemoryRepairState();
+	MemoryRepairState(bool isBossVictory);  // Boss战胜利专用构造函数
 	~MemoryRepairState();
 
 	void onEnter(App& app) override;
@@ -38,6 +39,7 @@ private:
     std::array<bool,3> flipped_{{false,false,false}};
     BackHintType sessionHint_ = BackHintType::Unknown; // 本次三选一的统一提示类型
     std::array<int, 3> sessionCostTypes_{{0, 1, 2}}; // 三个牌位的消耗类型：0=1墨滴, 1=2墨滴, 2=3墨滴, 3=魂骨
+    bool isBossVictory_ = false; // 是否为Boss战胜利奖励
     Button* backButton_ = nullptr;
     Button* rerollButton_ = nullptr; // 重新抽卡按钮
     bool rerollUsed_ = false; // 是否已使用重新抽卡功能
