@@ -92,6 +92,36 @@ void InkShopState::render(App& app) {
 	if (!message_.empty() && smallFont_) {
 		SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended_Wrapped(smallFont_, message_.c_str(), col, screenW_-40); if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r,s); SDL_Rect d{20, screenH_-s->h-20, s->w, s->h}; SDL_RenderCopy(r,t,nullptr,&d); SDL_DestroyTexture(t); SDL_FreeSurface(s);} 
 	}
+	
+	// 绘制操作说明（左下角）
+	if (smallFont_) {
+		SDL_Color helpColor{ 180, 180, 180, 255 }; // 灰色文字
+		const char* helpLines[] = {
+			u8"墨汁商店操作说明：",
+			u8"• 点击商品购买墨汁",
+			u8"• 使用文脉作为货币",
+			u8"• 墨汁用于战斗中的特殊效果",
+			u8"• 点击返回按钮退出商店"
+		};
+		
+		int lineCount = sizeof(helpLines) / sizeof(helpLines[0]);
+		int x = 20;
+		int y = screenH_ - 150;
+		
+		for (int i = 0; i < lineCount; ++i) {
+			SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, helpLines[i], helpColor);
+			if (s) {
+				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+				if (t) {
+					SDL_Rect dst{ x, y, s->w, s->h };
+					SDL_RenderCopy(r, t, nullptr, &dst);
+					SDL_DestroyTexture(t);
+				}
+				SDL_FreeSurface(s);
+			}
+			y += 20;
+		}
+	}
 }
 
 void InkShopState::grantEntryGift() {

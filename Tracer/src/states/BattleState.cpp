@@ -3,6 +3,7 @@
 #include "TestState.h"
 #include "MapExploreState.h"
 #include "MemoryRepairState.h"
+#include "VictoryState.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
 #include "../core/ItemStore.h"
@@ -617,7 +618,6 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 					statusMessage_ = "请先打出已选中的卡牌！";
 					return;
 				}
-				selectedHandCard_ = static_cast<int>(i);
 
 				// 检查是否有消耗骨头词条
 				bool hasBoneCost = false;
@@ -633,14 +633,17 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 					int boneCost = handCards_[i].sacrificeCost;
 					if (boneCount_ < boneCost) {
 						statusMessage_ = "魂骨不足！需要 " + std::to_string(boneCost) + " 个魂骨，当前有 " + std::to_string(boneCount_) + " 个";
+						return; // 魂骨不足时不选中卡牌
 					}
 					else {
+						selectedHandCard_ = static_cast<int>(i);
 						isSacrificing_ = false;
 						statusMessage_ = "已选择手牌：" + handCards_[i].name + "（消耗 " + std::to_string(boneCost) + " 个魂骨）";
 					}
 				}
 				else if (handCards_[i].sacrificeCost > 0) {
 					// 需要献墨，进入献祭模式
+					selectedHandCard_ = static_cast<int>(i);
 					isSacrificing_ = true;
 					sacrificeTargetCost_ = handCards_[i].sacrificeCost;
 					currentSacrificeInk_ = 0;
@@ -671,6 +674,7 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 				}
 				else {
 					// 0献墨点数，直接可以打出
+					selectedHandCard_ = static_cast<int>(i);
 					isSacrificing_ = false;
 					statusMessage_ = "已选择手牌：" + handCards_[i].name + "（0献墨点数，可直接打出）";
 				}
@@ -1176,6 +1180,13 @@ void BattleState::update(App& app, float dt) {
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new MemoryRepairState(true))));
 		return;
 	}
+	
+	if (pendingGoVictory_) {
+		std::cout << "[BATTLE STATE] 跳转到胜利界面" << std::endl;
+		pendingGoVictory_ = false;
+		app.setState(std::unique_ptr<State>(static_cast<State*>(new VictoryState())));
+		return;
+	}
 
 	// 敌人前进动画更新（若有）
 	updateEnemyAdvance(dt);
@@ -1653,6 +1664,9 @@ void BattleState::update(App& app, float dt) {
 	
 	// 处理猎人Boss转阶段动画
 	updateHunterBossTransform(dt);
+	
+	// 处理最终Boss转阶段动画
+	updateFinalBossTransform(dt);
 	
 	// 处理矿工Boss转阶段完成后的延时
 	if (isMinerBossTransformComplete_) {
@@ -2910,6 +2924,17 @@ void BattleState::endTurn() {
 void BattleState::enemyTurn() {
 	std::cout << "[ENEMY TURN] ========== 敌人回合开始 ==========" << std::endl;
 	
+	// 最终Boss二阶段动态出牌：在敌人回合开始时检查是否需要出牌
+	std::cout << "[ENEMY TURN] 检查最终Boss二阶段: currentBattleId_=" << currentBattleId_ 
+		<< ", isFinalBossPhase2_=" << isFinalBossPhase2_ 
+		<< ", finalBossPhase2Rounds_=" << finalBossPhase2Rounds_ 
+		<< ", finalBossPhase2MaxRounds_=" << finalBossPhase2MaxRounds_ << std::endl;
+		
+	if (currentBattleId_ == 105 && isFinalBossPhase2_ && finalBossPhase2Rounds_ < finalBossPhase2MaxRounds_) {
+		std::cout << "[FINAL BOSS PHASE2] 敌人回合：检查动态出牌" << std::endl;
+		generateFinalBossPhase2Cards();
+	}
+	
 	// 渔夫Boss缚魂索：在偶数敌人回合开始后，敌人卡牌前进前执行
 	std::cout << "[DEBUG] enemyTurn: currentBattleId_=" << currentBattleId_ << ", currentBossPhase_=" << currentBossPhase_ 
 		<< ", currentTurn_=" << currentTurn_ << ", isFishermanBossFuhunsuoActive_=" << isFishermanBossFuhunsuoActive_ 
@@ -3085,6 +3110,12 @@ void BattleState::enemyTurn() {
 
 	// 敌人前进与成长完成后：应用我方护主补位到对位（若满足条件）
 	applyGuardianForEnemyAttack();
+	
+	// 最终Boss二阶段动态出牌：在敌人前进完成后生成
+	if (currentBattleId_ == 106 && isFinalBossPhase2_ ) {
+		std::cout << "[FINAL BOSS PHASE2] 敌人前进完成后：检查动态出牌" << std::endl;
+		generateFinalBossPhase2Cards();
+	}
 
 	// 收集所有可以攻击的敌方卡牌（从左到右）
 	attackingCards_.clear();
@@ -3856,10 +3887,33 @@ void BattleState::checkGameOver() {
                     }
                 }
             }
+            // 检查是否为最终Boss（战斗ID 105）- 直接转阶段
+            else if (currentBattleId_ == 105) {
+                std::cout << "[FINAL BOSS DEATH] 开始最终Boss死亡转阶段" << std::endl;
+                statusMessage_ = "最终Boss死亡！正在进入终极形态...";
+                
+                // 更新战斗ID到二阶段
+                currentBattleId_ = 106;
+                
+                // 直接设置Boss二阶段和墨尺归零
+                currentBossPhase_ = 2;
+                meterActualPos_ = 0;  // 墨尺归零
+                meterTargetPos_ = 0;
+                meterDisplayPos_ = 0;  // 确保显示位置也归零
+                
+                // 初始化最终Boss二阶段动态出牌
+                initializeFinalBossPhase2();
+                
+                // 立即结束敌人回合，进入玩家回合
+                currentPhase_ = GamePhase::PlayerTurn;
+                
+                statusMessage_ = "最终Boss进入终极形态！墨尺归零！";
+                return;  // 直接返回，避免执行后面的通用转阶段逻辑
+            }
             
-                    // 对于矿工Boss、渔夫Boss和猎人Boss，转阶段动画会处理预设切换
+                    // 对于矿工Boss、渔夫Boss、猎人Boss和最终Boss，转阶段动画会处理预设切换
                     // 对于其他Boss，立即进入二阶段
-                    if (currentBattleId_ != 100 && currentBattleId_ != 102 && currentBattleId_ != 104) {
+                    if (currentBattleId_ != 100 && currentBattleId_ != 102 && currentBattleId_ != 104 && currentBattleId_ != 105) {
                         currentBossPhase_ = 2;
                         meterActualPos_ = 0;  // 墨尺归零
                         meterTargetPos_ = 0;
@@ -3887,17 +3941,43 @@ void BattleState::checkGameOver() {
         }
 		// Boss战二阶段胜利时恢复一根蜡烛
 		if (isBossBattle_ && currentBossPhase_ == 2) {
-			App::restoreCandle();
-			statusMessage_ = "Boss战胜利！恢复一根蜡烛！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
-			std::cout << "[VICTORY] Boss战二阶段胜利，恢复一根蜡烛！剩余蜡烛: " << App::getRemainingCandles() << std::endl;
-			
-			// Boss战二阶段胜利后跳转到记忆修复界面
-			std::cout << "[VICTORY] Boss战二阶段胜利，跳转到记忆修复界面！" << std::endl;
-			// 设置跳转到记忆修复界面的标志
-			pendingGoMemoryRepair_ = true;
-			std::cout << "[VICTORY] 设置pendingGoMemoryRepair_=true" << std::endl;
-			return;
+			// 检查是否为最终Boss，最终Boss有三阶段，二阶段胜利转三阶段
+			if (currentBattleId_ == 106) {
+				std::cout << "[FINAL BOSS] 二阶段胜利，转三阶段" << std::endl;
+				// 最终Boss二阶段胜利，转三阶段
+				initializeFinalBossPhase3();
+				// 转三阶段后直接返回，不执行通用胜利逻辑
+				return;
+			} else {
+				App::restoreCandle();
+				statusMessage_ = "Boss战胜利！恢复一根蜡烛！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
+				std::cout << "[VICTORY] Boss战二阶段胜利，恢复一根蜡烛！剩余蜡烛: " << App::getRemainingCandles() << std::endl;
+				
+				// Boss战二阶段胜利后跳转到记忆修复界面
+				std::cout << "[VICTORY] Boss战二阶段胜利，跳转到记忆修复界面！" << std::endl;
+				// 设置跳转到记忆修复界面的标志
+				pendingGoMemoryRepair_ = true;
+				std::cout << "[VICTORY] 设置pendingGoMemoryRepair_=true" << std::endl;
+				return;
+			}
 		}
+		
+		// 最终Boss三阶段胜利条件：月球死亡
+		if (isBossBattle_ && isFinalBossPhase3_) {
+			// 检查月球是否死亡
+			int moonIndex = 1 * BATTLEFIELD_COLS + 1;  // 第二行第二列的位置
+			if (!battlefield_[moonIndex].isAlive || battlefield_[moonIndex].health <= 0) {
+				App::restoreCandle();
+				statusMessage_ = "最终Boss三阶段胜利！恢复一根蜡烛！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
+				std::cout << "[VICTORY] 最终Boss三阶段胜利，恢复一根蜡烛！剩余蜡烛: " << App::getRemainingCandles() << std::endl;
+				
+				// 三阶段胜利后跳转到胜利界面
+				std::cout << "[VICTORY] 最终Boss三阶段胜利，跳转到胜利界面！" << std::endl;
+				pendingGoVictory_ = true;
+				return;
+			}
+		}
+		
 		
         // 启动胜利动画
         startVictoryAnimation();
@@ -3961,6 +4041,35 @@ void BattleState::renderBattlefield(App& app) {
 
 
     // 移除整行高亮，仅保留单格高亮
+
+	// 第一遍：绘制月球（如果存在）
+	if (isFinalBossPhase3_) {
+		// 找到月球的主卡牌（第二行第二列）
+		int moonIndex = 1 * BATTLEFIELD_COLS + 1;
+		if (battlefield_[moonIndex].isMoon && battlefield_[moonIndex].isAlive) {
+			// 攻击动画时跳过月球的原位渲染
+			bool skipMoonRender = false;
+			if (isAttackAnimating_ && !isPlayerAttacking_) {
+				// 敌方攻击动画时跳过月球原位渲染
+				skipMoonRender = true;
+			}
+			
+			if (!skipMoonRender) {
+				// 计算月球的渲染区域（占满第一行和第二行）
+				SDL_Rect moonRect;
+				moonRect.x = battlefield_[0].rect.x;  // 第一行第一列
+				moonRect.y = battlefield_[0].rect.y;   // 第一行第一列
+				moonRect.w = battlefield_[0].rect.w * 4;  // 4列宽度
+				moonRect.h = battlefield_[0].rect.h * 2;   // 2行高度
+				
+				// 渲染月球卡牌
+				Card tempCard = battlefield_[moonIndex].card;
+				tempCard.health = battlefield_[moonIndex].health;
+				tempCard.attack = getDisplayAttackForIndex(moonIndex);
+				CardRenderer::renderCard(app, tempCard, moonRect, cardNameFont_, cardStatFont_, false);
+			}
+		}
+	}
 
 	// 第一遍：绘制所有非攻击中的卡牌
 	for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
@@ -4093,6 +4202,19 @@ void BattleState::renderBattlefield(App& app) {
 		if (isPushedAnimating_) {
 			for (int cardIndex : pushedCardIndices_) {
 				if (cardIndex == i) isPushedAnimating = true; break;
+			}
+		}
+
+		// 跳过月球部分的卡牌（包括主卡牌，因为已经单独渲染了）
+		if (isFinalBossPhase3_ && bfCard.isMoon) {
+			continue;  // 跳过所有月球部分
+		}
+		
+		// 攻击动画时跳过攻击者的原位渲染
+		if (isAttackAnimating_ && currentAttackingIndex_ < static_cast<int>(attackingCards_.size())) {
+			int currentCardIndex = attackingCards_[currentAttackingIndex_];
+			if (currentCardIndex == i) {
+				continue;  // 跳过攻击者的原位渲染
 			}
 		}
 
@@ -4317,6 +4439,62 @@ void BattleState::renderBattlefield(App& app) {
 
 				// 计算攻击动画效果
 				SDL_Rect renderRect = bfCard.rect;
+				
+				// 三阶段特殊处理：攻击月球
+				if (isFinalBossPhase3_) {
+					// 计算月球位置（第二行第二列）
+					int moonIndex = 1 * BATTLEFIELD_COLS + 1;
+					// 使用月球的渲染区域（占满2×4区域）
+					SDL_Rect moonRect;
+					moonRect.x = battlefield_[0].rect.x;  // 第一行第一列
+					moonRect.y = battlefield_[0].rect.y;   // 第一行第一列
+					moonRect.w = battlefield_[0].rect.w * 4;  // 4列宽度
+					moonRect.h = battlefield_[0].rect.h * 2;   // 2行高度
+					
+					// 攻击动画：卡牌向月球移动
+					float moveDistance = 60.0f * std::sin(attackProgress * 3.14159f);
+					float flashIntensity = 0.3f + 0.7f * std::sin(attackProgress * 12.56636f);
+					
+					// 计算向月球移动的方向
+					float dx = moonRect.x + moonRect.w/2 - (renderRect.x + renderRect.w/2);
+					float dy = moonRect.y + moonRect.h/2 - (renderRect.y + renderRect.h/2);
+					float distance = std::sqrt(dx*dx + dy*dy);
+					if (distance > 0) {
+						dx /= distance;
+						dy /= distance;
+						renderRect.x += static_cast<int>(moveDistance * dx);
+						renderRect.y += static_cast<int>(moveDistance * dy);
+					}
+					
+					// 渲染攻击卡牌
+					Card tempCard = bfCard.card;
+					tempCard.health = bfCard.health;
+					tempCard.attack = getDisplayAttackForIndex(currentCardIndex);
+					CardRenderer::renderCard(app, tempCard, renderRect, cardNameFont_, cardStatFont_, false);
+					
+					// 添加攻击月球的特效边框
+					SDL_SetRenderDrawColor(r, 255, 255, 0, static_cast<Uint8>(255 * flashIntensity));
+					SDL_Rect outerRect = renderRect;
+					outerRect.x -= 3;
+					outerRect.y -= 3;
+					outerRect.w += 6;
+					outerRect.h += 6;
+					SDL_RenderDrawRect(r, &outerRect);
+					
+					// 显示"攻击月球"文字
+					SDL_Color textColor = {255, 255, 0, 255};
+					SDL_Surface* textSurface = TTF_RenderText_Blended(cardNameFont_, "攻击月球", textColor);
+					if (textSurface) {
+						SDL_Texture* textTexture = SDL_CreateTextureFromSurface(r, textSurface);
+						if (textTexture) {
+							SDL_Rect textRect = {renderRect.x, renderRect.y - 30, textSurface->w, textSurface->h};
+							SDL_RenderCopy(r, textTexture, nullptr, &textRect);
+							SDL_DestroyTexture(textTexture);
+						}
+						SDL_FreeSurface(textSurface);
+					}
+					return;  // 跳过普通攻击动画
+				}
 
 				// 攻击动画效果：卡牌向前移动并闪烁
 				float moveDistance = 40.0f * std::sin(attackProgress * 3.14159f); // 增加移动距离
@@ -4380,6 +4558,75 @@ void BattleState::renderBattlefield(App& app) {
 			// 攻击动画效果：卡牌移动并闪烁
 			float moveDistance = 40.0f * std::sin(attackProgress * 3.14159f);
 			float flashIntensity = 0.3f + 0.7f * std::sin(attackProgress * 12.56636f);
+
+			// 三阶段特殊处理：月球攻击玩家
+			if (isFinalBossPhase3_ && !isPlayerAttacking_) {
+				// 计算月球位置（占满2×4区域）
+				SDL_Rect moonRect;
+				moonRect.x = battlefield_[0].rect.x;  // 第一行第一列
+				moonRect.y = battlefield_[0].rect.y;   // 第一行第一列
+				moonRect.w = battlefield_[0].rect.w * 4;  // 4列宽度
+				moonRect.h = battlefield_[0].rect.h * 2;   // 2行高度
+				
+				// 攻击动画：月球向玩家移动
+				float moonMoveDistance = 60.0f * std::sin(attackProgress * 3.14159f);
+				float moonFlashIntensity = 0.3f + 0.7f * std::sin(attackProgress * 12.56636f);
+				
+				// 计算月球到目标的移动方向
+				if (currentTargetIndex != -1) {
+					const auto& target = battlefield_[currentTargetIndex];
+					
+					// 计算月球到目标的方向向量
+					int moonCenterX = moonRect.x + moonRect.w / 2;
+					int moonCenterY = moonRect.y + moonRect.h / 2;
+					int targetCenterX = target.rect.x + target.rect.w / 2;
+					int targetCenterY = target.rect.y + target.rect.h / 2;
+					
+					// 计算方向向量
+					float deltaX = static_cast<float>(targetCenterX - moonCenterX);
+					float deltaY = static_cast<float>(targetCenterY - moonCenterY);
+					float distance = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+					
+					if (distance > 0) {
+						// 归一化方向向量
+						float dirX = deltaX / distance;
+						float dirY = deltaY / distance;
+						
+						// 根据方向移动月球
+						moonRect.x += static_cast<int>(moonMoveDistance * dirX);
+						moonRect.y += static_cast<int>(moonMoveDistance * dirY);
+					}
+				}
+				
+				// 渲染月球卡牌（攻击动画效果）
+				Card tempCard = battlefield_[1 * BATTLEFIELD_COLS + 1].card;  // 月球主卡牌
+				tempCard.health = battlefield_[1 * BATTLEFIELD_COLS + 1].health;
+				tempCard.attack = getDisplayAttackForIndex(1 * BATTLEFIELD_COLS + 1);
+				CardRenderer::renderCard(app, tempCard, moonRect, cardNameFont_, cardStatFont_, false);
+				
+				// 添加攻击特效边框（月球闪烁）
+				SDL_SetRenderDrawColor(r, 255, 255, 0, static_cast<Uint8>(255 * moonFlashIntensity));
+				SDL_Rect outerRect = moonRect;
+				outerRect.x -= 3;
+				outerRect.y -= 3;
+				outerRect.w += 6;
+				outerRect.h += 6;
+				SDL_RenderDrawRect(r, &outerRect);
+				
+				// 显示"月球攻击"文字
+				SDL_Color textColor = {255, 255, 0, 255};
+				SDL_Surface* textSurface = TTF_RenderText_Blended(cardNameFont_, "月球攻击", textColor);
+				if (textSurface) {
+					SDL_Texture* textTexture = SDL_CreateTextureFromSurface(r, textSurface);
+					if (textTexture) {
+						SDL_Rect textRect = {moonRect.x, moonRect.y - 30, textSurface->w, textSurface->h};
+						SDL_RenderCopy(r, textTexture, nullptr, &textRect);
+						SDL_DestroyTexture(textTexture);
+					}
+					SDL_FreeSurface(textSurface);
+				}
+				return;  // 跳过普通攻击动画
+			}
 
 			// 根据当前目标计算移动方向
 			if (currentTargetIndex != -1) {
@@ -5355,6 +5602,28 @@ void BattleState::attackTarget(int attackerIndex, int targetIndex, int damage) {
 
     const auto& attacker = battlefield_[attackerIndex];
     // 注意：target 在断尾求生后会变化，延后获取
+    
+    // 检查是否在最终Boss三阶段，如果是，所有攻击都攻击月球
+    if (isFinalBossPhase3_ && battlefield_[targetIndex].isMoon) {
+        // 攻击月球，所有攻击都攻击第二行第二列的月球卡牌
+        int moonIndex = 1 * BATTLEFIELD_COLS + 1;  // 第二行第二列的位置
+        if (battlefield_[moonIndex].isAlive && battlefield_[moonIndex].isMoon) {
+            // 攻击月球
+            battlefield_[moonIndex].health -= damage;
+            if (battlefield_[moonIndex].health <= 0) {
+                // 月球死亡，清除所有月球标记
+                for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+                    if (battlefield_[i].isMoon) {
+                        battlefield_[i].isAlive = false;
+                        battlefield_[i].health = 0;
+                        battlefield_[i].isMoon = false;
+                    }
+                }
+                statusMessage_ = "月球被摧毁！最终Boss三阶段结束！";
+            }
+        }
+        return;
+    }
 
 	// 检查攻击者是否有空袭印记
 	bool hasAirStrike = hasMark(attacker.card, u8"空袭");
@@ -6469,6 +6738,55 @@ void BattleState::renderUI(App& app) {
 	if (isHunterBossFurExchange_) {
 		// 只在状态消息中显示毛皮交换信息，不添加额外的视觉特效
 		// 毛皮交换的交互通过点击场上的卡牌直接完成
+	}
+	
+	// 在右上角显示当前战斗预设编号
+	if (infoFont_) {
+		SDL_Color textColor{ 255, 255, 255, 255 }; // 白色文字
+		std::string battleIdText = "预设: " + std::to_string(currentBattleId_);
+		SDL_Surface* s = TTF_RenderUTF8_Blended(infoFont_, battleIdText.c_str(), textColor);
+		if (s) {
+			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+			if (t) {
+				// 右上角位置，距离边缘10像素
+				SDL_Rect dst{ screenW_ - s->w - 10, 10, s->w, s->h };
+				SDL_RenderCopy(r, t, nullptr, &dst);
+				SDL_DestroyTexture(t);
+			}
+			SDL_FreeSurface(s);
+		}
+	}
+	
+	// 绘制操作说明（左下角）
+	if (infoFont_) {
+		SDL_Color helpColor{ 180, 180, 180, 255 }; // 灰色文字
+		const char* helpLines[] = {
+			u8"战斗操作说明：",
+			u8"• 点击手牌使用卡牌",
+			u8"• 点击战场放置造物",
+			u8"• 点击牌堆抽卡",
+			u8"• 点击道具使用效果",
+			u8"• 墨尺达到±5时胜利/失败",
+			u8"• 按ESC返回地图"
+		};
+		
+		int lineCount = sizeof(helpLines) / sizeof(helpLines[0]);
+		int x = 10;
+		int y = screenH_ - 200;
+		
+		for (int i = 0; i < lineCount; ++i) {
+			SDL_Surface* s = TTF_RenderUTF8_Blended(infoFont_, helpLines[i], helpColor);
+			if (s) {
+				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+				if (t) {
+					SDL_Rect dst{ x, y, s->w, s->h };
+					SDL_RenderCopy(r, t, nullptr, &dst);
+					SDL_DestroyTexture(t);
+				}
+				SDL_FreeSurface(s);
+			}
+			y += 20;
+		}
 	}
 }
 // 冲刺能手相关方法实现
@@ -8250,4 +8568,223 @@ void BattleState::completeHunterBossFurExchange() {
 	// 强制刷新状态消息显示
 	std::cout << "[HUNTER BOSS] 毛皮交换完成，Boss进入二阶段，墨尺归零" << std::endl;
 	std::cout << "[HUNTER BOSS] 状态消息: " << statusMessage_ << std::endl;
+}
+
+// 最终Boss转阶段动画更新
+void BattleState::updateFinalBossTransform(float dt) {
+	if (!isFinalBossTransforming_) return;
+	
+	finalBossTransformTime_ += dt;
+	
+	// 每0.5秒处理一个步骤
+	float stepInterval = 0.5f;
+	int targetStep = static_cast<int>(finalBossTransformTime_ / stepInterval);
+	
+	// 处理新的步骤
+	while (finalBossTransformStep_ < targetStep) {
+		switch (finalBossTransformStep_) {
+			case 0: {
+				// 步骤1：显示转阶段消息
+				std::cout << "[FINAL BOSS TRANSFORM] 步骤1: 显示转阶段消息" << std::endl;
+				statusMessage_ = "最终Boss正在进入终极形态...";
+				break;
+			}
+			case 1: {
+				// 步骤2：完成转阶段，进入二阶段
+				std::cout << "[FINAL BOSS TRANSFORM] 步骤2: 进入二阶段" << std::endl;
+				statusMessage_ = "最终Boss进入终极形态！墨尺归零！";
+				
+				// 设置Boss二阶段和墨尺归零
+				currentBossPhase_ = 2;
+				meterActualPos_ = 0;  // 墨尺归零
+				meterTargetPos_ = 0;
+				meterDisplayPos_ = 0;  // 确保显示位置也归零
+				
+				// 启动墨尺动画，让显示位置正确更新到0
+				meterStartPos_ = meterDisplayPos_;
+				isMeterAnimating_ = true;
+				meterAnimTime_ = 0.0f;
+				
+				// 初始化最终Boss二阶段动态出牌
+				initializeFinalBossPhase2();
+				
+				// 立即结束敌人回合，进入玩家回合
+				currentPhase_ = GamePhase::PlayerTurn;
+				break;
+			}
+		}
+		
+		finalBossTransformStep_++;
+	}
+	
+	// 检查是否完成所有转换
+	if (finalBossTransformStep_ >= 2) {
+		isFinalBossTransforming_ = false;
+		statusMessage_ = "最终Boss转阶段完成！进入终极形态！";
+		std::cout << "[FINAL BOSS TRANSFORM] 转阶段完成" << std::endl;
+	}
+}
+
+// 初始化最终Boss二阶段
+void BattleState::initializeFinalBossPhase2() {
+	std::cout << "[FINAL BOSS PHASE2] 初始化最终Boss二阶段" << std::endl;
+	
+	// 设置二阶段状态
+	isFinalBossPhase2_ = true;
+	finalBossPhase2Rounds_ = 0;
+	finalBossPhase2TurnCount_ = 0;
+	
+	// 收集所有死亡部族的卡牌ID
+	collectDeadCards();
+	
+	std::cout << "[FINAL BOSS PHASE2] 收集到 " << deadCardIds_.size() << " 张死亡卡牌" << std::endl;
+	
+	// 清空当前战场上的敌人卡牌
+	for (int i = 0; i < BATTLEFIELD_ROWS * BATTLEFIELD_COLS; ++i) {
+		if (!battlefield_[i].isPlayer) {
+			battlefield_[i].isAlive = false;
+			battlefield_[i].health = 0;
+		}
+	}
+	
+	// 在第二行随机放置一个木桩
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> colDist(0, BATTLEFIELD_COLS - 1);
+	int randomCol = colDist(gen);
+	
+	int idx = 1 * BATTLEFIELD_COLS + randomCol;  // 第二行随机列
+	battlefield_[idx].card = CardDB::instance().make("muzhuang");
+	battlefield_[idx].isAlive = true;
+	battlefield_[idx].isPlayer = false;
+	battlefield_[idx].health = 3;  // 木桩生命值是3
+	battlefield_[idx].isJiaoyu = false;
+	
+	std::cout << "[FINAL BOSS PHASE2] 在第二行第 " << randomCol << " 列放置木桩" << std::endl;
+	
+	// 然后设置动态出牌状态
+	statusMessage_ = "最终Boss二阶段：先使用预设，然后从死亡卡牌中随机出牌！";
+}
+
+// 收集死亡卡牌ID
+void BattleState::collectDeadCards() {
+	// 直接使用已知的死亡卡牌列表
+	deadCardIds_ = {"louis", "jonah", "kevin", "sean", "tamara", "daniel", "cody", "david", "tahnee", "berke", "kaycee", "kaminski", "reginald", "Oct19", "Luke"};
+	std::cout << "[COLLECT DEAD CARDS] 使用死亡卡牌列表，共 " << deadCardIds_.size() << " 张" << std::endl;
+}
+
+// 生成最终Boss二阶段卡牌
+void BattleState::generateFinalBossPhase2Cards() {
+	std::cout << "[FINAL BOSS PHASE2] 尝试生成卡牌，isFinalBossPhase2_: " << isFinalBossPhase2_ 
+		<< ", deadCardIds_.size(): " << deadCardIds_.size() << std::endl;
+	
+	if (!isFinalBossPhase2_ || deadCardIds_.empty()) {
+		std::cout << "[FINAL BOSS PHASE2] 不在二阶段或没有死亡卡牌" << std::endl;
+		return;
+	}
+	
+	// 检查是否已达到最大出牌轮数
+	if (finalBossPhase2Rounds_ >= finalBossPhase2MaxRounds_) {
+		std::cout << "[FINAL BOSS PHASE2] 已达到最大出牌轮数: " << finalBossPhase2Rounds_ << std::endl;
+		return;
+	}
+	
+	// 随机决定这回合出1-2张卡牌
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> cardCountDist(1, 2);
+	int cardsToGenerate = cardCountDist(gen);
+	
+	std::cout << "[FINAL BOSS PHASE2] 第 " << (finalBossPhase2Rounds_ + 1) << " 轮，生成 " << cardsToGenerate << " 张卡牌" << std::endl;
+	
+	// 参考其他战斗的矩阵生成方式：随机位置放置
+	std::vector<int> emptyCols;
+	for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+		int idx = 0 * BATTLEFIELD_COLS + col;  // 第一行（row 0）
+		if (!battlefield_[idx].isAlive) emptyCols.push_back(col);
+	}
+	
+	std::uniform_int_distribution<> cardDist(0, static_cast<int>(deadCardIds_.size()) - 1);
+	
+	for (int i = 0; i < cardsToGenerate && !emptyCols.empty(); ++i) {
+		// 随机选择空列
+		std::uniform_int_distribution<int> pick(0, static_cast<int>(emptyCols.size()) - 1);
+		int choose = pick(gen);
+		int col = emptyCols[choose];
+		emptyCols.erase(emptyCols.begin() + choose);
+		
+		// 随机选择一张死亡卡牌
+		std::string selectedCardId = deadCardIds_[cardDist(gen)];
+		Card card = CardDB::instance().make(selectedCardId);
+		
+		if (!card.id.empty()) {
+			int idx = 0 * BATTLEFIELD_COLS + col;
+			battlefield_[idx].card = card;
+			battlefield_[idx].isPlayer = false;
+			battlefield_[idx].health = card.health;
+			battlefield_[idx].isAlive = true;
+			battlefield_[idx].moveDirection = 0;
+			battlefield_[idx].isMovedToDeath = false;
+			
+			std::cout << "[FINAL BOSS PHASE2] 在位置 " << idx << " 生成卡牌: " << selectedCardId << std::endl;
+		}
+	}
+	
+	finalBossPhase2Rounds_++;
+	statusMessage_ = "最终Boss二阶段第 " + std::to_string(finalBossPhase2Rounds_) + " 轮出牌完成！";
+}
+
+// 初始化最终Boss三阶段
+void BattleState::initializeFinalBossPhase3() {
+	std::cout << "[FINAL BOSS PHASE3] 初始化最终Boss三阶段" << std::endl;
+	
+	// 设置三阶段状态
+	isFinalBossPhase3_ = true;
+	isFinalBossPhase2_ = false;  // 结束二阶段
+	currentBattleId_ = 107;  // 更新为三阶段ID
+	
+	// 清空第一行和第二行的所有牌
+	for (int row = 0; row < 2; ++row) {  // 第一行和第二行
+		for (int col = 0; col < BATTLEFIELD_COLS; ++col) {
+			int idx = row * BATTLEFIELD_COLS + col;
+			battlefield_[idx].isAlive = false;
+			battlefield_[idx].health = 0;
+			battlefield_[idx].card = Card();  // 清空卡牌
+		}
+	}
+	
+	// 生成月球：在第二行第二列（位置5）放置月球卡牌
+	int moonIndex = 1 * BATTLEFIELD_COLS + 1;  // 第二行第二列
+	battlefield_[moonIndex].card = CardDB::instance().make("yueqiu");
+	battlefield_[moonIndex].isAlive = true;
+	battlefield_[moonIndex].isPlayer = false;
+	battlefield_[moonIndex].health = 40;
+	battlefield_[moonIndex].isJiaoyu = false;
+	battlefield_[moonIndex].isMoon = true;
+	
+	// 标记月球的其他部分（第一行全部4列 + 第二行第1、3、4列）
+	int moonParts[] = {
+		0 * BATTLEFIELD_COLS + 0, 0 * BATTLEFIELD_COLS + 1, 0 * BATTLEFIELD_COLS + 2, 0 * BATTLEFIELD_COLS + 3,  // 第一行全部
+		1 * BATTLEFIELD_COLS + 0, 1 * BATTLEFIELD_COLS + 2, 1 * BATTLEFIELD_COLS + 3  // 第二行第1、3、4列
+	};
+	for (int part : moonParts) {
+		battlefield_[part].isAlive = false;
+		battlefield_[part].health = 0;
+		battlefield_[part].isMoon = true;
+	}
+	
+	// 墨尺归零
+	meterActualPos_ = 0;
+	meterTargetPos_ = 0;
+	meterDisplayPos_ = 0;
+	
+	// 设置回合为玩家回合
+	currentPhase_ = GamePhase::PlayerTurn;
+	currentTurn_++; // 增加回合数
+	hasDrawnThisTurn_ = false; // 重置抽牌状态
+	mustDrawThisTurn_ = (currentTurn_ >= 2); // 第二回合开始必须抽牌
+	// 重置本回合献祭次数
+	sacrificeCountThisTurn_ = 0;
+	
+	statusMessage_ = "最终Boss进入三阶段！";
 }

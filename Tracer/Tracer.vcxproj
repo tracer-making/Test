@@ -166,6 +166,7 @@
     <ClCompile Include="src\states\DeckViewState.cpp" />
     <ClCompile Include="src\states\DeckSelectState.cpp" />
     <ClCompile Include="src\states\EnemyPresets.cpp" />
+    <ClCompile Include="src\states\VictoryState.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -198,6 +199,7 @@
     <ClInclude Include="src\states\DeckViewState.h" />
     <ClInclude Include="src\states\DeckSelectState.h" />
     <ClInclude Include="src\states\EnemyPresets.h" />
+    <ClInclude Include="src\states\VictoryState.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

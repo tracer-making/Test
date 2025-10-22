@@ -39,6 +39,7 @@ private:
     Button* testMinerButton_ = nullptr;
     Button* testFishermanButton_ = nullptr;
     Button* testHunterButton_ = nullptr;
+    Button* testFinalBossButton_ = nullptr;
     bool pendingGoTest_ = false;
     
     // 状态切换
@@ -46,6 +47,7 @@ private:
     bool pendingGoMinerBoss_ = false;
     bool pendingGoFishermanBoss_ = false;
     bool pendingGoHunterBoss_ = false;
+    bool pendingGoFinalBoss_ = false;
     bool pendingGoBarter_ = false;
     bool pendingGoEngrave_ = false;
     bool pendingGoHeritage_ = false;

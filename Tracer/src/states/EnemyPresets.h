@@ -38,6 +38,12 @@ public:
     
     // 获取可用的战斗ID列表
     std::vector<int> getAvailableBattleIds() const;
+    
+    // 根据地形层数获取可用的战斗ID池
+    std::vector<int> getBattleIdsForBiome(const std::string& biome, int layer) const;
+    // 随机分配不重复的战斗节点
+    std::vector<int> getRandomBattleSequence(const std::string& biome, int layer, int nodeCount) const;
+    
 
 private:
     EnemyPresetManager() = default;

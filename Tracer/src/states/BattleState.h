@@ -45,6 +45,13 @@ private:
 	int countPlayerFurCards();  // 统计玩家手牌中的毛皮数量
 	void startHunterBossFurExchange();  // 开始猎人Boss毛皮交换
 	void completeHunterBossFurExchange();  // 完成猎人Boss毛皮交换
+	
+	// 最终Boss转阶段
+	void updateFinalBossTransform(float dt);  // 更新最终Boss转阶段动画
+	void initializeFinalBossPhase2();  // 初始化最终Boss二阶段
+	void generateFinalBossPhase2Cards();  // 生成最终Boss二阶段卡牌
+	void collectDeadCards();  // 收集死亡卡牌ID
+	void initializeFinalBossPhase3();  // 初始化最终Boss三阶段
 
 private:
 	// 游戏状态
@@ -114,6 +121,22 @@ private:
 	std::vector<int> hunterBossExchangeCardIndices_;  // 猎人Boss场上卡牌的索引
 	int selectedExchangeCard_ = -1;  // 当前选中的交换卡牌索引
 	int totalFurCount_ = 0;  // 玩家手牌中的毛皮总数
+	
+	// 最终Boss转阶段动画
+	bool isFinalBossTransforming_ = false;  // 是否正在转阶段
+	float finalBossTransformTime_ = 0.0f;  // 转阶段动画时间
+	float finalBossTransformDuration_ = 2.0f;  // 转阶段动画持续时间
+	int finalBossTransformStep_ = 0;  // 当前处理步骤
+	
+	// 最终Boss二阶段动态出牌
+	bool isFinalBossPhase2_ = false;  // 是否处于最终Boss二阶段
+	int finalBossPhase2Rounds_ = 0;  // 二阶段已出牌轮数
+	int finalBossPhase2MaxRounds_ = 7;  // 二阶段最大出牌轮数
+	std::vector<std::string> deadCardIds_;  // 死亡卡牌ID列表
+	int finalBossPhase2TurnCount_ = 0;  // 二阶段回合计数
+	
+	// 最终Boss三阶段
+	bool isFinalBossPhase3_ = false;  // 是否处于最终Boss三阶段
 
 	// 上帝模式：锁血与墨尺
 	bool lockPlayerHealth_ = false;
@@ -142,6 +165,7 @@ private:
 		bool isDiving = false; // 水袭印记：是否潜水状态
 		bool isJiaoyu = false; // 是否为鲛鱼（渔夫Boss转阶段生成）
 		bool isJiaolong = false; // 是否为鲛龙（鲛鱼死亡后生成）
+		bool isMoon = false; // 是否为月球（最终Boss三阶段生成）
 	};
 	std::array<BattlefieldCard, TOTAL_BATTLEFIELD_SLOTS> battlefield_;
 
@@ -187,6 +211,7 @@ private:
 	// 状态切换
 	bool pendingGoMapExplore_ = false;  // 返回地图探索
 	bool pendingGoMemoryRepair_ = false;  // 跳转到记忆修复界面
+	bool pendingGoVictory_ = false;  // 跳转到胜利界面
 	int hoveredItemIndex_ = -1; // 当前悬停的道具索引
 	
 	// 风雅扇效果跟踪

@@ -249,6 +249,36 @@ void MemoryRepairState::render(App& app) {
             }
 		}
 	}
+	
+	// 绘制操作说明（左下角）
+	if (smallFont_) {
+		SDL_Color helpColor{ 180, 180, 180, 255 }; // 灰色文字
+		const char* helpLines[] = {
+			u8"记忆修复操作说明：",
+			u8"• 点击卡牌选择要修复的记忆",
+			u8"• 每张卡牌都有不同的消耗",
+			u8"• 消耗墨滴或魂骨来修复记忆",
+			u8"• 修复后获得新的卡牌能力"
+		};
+		
+		int lineCount = sizeof(helpLines) / sizeof(helpLines[0]);
+		int x = 20;
+		int y = screenH_ - 150;
+		
+		for (int i = 0; i < lineCount; ++i) {
+			SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, helpLines[i], helpColor);
+			if (s) {
+				SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+				if (t) {
+					SDL_Rect dst{ x, y, s->w, s->h };
+					SDL_RenderCopy(r, t, nullptr, &dst);
+					SDL_DestroyTexture(t);
+				}
+				SDL_FreeSurface(s);
+			}
+			y += 20;
+		}
+	}
 }
 
 void MemoryRepairState::buildCandidates() {

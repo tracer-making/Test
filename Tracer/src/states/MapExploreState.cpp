@@ -484,6 +484,18 @@ void MapExploreState::onEnter(App& app) {
             pendingGoHunterBoss_ = true;
         });
     }
+    
+    // 最终Boss测试按钮（猎人测试按钮下方）
+    testFinalBossButton_ = new Button();
+    if (testFinalBossButton_) {
+        SDL_Rect r{ startX + 130, startY + btnH + 12 + 120, 120, 36 };
+        testFinalBossButton_->setRect(r);
+        testFinalBossButton_->setText(u8"最终Boss");
+        if (smallFont_) testFinalBossButton_->setFont(smallFont_, app.getRenderer());
+        testFinalBossButton_->setOnClick([this]() {
+            pendingGoFinalBoss_ = true;
+        });
+    }
     // 进入时更新滚动边界
     updateScrollBounds();
     
@@ -598,6 +610,7 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
     if (testMinerButton_) testMinerButton_->handleEvent(e);
     if (testFishermanButton_) testFishermanButton_->handleEvent(e);
     if (testHunterButton_) testHunterButton_->handleEvent(e);
+    if (testFinalBossButton_) testFinalBossButton_->handleEvent(e);
 
     // 滚轮滚动地图（仅在上帝模式下生效）
     if (e.type == SDL_MOUSEWHEEL && godMode_) {
@@ -695,7 +708,31 @@ void MapExploreState::update(App& app, float dt) {
     // 处理各种状态切换
     if (pendingGoBattle_) {
         pendingGoBattle_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState())));
+        
+        // 从MapStore获取当前层的地形信息
+        auto& ms = MapStore::instance();
+        std::string currentBiome = u8"林地"; // 默认地形
+        int currentLayer = currentMapLayer_;
+        
+        if (!ms.layerBiomes().empty() && currentLayer < (int)ms.layerBiomes().size()) {
+            currentBiome = ms.layerBiomes()[currentLayer];
+        }
+        
+        std::cout << "[MAPEXPLORE] 当前层: " << currentLayer << ", 地形: " << currentBiome << std::endl;
+        
+        // 使用随机战斗选择系统
+        auto& presetManager = EnemyPresetManager::instance();
+        auto availableBattles = presetManager.getRandomBattleSequence(currentBiome, currentLayer, 1);
+        
+        int battleId = 1; // 默认战斗ID
+        if (!availableBattles.empty()) {
+            battleId = availableBattles[0];
+        }
+        
+        std::cout << "[MAPEXPLORE] 随机选择战斗: 地形=" << currentBiome 
+                  << ", 层数=" << currentLayer << ", 战斗ID=" << battleId << std::endl;
+        
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState(battleId))));
         return;
     }
     
@@ -729,6 +766,19 @@ void MapExploreState::update(App& app, float dt) {
         std::cout << "[HUNTER TEST] BattleState创建完成，正在切换状态..." << std::endl;
         app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
         std::cout << "[HUNTER TEST] 状态切换完成！" << std::endl;
+        return;
+    }
+    
+    if (pendingGoFinalBoss_) {
+        pendingGoFinalBoss_ = false;
+        std::cout << "[FINAL BOSS] 最终Boss按钮被点击，进入Boss战（ID: 105）" << std::endl;
+        std::cout << "[FINAL BOSS] 当前蜡烛数量: " << App::getRemainingCandles() << std::endl;
+        std::cout << "[FINAL BOSS] 正在创建BattleState(105)..." << std::endl;
+        // 设置最终Boss战（ID: 105）
+        auto* battleState = new BattleState(105);
+        std::cout << "[FINAL BOSS] BattleState创建完成，正在切换状态..." << std::endl;
+        app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
+        std::cout << "[FINAL BOSS] 状态切换完成！" << std::endl;
         return;
     }
     
@@ -843,6 +893,41 @@ void MapExploreState::render(App& app) {
     }
     if (testHunterButton_) {
         try { testHunterButton_->render(r); } catch (...) {}
+    }
+    if (testFinalBossButton_) {
+        try { testFinalBossButton_->render(r); } catch (...) {}
+    }
+    
+    // 绘制操作说明（右下角）
+    if (smallFont_) {
+        SDL_Color helpColor{ 180, 180, 180, 255 }; // 灰色文字
+        const char* helpLines[] = {
+            u8"地图探索操作说明：",
+            u8"• 点击节点进入战斗/商店/其他功能",
+            u8"• 不同颜色节点代表不同类型",
+            u8"• 战斗节点：红色（普通战斗）",
+            u8"• 商店节点：蓝色（购买道具）",
+            u8"• 特殊节点：绿色（特殊功能）",
+            u8"• 按ESC返回主菜单"
+        };
+        
+        int lineCount = sizeof(helpLines) / sizeof(helpLines[0]);
+        int x = screenW_ - 300;
+        int y = screenH_ - 200;
+        
+        for (int i = 0; i < lineCount; ++i) {
+            SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, helpLines[i], helpColor);
+            if (s) {
+                SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+                if (t) {
+                    SDL_Rect dst{ x, y, s->w, s->h };
+                    SDL_RenderCopy(r, t, nullptr, &dst);
+                    SDL_DestroyTexture(t);
+                }
+                SDL_FreeSurface(s);
+            }
+            y += 18;
+        }
     }
 }
 
@@ -1125,12 +1210,19 @@ void MapExploreState::generateSecondThirdLayerPattern(std::mt19937& gen) {
 
 void MapExploreState::generateLastLayerPattern(std::mt19937& gen) {
     // 第四层：固定中间一行四个节点 + boss
-    // 节点类型固定为：以物易物 + 三个事件（与旧设计语义保持）
+    // 节点类型和标签固定为：墨宝拾遗、以物易物、意境刻画、文脉传承
     std::vector<MapNode::NodeType> rowTypes = {
+        MapNode::NodeType::EVENT,  // 墨宝拾遗
         MapNode::NodeType::SHOP,   // 以物易物
-        MapNode::NodeType::EVENT,  // 文脉传承/事件
-        MapNode::NodeType::EVENT,  // 墨宝拾遗/事件
-        MapNode::NodeType::EVENT   // 意境刻画/事件
+        MapNode::NodeType::EVENT,  // 意境刻画
+        MapNode::NodeType::EVENT   // 文脉传承
+    };
+    
+    std::vector<std::string> rowLabels = {
+        u8"墨宝拾遗",
+        u8"以物易物", 
+        u8"意境刻画",
+        u8"文脉传承"
     };
 
     // 计算垂直位置：使用世界坐标的中间一行
@@ -1152,6 +1244,7 @@ void MapExploreState::generateLastLayerPattern(std::mt19937& gen) {
         node.x = xs[i];
         node.y = middleY;
         node.type = rowTypes[i];
+        node.label = rowLabels[i];  // 设置固定标签
         node.accessible = true;
         this->layerNodes_[1].push_back(node);
     }
@@ -1325,7 +1418,11 @@ void MapExploreState::createEndNode() {
     std::cout << "[BOSS NODE] layerBiomes大小: " << ms.layerBiomes().size() << std::endl;
     std::cout << "[BOSS NODE] 地图类型: '" << biome << "'" << std::endl;
     
-    if (biome == u8"林地") {
+    if (currentMapLayer_ == 4) {
+        // 第四层是最终Boss
+        endNode.label = u8"最终Boss";
+        std::cout << "[BOSS NODE] 设置为最终Boss" << std::endl;
+    } else if (biome == u8"林地") {
         endNode.label = u8"矿工Boss";
         std::cout << "[BOSS NODE] 设置为矿工Boss" << std::endl;
     } else if (biome == u8"湿地") {
@@ -2056,6 +2153,12 @@ void MapExploreState::assignRowEventLabels() {
     // 为每一行的节点分配不重复的事件名称
     if (layerNodes_.size() <= 1) return;
     
+    // 第四层有固定的节点标签，不需要重新分配
+    if (currentMapLayer_ == 4) {
+        std::cout << "[ASSIGN LABELS] 第四层使用固定标签，跳过随机分配" << std::endl;
+        return;
+    }
+    
     // 只处理中间层（layer 1），因为其他层有固定的标签
     auto& nodes = layerNodes_[1];
     if (nodes.empty()) return;
@@ -2500,6 +2603,9 @@ void MapExploreState::movePlayerToNode(int nodeIndex) {
                 } else if (node->label == u8"猎人Boss" || node->label == u8"猎人") {
                     std::cout << "[BOSS NODE] 匹配猎人Boss，设置pendingGoHunterBoss_" << std::endl;
                     pendingGoHunterBoss_ = true;
+                } else if (node->label == u8"最终Boss") {
+                    std::cout << "[BOSS NODE] 匹配最终Boss，设置pendingGoFinalBoss_" << std::endl;
+                    pendingGoFinalBoss_ = true;
                 } else {
                     // 默认Boss战
                     std::cout << "[BOSS NODE] 未匹配任何Boss，设置pendingGoBattle_" << std::endl;
