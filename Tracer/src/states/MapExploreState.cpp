@@ -47,6 +47,12 @@ MapExploreState::~MapExploreState() {
 }
 
 void MapExploreState::onEnter(App& app) {
+    // 同步全局上帝模式状态
+    godMode_ = App::isGodMode();
+    
+    // 初始化事件图标系统
+    loadEventIcons(app.getRenderer());
+    
     // 首次进入地图：将全局道具补足至3件（使用战斗界面的道具池），并删除战斗内的补充逻辑
     static bool firstEnter = true;
     if (firstEnter) {
@@ -545,6 +551,7 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
     // 处理上帝模式切换（T键）
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDL_KeyCode::SDLK_t) {
         godMode_ = !godMode_;
+        App::setGodMode(godMode_); // 同步到全局状态
         SDL_Log("God mode %s", godMode_ ? "enabled" : "disabled");
         return;
     }
@@ -599,18 +606,20 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         return;
     }
     
-    // 分发到UI按钮（悬停与点击）
-    if (regenerateButton_) {
-        regenerateButton_->handleEvent(e);
+    // 分发到UI按钮（悬停与点击）- 只在上帝模式下处理
+    if (godMode_) {
+        if (regenerateButton_) {
+            regenerateButton_->handleEvent(e);
+        }
+        for (auto* b : difficultyButtons_) {
+            if (b) b->handleEvent(e);
+        }
+        if (backToTestButton_) backToTestButton_->handleEvent(e);
+        if (testMinerButton_) testMinerButton_->handleEvent(e);
+        if (testFishermanButton_) testFishermanButton_->handleEvent(e);
+        if (testHunterButton_) testHunterButton_->handleEvent(e);
+        if (testFinalBossButton_) testFinalBossButton_->handleEvent(e);
     }
-    for (auto* b : difficultyButtons_) {
-        if (b) b->handleEvent(e);
-    }
-    if (backToTestButton_) backToTestButton_->handleEvent(e);
-    if (testMinerButton_) testMinerButton_->handleEvent(e);
-    if (testFishermanButton_) testFishermanButton_->handleEvent(e);
-    if (testHunterButton_) testHunterButton_->handleEvent(e);
-    if (testFinalBossButton_) testFinalBossButton_->handleEvent(e);
 
     // 滚轮滚动地图（仅在上帝模式下生效）
     if (e.type == SDL_MOUSEWHEEL && godMode_) {
@@ -678,6 +687,9 @@ void MapExploreState::update(App& app, float dt) {
     // 更新玩家移动动画
     updatePlayerMoveAnimation(dt);
     
+    // 更新事件图标动画
+    updateEventIcons(dt);
+    
     // 移动动画推进
     if (isMoving_) {
         moveT_ += dt / moveDuration_;
@@ -730,9 +742,11 @@ void MapExploreState::update(App& app, float dt) {
         }
         
         std::cout << "[MAPEXPLORE] 随机选择战斗: 地形=" << currentBiome 
-                  << ", 层数=" << currentLayer << ", 战斗ID=" << battleId << std::endl;
+                  << ", 层数=" << currentLayer << ", 战斗ID=" << battleId << ", 战斗类型=" << currentBattleType_ << std::endl;
         
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState(battleId))));
+        // 根据战斗类型决定是否为意境之斗
+        bool isEngraveBattle = (currentBattleType_ == u8"意境之斗");
+        app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState(battleId, isEngraveBattle))));
         return;
     }
     
@@ -848,11 +862,11 @@ void MapExploreState::update(App& app, float dt) {
 void MapExploreState::render(App& app) {
     SDL_Renderer* r = app.getRenderer();
     
-    // 清屏
-    SDL_SetRenderDrawColor(r, 20, 20, 40, 255);
+    // 清屏 - 灰白色背景
+    SDL_SetRenderDrawColor(r, 180, 180, 180, 255);
     SDL_RenderClear(r);
     
-    // 渲染标题
+    // 渲染标题（已删除"地图探索"标题）
     renderTitle(r);
     
     // 渲染地图
@@ -861,41 +875,44 @@ void MapExploreState::render(App& app) {
     // 渲染左侧UI信息
     renderLeftSideUI(r);
     
-    // 渲染按钮
-    if (regenerateButton_) {
-        try {
-            regenerateButton_->render(r);
-        } catch (...) {
-            // 如果按钮渲染失败，忽略错误
+    // 渲染按钮（只在上帝模式下显示）
+    if (godMode_) {
+        if (regenerateButton_) {
+            try {
+                regenerateButton_->render(r);
+            } catch (...) {
+                // 如果按钮渲染失败，忽略错误
+            }
+        }
+        
+        // 渲染复杂度按钮
+        for (auto* b : difficultyButtons_) {
+            if (!b) continue;
+            try {
+                b->render(r);
+            } catch (...) {
+            }
+        }
+        if (backToTestButton_) {
+            try { backToTestButton_->render(r); } catch (...) {}
+        }
+        if (testMinerButton_) {
+            try { testMinerButton_->render(r); } catch (...) {}
+        }
+        if (testFishermanButton_) {
+            try { testFishermanButton_->render(r); } catch (...) {}
+        }
+        if (testHunterButton_) {
+            try { testHunterButton_->render(r); } catch (...) {}
+        }
+        if (testFinalBossButton_) {
+            try { testFinalBossButton_->render(r); } catch (...) {}
         }
     }
     
     // 渲染上帝模式提示
     if (godMode_) {
         renderGodModeIndicator(r);
-    }
-    // 渲染复杂度按钮
-    for (auto* b : difficultyButtons_) {
-        if (!b) continue;
-        try {
-            b->render(r);
-        } catch (...) {
-        }
-    }
-    if (backToTestButton_) {
-        try { backToTestButton_->render(r); } catch (...) {}
-    }
-    if (testMinerButton_) {
-        try { testMinerButton_->render(r); } catch (...) {}
-    }
-    if (testFishermanButton_) {
-        try { testFishermanButton_->render(r); } catch (...) {}
-    }
-    if (testHunterButton_) {
-        try { testHunterButton_->render(r); } catch (...) {}
-    }
-    if (testFinalBossButton_) {
-        try { testFinalBossButton_->render(r); } catch (...) {}
     }
     
     // 绘制操作说明（右下角）
@@ -932,15 +949,7 @@ void MapExploreState::render(App& app) {
 }
 
 void MapExploreState::renderTitle(SDL_Renderer* renderer) {
-    if (titleTex_) {
-        SDL_Rect titleRect = {
-            (screenW_ - titleW_) / 2,
-            50,
-            titleW_,
-            titleH_
-        };
-        SDL_RenderCopy(renderer, titleTex_, nullptr, &titleRect);
-    }
+    // 已删除"地图探索"标题渲染
     // 显示当前层环境
     if (smallFont_) {
         auto& ms = MapStore::instance();
@@ -2025,6 +2034,9 @@ void MapExploreState::renderMap(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_Rect r{ sx - 10, sy - 10, 20, 20 };  // 从12x12增大到20x20
         SDL_RenderFillRect(renderer, &r);
+        
+        // 绘制移动中的倒三角标注
+        drawTriangleMarker(renderer, sx, sy - 25, 30);
     }
     
     // 绘制玩家移动动画（Boss战胜利后的向上移动）
@@ -2047,6 +2059,9 @@ void MapExploreState::renderMap(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 100);
         SDL_Rect glow{ sx - 20, sy - 20, 40, 40 };
         SDL_RenderFillRect(renderer, &glow);
+        
+        // 绘制移动中的倒三角标注
+        drawTriangleMarker(renderer, sx, sy - 25, 30);
     }
 }
 
@@ -2058,94 +2073,14 @@ void MapExploreState::renderNode(SDL_Renderer* renderer, const MapNode& node, in
     bool isCurrentNode = (playerCurrentNode_ != -1 && index == playerCurrentNode_);
     bool isAccessible = (playerCurrentNode_ != -1 && isNodeAccessible(index));
     
-    // 设置节点颜色
-    switch (node.type) {
-        case MapNode::NodeType::START:
-            SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255); // 棕色
-            break;
-        case MapNode::NodeType::BOSS:
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // 红色
-            break;
-        case MapNode::NodeType::ELITE:
-            SDL_SetRenderDrawColor(renderer, 255, 215, 0, 255); // 金色
-            break;
-        case MapNode::NodeType::SHOP:
-            SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255); // 蓝色
-            break;
-        case MapNode::NodeType::EVENT:
-            SDL_SetRenderDrawColor(renderer, 138, 43, 226, 255); // 紫色
-            break;
-        default:
-            SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255); // 灰色
-            break;
-    }
+    // 不再绘制节点的颜色方块，只保留图标
     
-    // 绘制节点
-    SDL_Rect nodeRect = {
-        x - node.size / 2,
-        y - node.size / 2,
-        node.size,
-        node.size
-    };
-    SDL_RenderFillRect(renderer, &nodeRect);
+    // 渲染事件图标
+    renderEventIcon(renderer, node, x, y);
     
-    // 绘制边框 - 根据节点状态使用不同颜色
+    // 如果是当前位置，在节点上方绘制倒三角标注
     if (isCurrentNode) {
-        // 当前节点：亮黄色粗边框（增大边框范围，保持厚度）
-        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-        for (int i = 0; i < 4; ++i) {
-            SDL_Rect borderRect = {
-                nodeRect.x - i - 8,  // 向左扩展8像素
-                nodeRect.y - i - 8,  // 向上扩展8像素
-                nodeRect.w + 2 * i + 16,  // 宽度增加16像素
-                nodeRect.h + 2 * i + 16   // 高度增加16像素
-            };
-            SDL_RenderDrawRect(renderer, &borderRect);
-        }
-    } else if (isAccessible) {
-        // 可访问节点：亮绿色粗边框（增大边框范围，保持厚度）
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-        for (int i = 0; i < 3; ++i) {
-            SDL_Rect borderRect = {
-                nodeRect.x - i - 6,  // 向左扩展6像素
-                nodeRect.y - i - 6,  // 向上扩展6像素
-                nodeRect.w + 2 * i + 12,  // 宽度增加12像素
-                nodeRect.h + 2 * i + 12   // 高度增加12像素
-            };
-            SDL_RenderDrawRect(renderer, &borderRect);
-        }
-    } else {
-        // 不可访问节点：普通白色边框
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDrawRect(renderer, &nodeRect);
-    }
-    
-    // 绘制节点类型文字标识（代替数字）
-    if (smallFont_) {
-        const char* label = nullptr;
-        if (!node.label.empty()) {
-            label = node.label.c_str();
-        } else {
-            switch (node.type) {
-                case MapNode::NodeType::START: label = u8"起点"; break;
-                case MapNode::NodeType::BOSS:  label = u8"BOSS"; break;
-                case MapNode::NodeType::ELITE: label = u8"战斗"; break;
-                case MapNode::NodeType::SHOP:  label = u8"以物易物"; break;
-                case MapNode::NodeType::EVENT: label = u8"事件"; break;
-                default: label = u8"节点"; break;
-            }
-        }
-        SDL_Color textColor{ 255, 255, 255, 255 };
-        SDL_Surface* textSurface = TTF_RenderUTF8_Blended(smallFont_, label, textColor);
-        if (textSurface) {
-            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-            if (textTexture) {
-                SDL_Rect textRect = { x - textSurface->w / 2, y - textSurface->h / 2, textSurface->w, textSurface->h };
-                SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
-                SDL_DestroyTexture(textTexture);
-            }
-            SDL_FreeSurface(textSurface);
-        }
+        drawTriangleMarker(renderer, x, y - node.size/2 - 25, 30);
     }
 }
 
@@ -2325,8 +2260,9 @@ void MapExploreState::renderConnection(SDL_Renderer* renderer, int fromGlobalInd
     // 使用全局索引获取显示坐标（含随机美化位移）
     int fx, fy; getScreenXYForGlobalIndex(fromGlobalIndex, fx, fy);
     int tx, ty; getScreenXYForGlobalIndex(toGlobalIndex, tx, ty);
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDrawLine(renderer, fx, fy, tx, ty);
+    // 使用深灰色粗虚线，在灰白色背景下更清晰
+    SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+    drawDashedLine(renderer, fx, fy, tx, ty, 8, 4); // 8像素线段，4像素间隔
 }
 
 SDL_Point MapExploreState::gridToScreen(int gridX, int gridY) const {
@@ -2622,6 +2558,7 @@ void MapExploreState::movePlayerToNode(int nodeIndex) {
         // 根据节点标签进入对应界面
         if (!node->label.empty()) {
             if (node->label == u8"诗剑之争" || node->label == u8"意境之斗") {
+                currentBattleType_ = node->label;  // 存储战斗类型
                 pendingGoBattle_ = true;
             } else if (node->label == u8"以物易物") {
                 pendingGoBarter_ = true;
@@ -2690,13 +2627,13 @@ void MapExploreState::renderLeftSideUI(SDL_Renderer* renderer) {
     
     // 背景框 - 更大
     SDL_Rect bgRect = { 10, 80, 250, 400 };
-    SDL_SetRenderDrawColor(renderer, 30, 30, 50, 200); // 半透明深色背景
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 180); // 半透明浅灰色背景
     SDL_RenderFillRect(renderer, &bgRect);
-    SDL_SetRenderDrawColor(renderer, 100, 100, 150, 255); // 边框
+    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255); // 深灰色边框
     SDL_RenderDrawRect(renderer, &bgRect);
     
     // 标题 - 使用更大的字体
-    SDL_Color titleColor{ 255, 255, 200, 255 }; // 浅黄色
+    SDL_Color titleColor{ 0, 0, 0, 255 }; // 纯黑色，更明显
     SDL_Surface* titleSurface = TTF_RenderUTF8_Blended(smallFont_, u8"当前状态", titleColor);
     if (titleSurface) {
         SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(renderer, titleSurface);
@@ -2714,7 +2651,7 @@ void MapExploreState::renderLeftSideUI(SDL_Renderer* renderer) {
     auto& itemStore = ItemStore::instance();
     const auto& items = itemStore.items();
     
-    SDL_Color itemColor{ 200, 200, 255, 255 }; // 浅蓝色
+    SDL_Color itemColor{ 0, 100, 200, 255 }; // 深蓝色，更明显
     std::string itemText = u8"道具总数: " + std::to_string(itemStore.totalCount());
     SDL_Surface* itemSurface = TTF_RenderUTF8_Blended(smallFont_, itemText.c_str(), itemColor);
     if (itemSurface) {
@@ -2751,7 +2688,7 @@ void MapExploreState::renderLeftSideUI(SDL_Renderer* renderer) {
     auto& wenMaiStore = WenMaiStore::instance();
     int totalWenMai = wenMaiStore.get();
     
-    SDL_Color wenMaiColor{ 255, 200, 200, 255 }; // 浅红色
+    SDL_Color wenMaiColor{ 200, 0, 0, 255 }; // 深红色，更明显
     std::string wenMaiText = u8"文脉: " + std::to_string(totalWenMai);
     SDL_Surface* wenMaiSurface = TTF_RenderUTF8_Blended(smallFont_, wenMaiText.c_str(), wenMaiColor);
     if (wenMaiSurface) {
@@ -2772,7 +2709,7 @@ void MapExploreState::renderLeftSideUI(SDL_Renderer* renderer) {
         biome = ms.layerBiomes()[currentMapLayer_];
     }
     if (!biome.empty()) {
-        SDL_Color tipColor{ 200, 230, 255, 255 };
+        SDL_Color tipColor{ 0, 150, 0, 255 }; // 深绿色，更明显
         std::string tip = u8"当前层环境：" + biome;
         SDL_Surface* tipSurface = TTF_RenderUTF8_Blended(smallFont_, tip.c_str(), tipColor);
         if (tipSurface) {
@@ -2909,5 +2846,298 @@ void MapExploreState::updatePlayerMoveAnimation(float dt) {
                 }
             }
         }
+    }
+}
+
+// ==================== 事件图标系统实现 ====================
+
+void MapExploreState::loadEventIcons(SDL_Renderer* renderer) {
+    // 初始化节点类型到图标的映射
+    nodeTypeToIcon_[MapNode::NodeType::START] = "animated_campfire";
+    nodeTypeToIcon_[MapNode::NodeType::BOSS] = "animated_bossnode_leshy";
+    nodeTypeToIcon_[MapNode::NodeType::ELITE] = "animated_cardbattlenode";
+    nodeTypeToIcon_[MapNode::NodeType::SHOP] = "animated_buypelts";
+    nodeTypeToIcon_[MapNode::NodeType::EVENT] = "animated_cardchoicenode";
+    
+    // 加载静态图标
+    std::vector<std::string> staticIcons = {
+        "moon_portrait"
+    };
+    
+    for (const auto& iconName : staticIcons) {
+        std::string path = "assets/events/Texture2D/" + iconName + ".png";
+        SDL_Surface* surface = IMG_Load(path.c_str());
+        if (surface) {
+            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+            if (texture) {
+                eventIcons_[iconName] = {texture, 1, 0, 0.0f, 0.5f};
+                std::cout << "[ICON LOAD] 加载静态图标: " << iconName << std::endl;
+            }
+            SDL_FreeSurface(surface);
+        }
+    }
+    
+    // 加载动画图标
+    std::vector<std::string> animatedIcons = {
+        // Boss图标
+        "animated_bossnode_leshy",
+        "animated_bossnode_prospector", 
+        "animated_bossnode_angler",
+        "animated_bossnode_trappertrader",
+        
+        // 事件图标（直接使用您提供的名称）
+        "animated_boulderchoice",
+        "animated_buildtotemnode",
+        "animated_buypelts",
+        "animated_backpack",
+        "animated_campfire",
+        "animated_cardbattlenode",
+        "animated_cardchoicenode",
+        "animated_cardchoicenode_cost",
+        "animated_cardchoicenode_tribe",
+        "animated_cardmergenode",
+        "animated_copycard",
+        "animated_decktrialnode",
+        "animated_mushrooms",
+        "animated_removecardnode",
+        "animated_totembattlenode",
+        "animated_tradepelts"
+    };
+    
+    for (const auto& iconName : animatedIcons) {
+        // 直接加载对应的图标文件
+        std::string path = "assets/events/Texture2D/" + iconName + "_1.png";
+        SDL_Surface* surface = IMG_Load(path.c_str());
+        if (surface) {
+            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+            if (texture) {
+                eventIcons_[iconName] = {texture, 4, 0, 0.0f, 0.5f};
+                std::cout << "[ICON LOAD] 成功加载图标: " << iconName << " 路径: " << path << std::endl;
+            } else {
+                std::cout << "[ICON LOAD] 纹理创建失败: " << iconName << " 路径: " << path << std::endl;
+            }
+            SDL_FreeSurface(surface);
+        } else {
+            std::cout << "[ICON LOAD] 文件加载失败: " << iconName << " 路径: " << path << " 错误: " << IMG_GetError() << std::endl;
+        }
+    }
+}
+
+void MapExploreState::updateEventIcons(float dt) {
+    // 静态图标不需要动画更新
+    // 如果需要动画，可以在这里添加动画逻辑
+}
+
+void MapExploreState::renderEventIcon(SDL_Renderer* renderer, const MapNode& node, int x, int y) {
+    std::string iconName = getIconNameForNode(node);
+    if (iconName.empty()) {
+        std::cout << "[ICON RENDER] 节点 " << node.label << " 没有图标" << std::endl;
+        return;
+    }
+    
+    auto it = eventIcons_.find(iconName);
+    if (it == eventIcons_.end()) {
+        std::cout << "[ICON RENDER] 图标 " << iconName << " 未找到，节点: " << node.label << std::endl;
+        return;
+    }
+    
+    std::cout << "[ICON RENDER] 渲染图标: " << iconName << " 节点: " << node.label << std::endl;
+    
+    const auto& icon = it->second;
+    if (!icon.texture) return;
+    
+    // 获取纹理尺寸
+    int texW, texH;
+    SDL_QueryTexture(icon.texture, nullptr, nullptr, &texW, &texH);
+    
+    // 计算渲染尺寸（比节点稍大）
+    int renderSize = static_cast<int>(node.size * 1.2f);
+    int offsetX = (node.size - renderSize) / 2;
+    int offsetY = (node.size - renderSize) / 2;
+    
+    SDL_Rect destRect = {
+        x - renderSize/2 + offsetX,
+        y - renderSize/2 + offsetY,
+        renderSize,
+        renderSize
+    };
+    
+    SDL_RenderCopy(renderer, icon.texture, nullptr, &destRect);
+}
+
+std::string MapExploreState::getIconNameForNode(const MapNode& node) {
+    std::cout << "[ICON SELECT] 节点标签: '" << node.label << "' 类型: " << (int)node.type << std::endl;
+    
+    // 根据节点标签选择图标，不区分节点类型
+    if (node.label == u8"矿工Boss") {
+        std::cout << "[ICON SELECT] 匹配到矿工Boss -> animated_bossnode_prospector" << std::endl;
+        return "animated_bossnode_prospector";
+    }
+    if (node.label == u8"渔夫Boss") {
+        std::cout << "[ICON SELECT] 匹配到渔夫Boss -> animated_bossnode_angler" << std::endl;
+        return "animated_bossnode_angler";
+    }
+    if (node.label == u8"猎人Boss") {
+        std::cout << "[ICON SELECT] 匹配到猎人Boss -> animated_bossnode_trappertrader" << std::endl;
+        return "animated_bossnode_trappertrader";
+    }
+    if (node.label == u8"最终Boss") {
+        std::cout << "[ICON SELECT] 匹配到最终Boss -> animated_bossnode_leshy" << std::endl;
+        return "animated_bossnode_leshy";
+    }
+    
+    // 所有事件标签
+    if (node.label == u8"寻物人") {
+        std::cout << "[ICON SELECT] 匹配到寻物人 -> animated_boulderchoice" << std::endl;
+        return "animated_boulderchoice";
+    }
+    if (node.label == u8"意境刻画") {
+        std::cout << "[ICON SELECT] 匹配到意境刻画 -> animated_buildtotemnode" << std::endl;
+        return "animated_buildtotemnode";
+    }
+    if (node.label == u8"墨坊") {
+        std::cout << "[ICON SELECT] 匹配到墨坊 -> animated_buypelts" << std::endl;
+        return "animated_buypelts";
+    }
+    if (node.label == u8"墨宝拾遗") {
+        std::cout << "[ICON SELECT] 匹配到墨宝拾遗 -> animated_backpack" << std::endl;
+        return "animated_backpack";
+    }
+    if (node.label == u8"淬炼") {
+        std::cout << "[ICON SELECT] 匹配到淬炼 -> animated_campfire" << std::endl;
+        return "animated_campfire";
+    }
+    if (node.label == u8"诗剑之争") {
+        std::cout << "[ICON SELECT] 匹配到诗剑之争 -> animated_cardbattlenode" << std::endl;
+        return "animated_cardbattlenode";
+    }
+    if (node.label == u8"记忆修复(随机)") {
+        std::cout << "[ICON SELECT] 匹配到记忆修复(随机) -> animated_cardchoicenode" << std::endl;
+        return "animated_cardchoicenode";
+    }
+    if (node.label == u8"记忆修复(已知消耗)") {
+        std::cout << "[ICON SELECT] 匹配到记忆修复(已知消耗) -> animated_cardchoicenode_cost" << std::endl;
+        return "animated_cardchoicenode_cost";
+    }
+    if (node.label == u8"记忆修复(已知部族)") {
+        std::cout << "[ICON SELECT] 匹配到记忆修复(已知部族) -> animated_cardchoicenode_tribe" << std::endl;
+        return "animated_cardchoicenode_tribe";
+    }
+    if (node.label == u8"文脉传承") {
+        std::cout << "[ICON SELECT] 匹配到文脉传承 -> animated_cardmergenode" << std::endl;
+        return "animated_cardmergenode";
+    }
+    if (node.label == u8"墨鬼") {
+        std::cout << "[ICON SELECT] 匹配到墨鬼 -> animated_copycard" << std::endl;
+        return "animated_copycard";
+    }
+    if (node.label == u8"文心试炼") {
+        std::cout << "[ICON SELECT] 匹配到文心试炼 -> animated_decktrialnode" << std::endl;
+        return "animated_decktrialnode";
+    }
+    if (node.label == u8"合卷") {
+        std::cout << "[ICON SELECT] 匹配到合卷 -> animated_mushrooms" << std::endl;
+        return "animated_mushrooms";
+    }
+    if (node.label == u8"焚书") {
+        std::cout << "[ICON SELECT] 匹配到焚书 -> animated_removecardnode" << std::endl;
+        return "animated_removecardnode";
+    }
+    if (node.label == u8"意境之斗") {
+        std::cout << "[ICON SELECT] 匹配到意境之斗 -> animated_totembattlenode" << std::endl;
+        return "animated_totembattlenode";
+    }
+    if (node.label == u8"以物易物") {
+        std::cout << "[ICON SELECT] 匹配到以物易物 -> animated_tradepelts" << std::endl;
+        return "animated_tradepelts";
+    }
+    
+    // 起点节点不显示图标
+    if (node.type == MapNode::NodeType::START) {
+        std::cout << "[ICON SELECT] 起点节点，不显示图标" << std::endl;
+        return "";
+    }
+    
+    // 默认图标
+    std::cout << "[ICON SELECT] 未匹配到任何标签，使用默认图标: animated_cardchoicenode" << std::endl;
+    return "animated_cardchoicenode";
+}
+
+void MapExploreState::drawDashedLine(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int dashLength, int gapLength) {
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    float distance = sqrtf(dx * dx + dy * dy);
+    
+    if (distance == 0) return;
+    
+    float unitX = dx / distance;
+    float unitY = dy / distance;
+    
+    float currentDistance = 0;
+    bool drawing = true;
+    
+    while (currentDistance < distance) {
+        float startX = x1 + currentDistance * unitX;
+        float startY = y1 + currentDistance * unitY;
+        
+        float segmentLength = drawing ? dashLength : gapLength;
+        float endDistance = currentDistance + segmentLength;
+        
+        if (endDistance > distance) {
+            endDistance = distance;
+        }
+        
+        if (drawing) {
+            float endX = x1 + endDistance * unitX;
+            float endY = y1 + endDistance * unitY;
+            
+            // 绘制粗线条（5像素宽）
+            for (int i = 0; i < 5; ++i) {
+                SDL_RenderDrawLine(renderer, 
+                    static_cast<int>(startX), static_cast<int>(startY + i), 
+                    static_cast<int>(endX), static_cast<int>(endY + i));
+            }
+        }
+        
+        currentDistance = endDistance;
+        drawing = !drawing;
+    }
+}
+
+void MapExploreState::drawTriangleMarker(SDL_Renderer* renderer, int x, int y, int size) {
+    // 设置倒三角颜色（深灰色，在灰白色背景下清晰可见）
+    SDL_SetRenderDrawColor(renderer, 60, 60, 60, 255);
+    
+    // 绘制倒三角（顶点向下，底边向上）
+    int halfSize = size / 2;
+    int topY = y - halfSize;    // 底边在上方（最宽）
+    int bottomY = y + halfSize;  // 顶点在下方（最窄）
+    
+    // 倒三角扫描线算法（顶点向下）
+    for (int scanY = topY; scanY <= bottomY; scanY++) {
+        // 计算当前行的宽度（从底边最宽逐渐变窄到顶点）
+        int currentWidth = (bottomY - scanY) * 2;
+        int leftX = x - currentWidth / 2;
+        int rightX = x + currentWidth / 2;
+        SDL_RenderDrawLine(renderer, leftX, scanY, rightX, scanY);
+    }
+}
+
+void MapExploreState::drawTriangleMarkerWithAlpha(SDL_Renderer* renderer, int x, int y, int size, Uint8 alpha) {
+    // 设置倒三角颜色（深灰色，支持透明度）
+    SDL_SetRenderDrawColor(renderer, 60, 60, 60, alpha);
+    
+    // 绘制倒三角（顶点向下，底边向上）
+    int halfSize = size / 2;
+    int topY = y - halfSize;    // 底边在上方（最宽）
+    int bottomY = y + halfSize;  // 顶点在下方（最窄）
+    
+    // 倒三角扫描线算法（顶点向下）
+    for (int scanY = topY; scanY <= bottomY; scanY++) {
+        // 计算当前行的宽度（从底边最宽逐渐变窄到顶点）
+        int currentWidth = (bottomY - scanY) * 2;
+        int leftX = x - currentWidth / 2;
+        int rightX = x + currentWidth / 2;
+        SDL_RenderDrawLine(renderer, leftX, scanY, rightX, scanY);
     }
 }

@@ -44,6 +44,13 @@ public:
 		if (remainingCandles_ < 2) remainingCandles_++; 
 	}
 	static void resetCandles() { remainingCandles_ = 2; }
+	
+	// 全局印记提示系统
+	static void showMarkTooltip(const std::string& markName, const std::string& description, int x, int y);
+	static void hideMarkTooltip();
+	static bool isMarkTooltipVisible() { return showMarkTooltip_; }
+	static void getMarkTooltipInfo(std::string& markName, std::string& description, int& x, int& y);
+	static void renderMarkTooltip();
 
 private:
 	SDL_Window* window_ = nullptr;
@@ -59,6 +66,12 @@ private:
 	static std::string selectedInitialDeck_;
 	// 蜡烛系统（游戏生命值）
 	static int remainingCandles_;
+	// 全局印记提示系统
+	static bool showMarkTooltip_;
+	static std::string tooltipMarkName_;
+	static std::string tooltipDescription_;
+	static int tooltipMouseX_;
+	static int tooltipMouseY_;
 };
 
 

@@ -187,7 +187,7 @@ void EngraveState::render(App& app) {
 		}
 	}
 
-	if (backButton_) backButton_->render(r);
+	if (backButton_ && App::isGodMode()) backButton_->render(r);
     {
         // 简易填充圆绘制
         auto drawFilledCircle = [&](int cx, int cy, int radius, SDL_Color fill, SDL_Color border) {

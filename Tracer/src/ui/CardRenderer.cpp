@@ -1,5 +1,6 @@
 #include "CardRenderer.h"
 #include "../core/App.h"
+#include "../core/MarkEffectDatabase.h"
 
 static void drawDropOrBone(SDL_Renderer* r, bool bone, int x, int y, int size) {
     if (bone) {
@@ -207,6 +208,118 @@ void CardRenderer::renderCard(App& app,
             }
         }
     }
+}
+
+std::string CardRenderer::getClickedMark(const Card& card, 
+                                         const SDL_Rect& rect, 
+                                         int mouseX, int mouseY,
+                                         _TTF_Font* statFont) {
+    if (!statFont || card.marks.empty()) return "";
+    
+    // 计算印记区域位置（与渲染逻辑保持一致）
+    int lineY = 0;
+    // 这里需要重新计算lineY，与renderCard中的逻辑保持一致
+    // 简化处理：假设印记在卡牌下半部分
+    int startY = rect.y + rect.h * 0.6f; // 印记区域开始位置
+    int desiredStatH = SDL_max(8, (int)(rect.h * 0.10f));
+    int lineHeight = desiredStatH + 2;
+    
+    int idx = 0;
+    for (const auto& m : card.marks) {
+        if (m == "消耗骨头") continue;
+        
+        // 计算当前印记的位置
+        int markY = startY + idx * lineHeight;
+        int markH = desiredStatH;
+        
+        // 检查鼠标是否在此印记区域内
+        if (mouseY >= markY && mouseY <= markY + markH &&
+            mouseX >= rect.x && mouseX <= rect.x + rect.w) {
+            return m;
+        }
+        idx++;
+    }
+    
+    return "";
+}
+
+void CardRenderer::handleMarkClick(const Card& card, 
+                                   const SDL_Rect& rect, 
+                                   int mouseX, int mouseY,
+                                   _TTF_Font* statFont) {
+    std::string clickedMark = getClickedMark(card, rect, mouseX, mouseY, statFont);
+    if (!clickedMark.empty()) {
+        std::string description = MarkEffectDatabase::instance().getMarkDescription(clickedMark);
+        App::showMarkTooltip(clickedMark, description, mouseX, mouseY);
+    }
+}
+
+void CardRenderer::renderMarkTooltip(App& app, 
+                                     const std::string& markName,
+                                     const std::string& description,
+                                     int x, int y,
+                                     _TTF_Font* font) {
+    if (!font) return;
+    
+    SDL_Renderer* r = app.getRenderer();
+    
+    // 获取描述文本
+    std::string fullText = markName + ": " + description;
+    
+    // 渲染文本
+    SDL_Color textColor{255, 255, 255, 255};
+    SDL_Surface* textSurface = TTF_RenderUTF8_Blended(font, fullText.c_str(), textColor);
+    if (!textSurface) return;
+    
+    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(r, textSurface);
+    if (!textTexture) {
+        SDL_FreeSurface(textSurface);
+        return;
+    }
+    
+    // 计算提示框大小
+    int padding = 8;
+    int tooltipW = textSurface->w + padding * 2;
+    int tooltipH = textSurface->h + padding * 2;
+    
+    // 调整位置，避免超出屏幕
+    int finalX = x;
+    int finalY = y - tooltipH - 5; // 在鼠标上方显示
+    
+    if (finalY < 0) finalY = y + 20; // 如果上方空间不够，显示在下方
+    // 获取屏幕宽度（通过窗口获取）
+    int screenW, screenH;
+    SDL_GetWindowSize(app.getWindow(), &screenW, &screenH);
+    if (finalX + tooltipW > screenW) finalX = screenW - tooltipW;
+    if (finalX < 0) finalX = 0;
+    
+    // 绘制背景
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 200);
+    SDL_Rect bgRect{finalX, finalY, tooltipW, tooltipH};
+    SDL_RenderFillRect(r, &bgRect);
+    
+    // 绘制边框
+    SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
+    SDL_RenderDrawRect(r, &bgRect);
+    
+    // 绘制文本
+    SDL_Rect textRect{finalX + padding, finalY + padding, textSurface->w, textSurface->h};
+    SDL_RenderCopy(r, textTexture, nullptr, &textRect);
+    
+    // 清理
+    SDL_DestroyTexture(textTexture);
+    SDL_FreeSurface(textSurface);
+}
+
+// 全局印记提示渲染（供所有状态使用）
+void CardRenderer::renderGlobalMarkTooltip(App& app, _TTF_Font* font) {
+    if (!App::isMarkTooltipVisible() || !font) return;
+    
+    std::string markName, description;
+    int x, y;
+    App::getMarkTooltipInfo(markName, description, x, y);
+    
+    renderMarkTooltip(app, markName, description, x, y, font);
 }
 
 

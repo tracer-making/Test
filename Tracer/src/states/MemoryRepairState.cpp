@@ -117,6 +117,29 @@ void MemoryRepairState::onEnter(App& app) {
 }
 void MemoryRepairState::onExit(App& app) {}
 void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
+	// 处理印记提示
+	if (e.type == SDL_MOUSEMOTION) {
+		// 鼠标移动时隐藏印记提示
+		App::hideMarkTooltip();
+	}
+	else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+		// 右键点击检测印记
+		int mouseX = e.button.x;
+		int mouseY = e.button.y;
+		
+		// 检查候选卡牌中的印记
+		for (int i = 0; i < (int)candidates_.size(); ++i) {
+			const auto& c = candidates_[i];
+			if (mouseX >= c.rect.x && mouseX <= c.rect.x + c.rect.w &&
+				mouseY >= c.rect.y && mouseY <= c.rect.y + c.rect.h) {
+				CardRenderer::handleMarkClick(c.card, c.rect, mouseX, mouseY, cardStatFont_);
+				if (App::isMarkTooltipVisible()) {
+					return;
+				}
+			}
+		}
+	}
+	
 	// 处理返回按钮事件
 	if (backButton_) backButton_->handleEvent(e);
 	// 处理重新抽卡按钮事件（Boss战胜利时不处理）
@@ -174,8 +197,8 @@ void MemoryRepairState::render(App& app) {
 		}
 	}
 
-	// 返回按钮
-	if (backButton_) backButton_->render(r);
+	// 返回按钮（只在上帝模式下显示）
+	if (backButton_ && App::isGodMode()) backButton_->render(r);
 	// 重新抽卡按钮（Boss战胜利时不渲染）
 	if (rerollButton_ && !rerollUsed_ && !isBossVictory_) rerollButton_->render(r);
 
@@ -279,6 +302,9 @@ void MemoryRepairState::render(App& app) {
 			y += 20;
 		}
 	}
+	
+	// 渲染印记提示
+	CardRenderer::renderGlobalMarkTooltip(app, cardStatFont_);
 }
 
 void MemoryRepairState::buildCandidates() {

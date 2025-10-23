@@ -69,7 +69,7 @@ void InkShopState::render(App& app) {
 	SDL_RenderClear(r);
 
 	if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect dst{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r, titleTex_, nullptr, &dst);} 
-	if (backButton_) backButton_->render(r);
+	if (backButton_ && App::isGodMode()) backButton_->render(r);
 
 	// 文脉与持有之墨
 	if (smallFont_) {

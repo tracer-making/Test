@@ -276,8 +276,8 @@ void TestState::render(App& app) {
 		SDL_RenderCopy(r, titleTex_, nullptr, &dst);
 	}
 
-	// 渲染返回按钮
-	if (backButton_) backButton_->render(r);
+	// 渲染返回按钮（只在上帝模式下显示）
+	if (backButton_ && App::isGodMode()) backButton_->render(r);
 	
 	// 渲染测试按钮
 	for (auto* button : testButtons_) {

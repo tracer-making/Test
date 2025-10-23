@@ -137,7 +137,28 @@ void CardBrowserState::onExit(App& app) {
 }
 
 void CardBrowserState::handleEvent(App& app, const SDL_Event& event) {
-    if (event.type == SDL_MOUSEBUTTONDOWN) {
+    // 处理印记提示
+    if (event.type == SDL_MOUSEMOTION) {
+        // 鼠标移动时隐藏印记提示
+        App::hideMarkTooltip();
+    }
+    else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
+        // 右键点击检测印记
+        int mouseX = event.button.x;
+        int mouseY = event.button.y;
+        
+        // 检查卡牌中的印记
+        for (size_t i = 0; i < cardRects_.size() && i < filteredCards_.size(); ++i) {
+            if (mouseX >= cardRects_[i].x && mouseX <= cardRects_[i].x + cardRects_[i].w &&
+                mouseY >= cardRects_[i].y && mouseY <= cardRects_[i].y + cardRects_[i].h) {
+                CardRenderer::handleMarkClick(filteredCards_[i], cardRects_[i], mouseX, mouseY, cardStatFont_);
+                if (App::isMarkTooltipVisible()) {
+                    return;
+                }
+            }
+        }
+    }
+    else if (event.type == SDL_MOUSEBUTTONDOWN) {
         int mouseX = event.button.x;
         int mouseY = event.button.y;
         
@@ -233,6 +254,9 @@ void CardBrowserState::render(App& app) {
             SDL_FreeSurface(infoSurface);
         }
     }
+    
+    // 渲染印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, cardStatFont_);
 }
 
 void CardBrowserState::layoutCards() {

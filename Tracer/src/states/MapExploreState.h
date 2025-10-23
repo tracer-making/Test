@@ -8,6 +8,8 @@
 #include <vector>
 #include <random>
 #include <string>
+#include <map>
+#include <SDL_image.h>
 
 class MapExploreState : public State {
 public:
@@ -26,6 +28,10 @@ public:
     // 玩家移动动画
     void startPlayerMoveAnimation(int fromNode, int toNode);
     void updatePlayerMoveAnimation(float dt);
+    
+    // 事件图标系统
+    void loadEventIcons(SDL_Renderer* renderer);
+    void updateEventIcons(float dt);
 
 private:
     // 屏幕尺寸
@@ -44,6 +50,7 @@ private:
     
     // 状态切换
     bool pendingGoBattle_ = false;
+    std::string currentBattleType_ = "";  // 当前战斗类型（"诗剑之争"或"意境之斗"）
     bool pendingGoMinerBoss_ = false;
     bool pendingGoFishermanBoss_ = false;
     bool pendingGoHunterBoss_ = false;
@@ -79,6 +86,22 @@ private:
         int size = 44;               // 渲染大小（放大）
         std::string label;           // 显示用文字标签（按行随机分配）
     };
+    
+    // 事件图标系统方法声明
+    void renderEventIcon(SDL_Renderer* renderer, const MapNode& node, int x, int y);
+    std::string getIconNameForNode(const MapNode& node);
+    
+    // 事件图标系统
+    struct EventIcon {
+        SDL_Texture* texture = nullptr;
+        int frameCount = 1;
+        int currentFrame = 0;
+        float animTime = 0.0f;
+        float animSpeed = 0.5f; // 动画速度（秒/帧）
+    };
+    
+    std::map<std::string, EventIcon> eventIcons_; // 事件图标映射
+    std::map<MapNode::NodeType, std::string> nodeTypeToIcon_; // 节点类型到图标的映射
     
     // 分层地图结构
     std::vector<std::vector<MapNode>> layerNodes_; // 每层的节点列表
@@ -119,6 +142,9 @@ private:
     bool allPathsFromStartReachBoss();
     bool dfsCheckAllPaths(int current, int target, std::vector<bool>& visited);
     void removeOrphanNodes();
+    void drawDashedLine(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int dashLength, int gapLength); // 绘制虚线
+    void drawTriangleMarker(SDL_Renderer* renderer, int x, int y, int size); // 绘制倒三角标注
+    void drawTriangleMarkerWithAlpha(SDL_Renderer* renderer, int x, int y, int size, Uint8 alpha); // 绘制带透明度的倒三角标注
     
     // 辅助方法
     int getGlobalNodeIndex(int layer, int localIndex) const;

@@ -15,6 +15,12 @@ bool App::godMode_ = false;
 bool App::temperBlessing_ = false;
 std::string App::selectedInitialDeck_ = "";
 int App::remainingCandles_ = 2;
+// 全局印记提示系统
+bool App::showMarkTooltip_ = false;
+std::string App::tooltipMarkName_ = "";
+std::string App::tooltipDescription_ = "";
+int App::tooltipMouseX_ = 0;
+int App::tooltipMouseY_ = 0;
 
 App::App() = default;
 App::~App() { shutdown(); }
@@ -85,6 +91,33 @@ void App::setState(std::unique_ptr<State> nextState) {
 	if (state_) state_->onExit(*this);
 	state_ = std::move(nextState);
 	if (state_) state_->onEnter(*this);
+}
+
+// 全局印记提示系统实现
+void App::showMarkTooltip(const std::string& markName, const std::string& description, int x, int y) {
+	tooltipMarkName_ = markName;
+	tooltipDescription_ = description;
+	tooltipMouseX_ = x;
+	tooltipMouseY_ = y;
+	showMarkTooltip_ = true;
+}
+
+void App::hideMarkTooltip() {
+	showMarkTooltip_ = false;
+}
+
+void App::getMarkTooltipInfo(std::string& markName, std::string& description, int& x, int& y) {
+	markName = tooltipMarkName_;
+	description = tooltipDescription_;
+	x = tooltipMouseX_;
+	y = tooltipMouseY_;
+}
+
+void App::renderMarkTooltip() {
+	if (!showMarkTooltip_) return;
+	
+	// 这里需要字体，但我们没有全局字体，所以让各个状态自己处理
+	// 或者我们可以在这里实现一个简单的文本渲染
 }
 
 

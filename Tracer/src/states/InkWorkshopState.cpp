@@ -138,8 +138,8 @@ void InkWorkshopState::render(App& app) {
     SDL_SetRenderDrawColor(r, 30, 25, 20, 255);
     SDL_RenderClear(r);
     
-    // 渲染返回按钮
-    if (backButton_) backButton_->render(r);
+    // 渲染返回按钮（只在上帝模式下显示）
+    if (backButton_ && App::isGodMode()) backButton_->render(r);
     
     // 渲染标题
     renderTitle(app);

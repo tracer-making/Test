@@ -142,6 +142,8 @@
     <ClCompile Include="src\core\ItemStore.cpp" />
     <ClCompile Include="src\core\Deck.cpp" />
     <ClCompile Include="src\core\Cards.cpp" />
+    <ClCompile Include="src\core\EnemyEngraveStore.cpp" />
+    <ClCompile Include="src\core\MarkEffectDatabase.cpp" />
     <ClCompile Include="src\ui\Button.cpp" />
     <ClCompile Include="src\ui\CardRenderer.cpp" />
     <ClCompile Include="src\states\BattleState.cpp" />
@@ -175,6 +177,8 @@
     <ClInclude Include="src\core\Card.h" />
     <ClInclude Include="src\core\Deck.h" />
     <ClInclude Include="src\core\Cards.h" />
+    <ClInclude Include="src\core\EnemyEngraveStore.h" />
+    <ClInclude Include="src\core\MarkEffectDatabase.h" />
     <ClInclude Include="src\core\State.h" />
     <ClInclude Include="src\ui\Button.h" />
     <ClInclude Include="src\ui\CardRenderer.h" />

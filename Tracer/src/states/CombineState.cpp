@@ -168,7 +168,7 @@ void CombineState::update(App& app, float dt) {
 void CombineState::render(App& app) {
     SDL_Renderer* r = app.getRenderer(); SDL_SetRenderDrawColor(r, 18,22,32,255); SDL_RenderClear(r);
     if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect d{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r,titleTex_,nullptr,&d); }
-    if (backButton_) backButton_->render(r);
+    if (backButton_ && App::isGodMode()) backButton_->render(r);
     if (combineButton_ && pairLibIndexA_ >= 0 && pairLibIndexB_ >= 0) combineButton_->render(r);
 
     // 渲染融合动画

@@ -428,8 +428,8 @@ void BarterState::render(App& app) {
         SDL_RenderCopy(app.getRenderer(), titleTex_, nullptr, &titleRect);
     }
     
-    // 渲染返回按钮（只有在没有毛皮时显示）
-    if (backButton_ && !hasFurCards()) backButton_->render(app.getRenderer());
+    // 渲染返回按钮（在上帝模式下显示，或者在没有毛皮时显示）
+    if (backButton_ && (App::isGodMode() || !hasFurCards())) backButton_->render(app.getRenderer());
     
     if (hasFur_ && currentTradeType_ != TradeType::None) {
         // 渲染左侧玩家毛皮卡牌（只显示一张，带数量）

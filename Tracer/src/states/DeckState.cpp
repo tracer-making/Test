@@ -59,6 +59,35 @@ void DeckState::onExit(App& app) {}
 
 void DeckState::handleEvent(App& app, const SDL_Event& e) {
 	if (backButton_) backButton_->handleEvent(e);
+	
+	// 处理印记提示
+	if (e.type == SDL_MOUSEMOTION) {
+		// 鼠标移动时隐藏印记提示
+		App::hideMarkTooltip();
+	}
+	else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+		// 右键点击检测印记
+		int mouseX = e.button.x;
+		int mouseY = e.button.y;
+		
+		// 检查卡牌网格中的印记
+		for (size_t i = 0; i < cards_.size(); ++i) {
+			const SDL_Rect& cardRect = cards_[i].rect;
+			if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+				mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+				// 转换 CardView 为 Card
+				Card card;
+				card.name = cards_[i].name;
+				card.attack = cards_[i].attack;
+				card.health = cards_[i].health;
+				card.marks = cards_[i].marks;
+				CardRenderer::handleMarkClick(card, cardRect, mouseX, mouseY, statFont_);
+				if (App::isMarkTooltipVisible()) {
+					return;
+				}
+			}
+		}
+	}
 }
 
 void DeckState::update(App& app, float dt) {}
@@ -80,7 +109,7 @@ void DeckState::render(App& app) {
 		SDL_RenderCopy(r, titleTex_, nullptr, &dst);
 	}
 
-	if (backButton_) backButton_->render(r);
+	if (backButton_ && App::isGodMode()) backButton_->render(r);
 
 	// 绘制卡牌网格（统一水墨风格）
 	for (const auto& c : cards_) {
@@ -110,6 +139,9 @@ void DeckState::render(App& app) {
 			SDL_FreeSurface(s);
 		} 
 	}
+	
+	// 渲染印记提示
+	CardRenderer::renderGlobalMarkTooltip(app, statFont_);
 }
 
 void DeckState::buildGlobalDeck() {

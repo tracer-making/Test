@@ -79,7 +79,7 @@ void TemperState::update(App& app, float dt) {
 void TemperState::render(App& app) {
 	SDL_Renderer* r = app.getRenderer(); SDL_SetRenderDrawColor(r, 18,22,32,255); SDL_RenderClear(r);
     if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect d{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r,titleTex_,nullptr,&d); }
-    if (backButton_) backButton_->render(r); if (confirmButton_) confirmButton_->render(r);
+    if (backButton_ && App::isGodMode()) backButton_->render(r); if (confirmButton_) confirmButton_->render(r);
 
     // 中央牌位：若已选择，则显示该牌；否则显示提示底板
     if (selectedLibIndex_ >= 0 && selectedLibIndex_ < (int)libIndices_.size()) {

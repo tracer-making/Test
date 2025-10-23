@@ -252,7 +252,7 @@ void HeritageState::render(App& app) {
 		SDL_RenderCopy(r, titleTex_, nullptr, &dst);
 	}
 
-	if (backButton_) backButton_->render(r);
+	if (backButton_ && App::isGodMode()) backButton_->render(r);
 	
 	// 只有两个牌位都有卡牌时才显示+按钮
 	if (hasSourceCard_ && hasTargetCard_ && plusButton_) {

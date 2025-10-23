@@ -5,6 +5,7 @@
 #include "../ui/CardRenderer.h"
 #include "../core/Card.h"
 #include "../core/Deck.h"
+#include "../core/EnemyEngraveStore.h"
 #include "EnemyPresets.h"
 #include <SDL.h>
 #include <vector>
@@ -14,7 +15,7 @@
 
 class BattleState : public State {
 public:
-	BattleState(int battleId = 1);
+	BattleState(int battleId = 1, bool isEngraveBattle = false);
 	~BattleState();
 
 	void onEnter(App& app) override;
@@ -29,6 +30,9 @@ public:
 private:
 	// Boss阶段切换
 	void switchToBossPhase2();
+	
+	// 检查是否为意境之斗
+	bool isEngraveBattle() const { return isEngraveBattle_; }
 	
 	// 矿工Boss死亡转阶段
 	void triggerMinerBossDeathPhase();
@@ -70,6 +74,7 @@ private:
 	// Boss阶段系统
 	int currentBossPhase_ = 1;  // 当前Boss阶段（1或2）
 	bool isBossBattle_ = false;  // 是否为Boss战
+	bool isEngraveBattle_ = false;  // 是否为意境之斗
 	bool isGeneratingJinkuai_ = false;  // 是否正在生成金块
 	
     // 矿工Boss转阶段动画
@@ -240,6 +245,8 @@ private:
 	int fuhunsuoToIndex_ = -1;          // 缚魂锁移动目标位置
 	SDL_Rect fuhunsuoFromRect_;         // 缚魂锁移动起始矩形
 	SDL_Rect fuhunsuoToRect_;           // 缚魂锁移动目标矩形
+	
+	// 印记提示系统已移至全局App类
 
 	// 印记系统 - 特殊攻击方式
 	enum class AttackType {

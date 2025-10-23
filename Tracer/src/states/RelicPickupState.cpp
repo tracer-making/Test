@@ -102,7 +102,7 @@ void RelicPickupState::update(App& app, float dt) {
 void RelicPickupState::render(App& app) {
 	SDL_Renderer* r = app.getRenderer(); SDL_SetRenderDrawColor(r, 18,22,32,255); SDL_RenderClear(r);
     if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect d{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r,titleTex_,nullptr,&d); }
-	if (backButton_) backButton_->render(r);
+	if (backButton_ && App::isGodMode()) backButton_->render(r);
 
     if (spawnCard_) {
         // 居中渲染书林署丞卡
