@@ -39,6 +39,134 @@ void CombineState::onEnter(App& app) {
 void CombineState::onExit(App& app) {}
 
 void CombineState::handleEvent(App& app, const SDL_Event& e) {
+	// 处理印记提示
+	if (e.type == SDL_MOUSEMOTION) {
+		int mouseX = e.motion.x;
+		int mouseY = e.motion.y;
+		
+		// 检查左侧卡牌中的印记悬停
+		if (pairLibIndexA_ >= 0) {
+			if (mouseX >= slotLeft_.x && mouseX <= slotLeft_.x + slotLeft_.w &&
+				mouseY >= slotLeft_.y && mouseY <= slotLeft_.y + slotLeft_.h) {
+				auto& lib = DeckStore::instance().library();
+				if (pairLibIndexA_ < (int)lib.size()) {
+					CardRenderer::handleMarkHover(lib[pairLibIndexA_], slotLeft_, mouseX, mouseY, statFont_);
+					return;
+				}
+			}
+		}
+		
+		// 检查右侧卡牌中的印记悬停
+		if (pairLibIndexB_ >= 0) {
+			if (mouseX >= slotRight_.x && mouseX <= slotRight_.x + slotRight_.w &&
+				mouseY >= slotRight_.y && mouseY <= slotRight_.y + slotRight_.h) {
+				auto& lib = DeckStore::instance().library();
+				if (pairLibIndexB_ < (int)lib.size()) {
+					CardRenderer::handleMarkHover(lib[pairLibIndexB_], slotRight_, mouseX, mouseY, statFont_);
+					return;
+				}
+			}
+		}
+		
+		// 检查选择界面中的卡牌印记悬停
+		if (selecting_) {
+			for (int i = 0; i < (int)pairRectsA_.size(); ++i) {
+				const SDL_Rect& rectA = pairRectsA_[i];
+				if (mouseX >= rectA.x && mouseX <= rectA.x + rectA.w &&
+					mouseY >= rectA.y && mouseY <= rectA.y + rectA.h) {
+					auto& lib = DeckStore::instance().library();
+					int ia = pairs_[i].first;
+					if (ia >= 0 && ia < (int)lib.size()) {
+						CardRenderer::handleMarkHover(lib[ia], rectA, mouseX, mouseY, statFont_);
+						return;
+					}
+				}
+			}
+			
+			for (int i = 0; i < (int)pairRectsB_.size(); ++i) {
+				const SDL_Rect& rectB = pairRectsB_[i];
+				if (mouseX >= rectB.x && mouseX <= rectB.x + rectB.w &&
+					mouseY >= rectB.y && mouseY <= rectB.y + rectB.h) {
+					auto& lib = DeckStore::instance().library();
+					int ib = pairs_[i].second;
+					if (ib >= 0 && ib < (int)lib.size()) {
+						CardRenderer::handleMarkHover(lib[ib], rectB, mouseX, mouseY, statFont_);
+						return;
+					}
+				}
+			}
+		}
+		
+		// 如果没有悬停在任何印记上，隐藏提示
+		App::hideMarkTooltip();
+	}
+	else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+		// 右键点击检测印记
+		int mouseX = e.button.x;
+		int mouseY = e.button.y;
+		
+		// 检查左侧卡牌中的印记
+		if (pairLibIndexA_ >= 0) {
+			if (mouseX >= slotLeft_.x && mouseX <= slotLeft_.x + slotLeft_.w &&
+				mouseY >= slotLeft_.y && mouseY <= slotLeft_.y + slotLeft_.h) {
+				auto& lib = DeckStore::instance().library();
+				if (pairLibIndexA_ < (int)lib.size()) {
+					CardRenderer::handleMarkClick(lib[pairLibIndexA_], slotLeft_, mouseX, mouseY, statFont_);
+					if (App::isMarkTooltipVisible()) {
+						return;
+					}
+				}
+			}
+		}
+		
+		// 检查右侧卡牌中的印记
+		if (pairLibIndexB_ >= 0) {
+			if (mouseX >= slotRight_.x && mouseX <= slotRight_.x + slotRight_.w &&
+				mouseY >= slotRight_.y && mouseY <= slotRight_.y + slotRight_.h) {
+				auto& lib = DeckStore::instance().library();
+				if (pairLibIndexB_ < (int)lib.size()) {
+					CardRenderer::handleMarkClick(lib[pairLibIndexB_], slotRight_, mouseX, mouseY, statFont_);
+					if (App::isMarkTooltipVisible()) {
+						return;
+					}
+				}
+			}
+		}
+		
+		// 检查选择界面中的卡牌印记
+		if (selecting_) {
+			for (int i = 0; i < (int)pairRectsA_.size(); ++i) {
+				const SDL_Rect& rectA = pairRectsA_[i];
+				if (mouseX >= rectA.x && mouseX <= rectA.x + rectA.w &&
+					mouseY >= rectA.y && mouseY <= rectA.y + rectA.h) {
+					auto& lib = DeckStore::instance().library();
+					int ia = pairs_[i].first;
+					if (ia >= 0 && ia < (int)lib.size()) {
+						CardRenderer::handleMarkClick(lib[ia], rectA, mouseX, mouseY, statFont_);
+						if (App::isMarkTooltipVisible()) {
+							return;
+						}
+					}
+				}
+			}
+			
+			for (int i = 0; i < (int)pairRectsB_.size(); ++i) {
+				const SDL_Rect& rectB = pairRectsB_[i];
+				if (mouseX >= rectB.x && mouseX <= rectB.x + rectB.w &&
+					mouseY >= rectB.y && mouseY <= rectB.y + rectB.h) {
+					auto& lib = DeckStore::instance().library();
+					int ib = pairs_[i].second;
+					if (ib >= 0 && ib < (int)lib.size()) {
+						CardRenderer::handleMarkClick(lib[ib], rectB, mouseX, mouseY, statFont_);
+						if (App::isMarkTooltipVisible()) {
+							return;
+						}
+					}
+				}
+			}
+		}
+	}
+
     if (backButton_) backButton_->handleEvent(e);
     if (combineButton_ && pairLibIndexA_ >= 0 && pairLibIndexB_ >= 0) combineButton_->handleEvent(e);
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -295,6 +423,9 @@ void CombineState::render(App& app) {
     }
 
     if (!message_.empty() && smallFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended_Wrapped(smallFont_, message_.c_str(), col, screenW_-40); if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r,s); SDL_Rect d{20, screenH_-s->h-20, s->w, s->h}; SDL_RenderCopy(r,t,nullptr,&d); SDL_DestroyTexture(t); SDL_FreeSurface(s);} }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, statFont_);
 }
 
 void CombineState::layoutUI() {
@@ -356,5 +487,6 @@ void CombineState::combineSelectedPair() {
     // 延迟执行实际融合操作
     message_ = u8"正在融合卡牌...";
 }
+
 
 

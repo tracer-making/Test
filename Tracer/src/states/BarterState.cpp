@@ -361,6 +361,64 @@ void BarterState::nextTradeType() {
 }
 
 void BarterState::handleEvent(App& app, const SDL_Event& e) {
+	// 处理印记提示
+	if (e.type == SDL_MOUSEMOTION) {
+		int mouseX = e.motion.x;
+		int mouseY = e.motion.y;
+		
+		// 检查玩家毛皮卡牌中的印记悬停
+		for (int i = 0; i < (int)playerFurCards_.size(); ++i) {
+			const SDL_Rect& cardRect = playerFurCards_[i].rect;
+			if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+				mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+				CardRenderer::handleMarkHover(playerFurCards_[i].card, cardRect, mouseX, mouseY, smallFont_);
+				return;
+			}
+		}
+		
+		// 检查交易卡牌中的印记悬停
+		for (int i = 0; i < (int)tradeCards_.size(); ++i) {
+			const SDL_Rect& cardRect = tradeCards_[i].rect;
+			if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+				mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+				CardRenderer::handleMarkHover(tradeCards_[i].card, cardRect, mouseX, mouseY, smallFont_);
+				return;
+			}
+		}
+		
+		// 如果没有悬停在任何印记上，隐藏提示
+		App::hideMarkTooltip();
+	}
+	else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+		// 右键点击检测印记
+		int mouseX = e.button.x;
+		int mouseY = e.button.y;
+		
+		// 检查玩家毛皮卡牌中的印记
+		for (int i = 0; i < (int)playerFurCards_.size(); ++i) {
+			const SDL_Rect& cardRect = playerFurCards_[i].rect;
+			if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+				mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+				CardRenderer::handleMarkClick(playerFurCards_[i].card, cardRect, mouseX, mouseY, smallFont_);
+				if (App::isMarkTooltipVisible()) {
+					return;
+				}
+			}
+		}
+		
+		// 检查交易卡牌中的印记
+		for (int i = 0; i < (int)tradeCards_.size(); ++i) {
+			const SDL_Rect& cardRect = tradeCards_[i].rect;
+			if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+				mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+				CardRenderer::handleMarkClick(tradeCards_[i].card, cardRect, mouseX, mouseY, smallFont_);
+				if (App::isMarkTooltipVisible()) {
+					return;
+				}
+			}
+		}
+	}
+
 	// 处理按钮事件（只有在没有毛皮时才能返回地图）
 	if (backButton_ && !hasFurCards()) {
 		backButton_->handleEvent(e);
@@ -558,4 +616,7 @@ void BarterState::render(App& app) {
             }
         }
     }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
 }

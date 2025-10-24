@@ -54,8 +54,49 @@ void DeckViewState::handleEvent(App& app, const SDL_Event& e) {
         return;
     }
     
+    if (e.type == SDL_MOUSEMOTION) {
+        int mx = e.motion.x, my = e.motion.y;
+        
+        // 处理印记悬停
+        for (size_t i = 0; i < libraryCards_.size() && i < cardRects_.size(); ++i) {
+            SDL_Rect renderRect = cardRects_[i];
+            renderRect.y -= scrollY_; // 应用滚动偏移
+            
+            // 只检查可见的卡牌
+            if (renderRect.y + renderRect.h >= 0 && renderRect.y <= screenH_) {
+                if (mx >= renderRect.x && mx <= renderRect.x + renderRect.w && 
+                    my >= renderRect.y && my <= renderRect.y + renderRect.h) {
+                    CardRenderer::handleMarkHover(libraryCards_[i], renderRect, mx, my, smallFont_);
+                    return;
+                }
+            }
+        }
+        
+        // 如果没有悬停在任何印记上，隐藏提示
+        App::hideMarkTooltip();
+    }
+    // 处理印记右键点击
+    else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+        int mx = e.button.x, my = e.button.y;
+        
+        for (size_t i = 0; i < libraryCards_.size() && i < cardRects_.size(); ++i) {
+            SDL_Rect renderRect = cardRects_[i];
+            renderRect.y -= scrollY_; // 应用滚动偏移
+            
+            // 只检查可见的卡牌
+            if (renderRect.y + renderRect.h >= 0 && renderRect.y <= screenH_) {
+                if (mx >= renderRect.x && mx <= renderRect.x + renderRect.w && 
+                    my >= renderRect.y && my <= renderRect.y + renderRect.h) {
+                    CardRenderer::handleMarkClick(libraryCards_[i], renderRect, mx, my, smallFont_);
+                    if (App::isMarkTooltipVisible()) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
     // 处理滚轮滚动
-    if (e.type == SDL_MOUSEWHEEL) {
+    else if (e.type == SDL_MOUSEWHEEL) {
         int oldScrollY = scrollY_;
         scrollY_ -= e.wheel.y * 30; // 滚动步长
         if (scrollY_ < 0) scrollY_ = 0;
@@ -108,6 +149,9 @@ void DeckViewState::render(App& app) {
             CardRenderer::renderCard(app, card, renderRect, smallFont_, smallFont_, false);
         }
     }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
 }
 
 void DeckViewState::layoutCards() {

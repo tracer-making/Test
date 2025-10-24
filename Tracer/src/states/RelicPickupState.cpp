@@ -48,8 +48,67 @@ void RelicPickupState::handleEvent(App& app, const SDL_Event& e) {
 
     if (e.type == SDL_MOUSEMOTION) {
         int mx = e.motion.x, my = e.motion.y;
+        
+        // 处理印记悬停
+        // 检查卡片中的印记悬停
+        if (spawnCard_) {
+            if (mx >= cardRect_.x && mx <= cardRect_.x + cardRect_.w &&
+                my >= cardRect_.y && my <= cardRect_.y + cardRect_.h) {
+                Card c = CardDB::instance().make("shulin_shucheng");
+                CardRenderer::handleMarkHover(c, cardRect_, mx, my, smallFont_);
+                return;
+            }
+        }
+        
+        // 检查候选道具中的印记悬停
+        for (auto& cand : candidates_) {
+            if (!cand.picked && mx >= cand.rect.x && mx <= cand.rect.x + cand.rect.w && 
+                my >= cand.rect.y && my <= cand.rect.y + cand.rect.h) {
+                // 检查是否有对应的卡牌可以悬停
+                if (cand.item.id == "shulin_shucheng") {
+                    Card c = CardDB::instance().make("shulin_shucheng");
+                    CardRenderer::handleMarkHover(c, cand.rect, mx, my, smallFont_);
+                    return;
+                }
+            }
+        }
+        
+        // 如果没有悬停在任何印记上，隐藏提示
+        App::hideMarkTooltip();
+        
         for (auto& cand : candidates_) {
             cand.hovered = (mx>=cand.rect.x && mx<=cand.rect.x+cand.rect.w && my>=cand.rect.y && my<=cand.rect.y+cand.rect.h);
+        }
+    }
+    // 处理印记右键点击
+    else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+        int mx = e.button.x, my = e.button.y;
+        
+        // 检查卡片中的印记
+        if (spawnCard_) {
+            if (mx >= cardRect_.x && mx <= cardRect_.x + cardRect_.w &&
+                my >= cardRect_.y && my <= cardRect_.y + cardRect_.h) {
+                Card c = CardDB::instance().make("shulin_shucheng");
+                CardRenderer::handleMarkClick(c, cardRect_, mx, my, smallFont_);
+                if (App::isMarkTooltipVisible()) {
+                    return;
+                }
+            }
+        }
+        
+        // 检查候选道具中的印记
+        for (auto& cand : candidates_) {
+            if (!cand.picked && mx >= cand.rect.x && mx <= cand.rect.x + cand.rect.w && 
+                my >= cand.rect.y && my <= cand.rect.y + cand.rect.h) {
+                // 检查是否有对应的卡牌可以点击
+                if (cand.item.id == "shulin_shucheng") {
+                    Card c = CardDB::instance().make("shulin_shucheng");
+                    CardRenderer::handleMarkClick(c, cand.rect, mx, my, smallFont_);
+                    if (App::isMarkTooltipVisible()) {
+                        return;
+                    }
+                }
+            }
         }
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         int mx = e.button.x, my = e.button.y;
@@ -181,6 +240,9 @@ void RelicPickupState::render(App& app) {
     }
 
     if (!message_.empty() && smallFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended_Wrapped(smallFont_, message_.c_str(), col, screenW_-40); if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r,s); SDL_Rect d{20, screenH_-s->h-20, s->w, s->h}; SDL_RenderCopy(r,t,nullptr,&d); SDL_DestroyTexture(t); SDL_FreeSurface(s);} }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
 }
 
 void RelicPickupState::setupPickupContent() {

@@ -14,11 +14,8 @@ public:
     // 获取印记效果描述
     std::string getMarkDescription(const std::string& mark) const;
     
-    // 初始化数据库
-    void initialize();
-    
 private:
     std::map<std::string, std::string> markDescriptions_;
     
-    MarkEffectDatabase() { initialize(); }
+    MarkEffectDatabase();
 };

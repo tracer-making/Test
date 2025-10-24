@@ -168,6 +168,9 @@ void InkWorkshopState::render(App& app) {
             SDL_FreeSurface(messageSurface);
         }
     }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, cardStatFont_);
 }
 
 void InkWorkshopState::handleEvent(App& app, const SDL_Event& event) {
@@ -178,6 +181,43 @@ void InkWorkshopState::handleEvent(App& app, const SDL_Event& event) {
         int mx = event.motion.x;
         int my = event.motion.y;
         
+        // 处理印记悬停
+        // 检查牌位中的印记悬停
+        Card rabbitCard = CardDB::instance().make("tuopi_mao");
+        if (mx >= rabbitSlotRect_.x && mx <= rabbitSlotRect_.x + rabbitSlotRect_.w &&
+            my >= rabbitSlotRect_.y && my <= rabbitSlotRect_.y + rabbitSlotRect_.h) {
+            CardRenderer::handleMarkHover(rabbitCard, rabbitSlotRect_, mx, my, cardStatFont_);
+            return;
+        }
+        
+        Card wolfCard = CardDB::instance().make("langpi");
+        if (mx >= wolfSlotRect_.x && mx <= wolfSlotRect_.x + wolfSlotRect_.w &&
+            my >= wolfSlotRect_.y && my <= wolfSlotRect_.y + wolfSlotRect_.h) {
+            CardRenderer::handleMarkHover(wolfCard, wolfSlotRect_, mx, my, cardStatFont_);
+            return;
+        }
+        
+        Card goldSheepCard = CardDB::instance().make("jinang_mao");
+        if (mx >= goldSheepSlotRect_.x && mx <= goldSheepSlotRect_.x + goldSheepSlotRect_.w &&
+            my >= goldSheepSlotRect_.y && my <= goldSheepSlotRect_.y + goldSheepSlotRect_.h) {
+            CardRenderer::handleMarkHover(goldSheepCard, goldSheepSlotRect_, mx, my, cardStatFont_);
+            return;
+        }
+        
+        // 检查毛皮中的印记悬停
+        for (int i = 0; i < (int)skinRects_.size(); ++i) {
+            if (mx >= skinRects_[i].x && mx <= skinRects_[i].x + skinRects_[i].w &&
+                my >= skinRects_[i].y && my <= skinRects_[i].y + skinRects_[i].h) {
+                if (i < (int)availableSkins_.size()) {
+                    CardRenderer::handleMarkHover(availableSkins_[i], skinRects_[i], mx, my, smallFont_);
+                    return;
+                }
+            }
+        }
+        
+        // 如果没有悬停在任何印记上，隐藏提示
+        App::hideMarkTooltip();
+        
         // 检查毛皮悬停
         hoveredSkinIndex_ = -1;
         for (int i = 0; i < (int)skinRects_.size(); ++i) {
@@ -185,6 +225,52 @@ void InkWorkshopState::handleEvent(App& app, const SDL_Event& event) {
                 my >= skinRects_[i].y && my <= skinRects_[i].y + skinRects_[i].h) {
                 hoveredSkinIndex_ = i;
                 break;
+            }
+        }
+    }
+    // 处理印记右键点击
+    else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
+        int mx = event.button.x;
+        int my = event.button.y;
+        
+        // 检查牌位中的印记
+        Card rabbitCard = CardDB::instance().make("tuopi_mao");
+        if (mx >= rabbitSlotRect_.x && mx <= rabbitSlotRect_.x + rabbitSlotRect_.w &&
+            my >= rabbitSlotRect_.y && my <= rabbitSlotRect_.y + rabbitSlotRect_.h) {
+            CardRenderer::handleMarkClick(rabbitCard, rabbitSlotRect_, mx, my, cardStatFont_);
+            if (App::isMarkTooltipVisible()) {
+                return;
+            }
+        }
+        
+        Card wolfCard = CardDB::instance().make("langpi");
+        if (mx >= wolfSlotRect_.x && mx <= wolfSlotRect_.x + wolfSlotRect_.w &&
+            my >= wolfSlotRect_.y && my <= wolfSlotRect_.y + wolfSlotRect_.h) {
+            CardRenderer::handleMarkClick(wolfCard, wolfSlotRect_, mx, my, cardStatFont_);
+            if (App::isMarkTooltipVisible()) {
+                return;
+            }
+        }
+        
+        Card goldSheepCard = CardDB::instance().make("jinang_mao");
+        if (mx >= goldSheepSlotRect_.x && mx <= goldSheepSlotRect_.x + goldSheepSlotRect_.w &&
+            my >= goldSheepSlotRect_.y && my <= goldSheepSlotRect_.y + goldSheepSlotRect_.h) {
+            CardRenderer::handleMarkClick(goldSheepCard, goldSheepSlotRect_, mx, my, cardStatFont_);
+            if (App::isMarkTooltipVisible()) {
+                return;
+            }
+        }
+        
+        // 检查毛皮中的印记
+        for (int i = 0; i < (int)skinRects_.size(); ++i) {
+            if (mx >= skinRects_[i].x && mx <= skinRects_[i].x + skinRects_[i].w &&
+                my >= skinRects_[i].y && my <= skinRects_[i].y + skinRects_[i].h) {
+                if (i < (int)availableSkins_.size()) {
+                    CardRenderer::handleMarkClick(availableSkins_[i], skinRects_[i], mx, my, smallFont_);
+                    if (App::isMarkTooltipVisible()) {
+                        return;
+                    }
+                }
             }
         }
     }

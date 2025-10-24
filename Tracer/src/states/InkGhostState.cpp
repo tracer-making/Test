@@ -187,6 +187,9 @@ void InkGhostState::render(App& app) {
             SDL_FreeSurface(descSurface);
         }
     }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
 }
 
 void InkGhostState::handleEvent(App& app, const SDL_Event& event) {
@@ -197,6 +200,30 @@ void InkGhostState::handleEvent(App& app, const SDL_Event& event) {
         int mx = event.motion.x;
         int my = event.motion.y;
         
+        // 处理印记悬停
+        // 检查手牌中的印记悬停
+        for (int i = 0; i < (int)handCardRects_.size(); ++i) {
+            if (mx >= handCardRects_[i].x && mx <= handCardRects_[i].x + handCardRects_[i].w &&
+                my >= handCardRects_[i].y && my <= handCardRects_[i].y + handCardRects_[i].h) {
+                if (i < (int)handCards_.size()) {
+                    CardRenderer::handleMarkHover(handCards_[i], handCardRects_[i], mx, my, smallFont_);
+                    return;
+                }
+            }
+        }
+        
+        // 检查右侧牌位中的印记悬停
+        if (mx >= rightSlotRect_.x && mx <= rightSlotRect_.x + rightSlotRect_.w &&
+            my >= rightSlotRect_.y && my <= rightSlotRect_.y + rightSlotRect_.h) {
+            if (selectedCard_.id != "") {
+                CardRenderer::handleMarkHover(selectedCard_, rightSlotRect_, mx, my, smallFont_);
+                return;
+            }
+        }
+        
+        // 如果没有悬停在任何印记上，隐藏提示
+        App::hideMarkTooltip();
+        
         // 检查手牌悬停
         hoveredHandCardIndex_ = -1;
         for (int i = 0; i < (int)handCardRects_.size(); ++i) {
@@ -204,6 +231,35 @@ void InkGhostState::handleEvent(App& app, const SDL_Event& event) {
                 my >= handCardRects_[i].y && my <= handCardRects_[i].y + handCardRects_[i].h) {
                 hoveredHandCardIndex_ = i;
                 break;
+            }
+        }
+    }
+    // 处理印记右键点击
+    else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
+        int mx = event.button.x;
+        int my = event.button.y;
+        
+        // 检查手牌中的印记
+        for (int i = 0; i < (int)handCardRects_.size(); ++i) {
+            if (mx >= handCardRects_[i].x && mx <= handCardRects_[i].x + handCardRects_[i].w &&
+                my >= handCardRects_[i].y && my <= handCardRects_[i].y + handCardRects_[i].h) {
+                if (i < (int)handCards_.size()) {
+                    CardRenderer::handleMarkClick(handCards_[i], handCardRects_[i], mx, my, smallFont_);
+                    if (App::isMarkTooltipVisible()) {
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // 检查右侧牌位中的印记
+        if (mx >= rightSlotRect_.x && mx <= rightSlotRect_.x + rightSlotRect_.w &&
+            my >= rightSlotRect_.y && my <= rightSlotRect_.y + rightSlotRect_.h) {
+            if (selectedCard_.id != "") {
+                CardRenderer::handleMarkClick(selectedCard_, rightSlotRect_, mx, my, smallFont_);
+                if (App::isMarkTooltipVisible()) {
+                    return;
+                }
             }
         }
     }

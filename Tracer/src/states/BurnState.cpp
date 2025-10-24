@@ -83,7 +83,44 @@ void BurnState::handleEvent(App& app, const SDL_Event& e) {
 	// 处理按钮事件（只在上帝模式下）
 	if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
     if (burnButton_) burnButton_->handleEvent(e);
-    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+    
+    if (e.type == SDL_MOUSEMOTION) {
+        int mx = e.motion.x, my = e.motion.y;
+        
+        // 处理印记悬停
+        // 检查中央牌位的卡牌
+        if (!animActive_ && selectedLibIndex_ >= 0 && selectedLibIndex_ < (int)libIndices_.size()) {
+            auto& lib = DeckStore::instance().library();
+            int li = libIndices_[selectedLibIndex_];
+            if (li >= 0 && li < (int)lib.size()) {
+                if (mx >= slotRect_.x && mx <= slotRect_.x + slotRect_.w && 
+                    my >= slotRect_.y && my <= slotRect_.y + slotRect_.h) {
+                    CardRenderer::handleMarkHover(lib[li], slotRect_, mx, my, statFont_);
+                    return;
+                }
+            }
+        }
+        
+        // 检查选择网格中的卡牌
+        if (selecting_) {
+            auto& lib = DeckStore::instance().library();
+            for (size_t i = 0; i < libRects_.size() && i < libIndices_.size(); ++i) {
+                int li = libIndices_[i];
+                if (li >= 0 && li < (int)lib.size()) {
+                    const Card& c = lib[li];
+                    const SDL_Rect& rc = libRects_[i];
+                    if (mx >= rc.x && mx <= rc.x + rc.w && my >= rc.y && my <= rc.y + rc.h) {
+                        CardRenderer::handleMarkHover(c, rc, mx, my, statFont_);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // 如果没有悬停在任何印记上，隐藏提示
+        App::hideMarkTooltip();
+    }
+    else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         int mx=e.button.x, my=e.button.y;
         // 点击中央牌位：打开选择
         if (mx>=slotRect_.x && mx<=slotRect_.x+slotRect_.w && my>=slotRect_.y && my<=slotRect_.y+slotRect_.h) {
@@ -92,6 +129,43 @@ void BurnState::handleEvent(App& app, const SDL_Event& e) {
         // 在选择网格中选择
         if (selecting_) {
             for (size_t i=0;i<libRects_.size(); ++i) { const SDL_Rect& rc = libRects_[i]; if (mx>=rc.x && mx<=rc.x+rc.w && my>=rc.y && my<=rc.y+rc.h) { selectedLibIndex_ = (int)i; selecting_ = false; break; } }
+        }
+    }
+    // 处理印记右键点击
+    else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+        int mx = e.button.x, my = e.button.y;
+        
+        // 检查中央牌位的卡牌
+        if (!animActive_ && selectedLibIndex_ >= 0 && selectedLibIndex_ < (int)libIndices_.size()) {
+            auto& lib = DeckStore::instance().library();
+            int li = libIndices_[selectedLibIndex_];
+            if (li >= 0 && li < (int)lib.size()) {
+                if (mx >= slotRect_.x && mx <= slotRect_.x + slotRect_.w && 
+                    my >= slotRect_.y && my <= slotRect_.y + slotRect_.h) {
+                    CardRenderer::handleMarkClick(lib[li], slotRect_, mx, my, statFont_);
+                    if (App::isMarkTooltipVisible()) {
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // 检查选择网格中的卡牌
+        if (selecting_) {
+            auto& lib = DeckStore::instance().library();
+            for (size_t i = 0; i < libRects_.size() && i < libIndices_.size(); ++i) {
+                int li = libIndices_[i];
+                if (li >= 0 && li < (int)lib.size()) {
+                    const Card& c = lib[li];
+                    const SDL_Rect& rc = libRects_[i];
+                    if (mx >= rc.x && mx <= rc.x + rc.w && my >= rc.y && my <= rc.y + rc.h) {
+                        CardRenderer::handleMarkClick(c, rc, mx, my, statFont_);
+                        if (App::isMarkTooltipVisible()) {
+                            return;
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -181,6 +255,9 @@ void BurnState::render(App& app) {
             SDL_RenderDrawPoint(r, fx, fy);
         }
     }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, statFont_);
 }
 
 void BurnState::layoutUI() {

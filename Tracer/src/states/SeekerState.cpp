@@ -38,7 +38,37 @@ void SeekerState::onExit(App& app) {}
 void SeekerState::handleEvent(App& app, const SDL_Event& e) {
 	// 处理按钮事件（只在上帝模式下）
 	if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
-	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+	
+	if (e.type == SDL_MOUSEMOTION) {
+		int mx = e.motion.x, my = e.motion.y;
+		
+		// 处理印记悬停
+		for (const auto& en : entries_) {
+			if (en.revealed && mx >= en.rect.x && mx <= en.rect.x + en.rect.w && 
+				my >= en.rect.y && my <= en.rect.y + en.rect.h) {
+				CardRenderer::handleMarkHover(en.card, en.rect, mx, my, statFont_);
+				return;
+			}
+		}
+		
+		// 如果没有悬停在任何印记上，隐藏提示
+		App::hideMarkTooltip();
+	}
+	// 处理印记右键点击
+	else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+		int mx = e.button.x, my = e.button.y;
+		
+		for (const auto& en : entries_) {
+			if (en.revealed && mx >= en.rect.x && mx <= en.rect.x + en.rect.w && 
+				my >= en.rect.y && my <= en.rect.y + en.rect.h) {
+				CardRenderer::handleMarkClick(en.card, en.rect, mx, my, statFont_);
+				if (App::isMarkTooltipVisible()) {
+					return;
+				}
+			}
+		}
+	}
+	else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx=e.button.x, my=e.button.y;
 		for (auto& en : entries_) {
 			if (mx>=en.rect.x && mx<=en.rect.x+en.rect.w && my>=en.rect.y && my<=en.rect.y+en.rect.h) {
@@ -109,6 +139,9 @@ void SeekerState::render(App& app) {
     }
 
 	if (!message_.empty() && smallFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended_Wrapped(smallFont_, message_.c_str(), col, screenW_-40); if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r,s); SDL_Rect d{20, screenH_-s->h-20, s->w, s->h}; SDL_RenderCopy(r,t,nullptr,&d); SDL_DestroyTexture(t); SDL_FreeSurface(s);} }
+	
+	// 渲染全局印记提示
+	CardRenderer::renderGlobalMarkTooltip(app, statFont_);
 }
 
 void SeekerState::buildEntries() {

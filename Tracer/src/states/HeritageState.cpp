@@ -74,6 +74,44 @@ void HeritageState::handleEvent(App& app, const SDL_Event& e) {
 		// 处理鼠标移动，检测悬停
 		int mx = e.motion.x, my = e.motion.y;
 		
+		// 处理印记悬停
+		// 检查左边牌位中的印记悬停
+		if (hasSourceCard_) {
+			SDL_Rect leftSlot = {screenW_/2 - 300, screenH_/2 - 150, 200, 300};
+			if (mx >= leftSlot.x && mx <= leftSlot.x + leftSlot.w && 
+				my >= leftSlot.y && my <= leftSlot.y + leftSlot.h) {
+				CardRenderer::handleMarkHover(selectedSourceCard_, leftSlot, mx, my, cardStatFont_);
+				return;
+			}
+		}
+		
+		// 检查右边牌位中的印记悬停
+		if (hasTargetCard_) {
+			SDL_Rect rightSlot = {screenW_/2 + 100, screenH_/2 - 150, 200, 300};
+			if (mx >= rightSlot.x && mx <= rightSlot.x + rightSlot.w && 
+				my >= rightSlot.y && my <= rightSlot.y + rightSlot.h) {
+				CardRenderer::handleMarkHover(selectedTargetCard_, rightSlot, mx, my, cardStatFont_);
+				return;
+			}
+		}
+		
+		// 检查手牌区中的印记悬停
+		if (showingHandCards_) {
+			for (size_t i = 0; i < handCardRects_.size(); ++i) {
+				const SDL_Rect& rc = handCardRects_[i];
+				if (mx >= rc.x && mx <= rc.x + rc.w && 
+					my >= rc.y && my <= rc.y + rc.h) {
+					if (i < availableCards_.size()) {
+						CardRenderer::handleMarkHover(availableCards_[i], rc, mx, my, cardStatFont_);
+						return;
+					}
+				}
+			}
+		}
+		
+		// 如果没有悬停在任何印记上，隐藏提示
+		App::hideMarkTooltip();
+		
 		// 检测左边牌位悬停
 		SDL_Rect leftSlot = {screenW_/2 - 300, screenH_/2 - 150, 200, 300};
 		if (mx >= leftSlot.x && mx <= leftSlot.x + leftSlot.w && 
@@ -110,7 +148,51 @@ void HeritageState::handleEvent(App& app, const SDL_Event& e) {
 		}
 	}
 
-	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+	// 处理印记右键点击
+	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+		int mx = e.button.x, my = e.button.y;
+		
+		// 检查左边牌位中的印记
+		if (hasSourceCard_) {
+			SDL_Rect leftSlot = {screenW_/2 - 300, screenH_/2 - 150, 200, 300};
+			if (mx >= leftSlot.x && mx <= leftSlot.x + leftSlot.w && 
+				my >= leftSlot.y && my <= leftSlot.y + leftSlot.h) {
+				CardRenderer::handleMarkClick(selectedSourceCard_, leftSlot, mx, my, cardStatFont_);
+				if (App::isMarkTooltipVisible()) {
+					return;
+				}
+			}
+		}
+		
+		// 检查右边牌位中的印记
+		if (hasTargetCard_) {
+			SDL_Rect rightSlot = {screenW_/2 + 100, screenH_/2 - 150, 200, 300};
+			if (mx >= rightSlot.x && mx <= rightSlot.x + rightSlot.w && 
+				my >= rightSlot.y && my <= rightSlot.y + rightSlot.h) {
+				CardRenderer::handleMarkClick(selectedTargetCard_, rightSlot, mx, my, cardStatFont_);
+				if (App::isMarkTooltipVisible()) {
+					return;
+				}
+			}
+		}
+		
+		// 检查手牌区中的印记
+		if (showingHandCards_) {
+			for (size_t i = 0; i < handCardRects_.size(); ++i) {
+				const SDL_Rect& rc = handCardRects_[i];
+				if (mx >= rc.x && mx <= rc.x + rc.w && 
+					my >= rc.y && my <= rc.y + rc.h) {
+					if (i < availableCards_.size()) {
+						CardRenderer::handleMarkClick(availableCards_[i], rc, mx, my, cardStatFont_);
+						if (App::isMarkTooltipVisible()) {
+							return;
+						}
+					}
+				}
+			}
+		}
+	}
+	else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx=e.button.x, my=e.button.y;
 		
 		if (showingHandCards_) {
@@ -279,6 +361,9 @@ void HeritageState::render(App& app) {
 	if (showingHandCards_) {
 		renderHandCardArea(app);
 	}
+	
+	// 渲染全局印记提示
+	CardRenderer::renderGlobalMarkTooltip(app, cardStatFont_);
 }
 
 void HeritageState::renderMainInterface(App& app) {

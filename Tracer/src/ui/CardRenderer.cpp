@@ -1,21 +1,72 @@
 #include "CardRenderer.h"
 #include "../core/App.h"
 #include "../core/MarkEffectDatabase.h"
+#include <SDL_image.h>
+
+// 静态成员变量定义
+SDL_Texture* CardRenderer::bloodTexture_ = nullptr;
+bool CardRenderer::bloodTextureLoaded_ = false;
+SDL_Texture* CardRenderer::boneTexture_ = nullptr;
+bool CardRenderer::boneTextureLoaded_ = false;
+
+void CardRenderer::loadBloodTexture(SDL_Renderer* renderer) {
+    if (!bloodTextureLoaded_) {
+        bloodTexture_ = IMG_LoadTexture(renderer, "assets/blood.png");
+        bloodTextureLoaded_ = true;
+    }
+}
+
+void CardRenderer::loadBoneTexture(SDL_Renderer* renderer) {
+    if (!boneTextureLoaded_) {
+        boneTexture_ = IMG_LoadTexture(renderer, "assets/bones.png");
+        boneTextureLoaded_ = true;
+    }
+}
+
+void CardRenderer::drawBloodDrop(SDL_Renderer* renderer, int x, int y, int size) {
+    loadBloodTexture(renderer);
+    if (bloodTexture_) {
+        // 调整宽度，使其稍微小一点
+        int adjustedWidth = static_cast<int>(size * 0.85f);
+        int offsetX = (size - adjustedWidth) / 2; // 居中对齐
+        SDL_Rect dstRect{ x + offsetX, y, adjustedWidth, size };
+        SDL_RenderCopy(renderer, bloodTexture_, nullptr, &dstRect);
+    } else {
+        // 如果图片加载失败，使用原来的黑色圆形作为后备
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_Rect dropRect{ x, y, size, size };
+        SDL_RenderFillRect(renderer, &dropRect);
+        SDL_RenderDrawLine(renderer, x + size/2, y + size, x + size/2, y + size + size/2);
+    }
+}
+
+void CardRenderer::drawBone(SDL_Renderer* renderer, int x, int y, int size) {
+    loadBoneTexture(renderer);
+    if (boneTexture_) {
+        // 调整宽度，使其稍微小一点
+        int adjustedWidth = static_cast<int>(size * 0.85f);
+        int offsetX = (size - adjustedWidth) / 2; // 居中对齐
+        SDL_Rect dstRect{ x + offsetX, y, adjustedWidth, size };
+        SDL_RenderCopy(renderer, boneTexture_, nullptr, &dstRect);
+    } else {
+        // 如果图片加载失败，使用原来的白色骨头图案作为后备
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_Rect boneRect{ x, y, size, size };
+        SDL_RenderFillRect(renderer, &boneRect);
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+        SDL_RenderDrawRect(renderer, &boneRect);
+        SDL_RenderDrawLine(renderer, x + 1, y + 1, x + size - 2, y + size - 2);
+        SDL_RenderDrawLine(renderer, x + size - 2, y + 1, x + 1, y + size - 2);
+    }
+}
 
 static void drawDropOrBone(SDL_Renderer* r, bool bone, int x, int y, int size) {
     if (bone) {
-        SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
-        SDL_Rect boneRect{ x, y, size, size };
-        SDL_RenderFillRect(r, &boneRect);
-        SDL_SetRenderDrawColor(r, 100, 100, 100, 255);
-        SDL_RenderDrawRect(r, &boneRect);
-        SDL_RenderDrawLine(r, x + 1, y + 1, x + size - 2, y + size - 2);
-        SDL_RenderDrawLine(r, x + size - 2, y + 1, x + 1, y + size - 2);
+        // 使用新的魂骨图片
+        CardRenderer::drawBone(r, x, y, size);
     } else {
-        SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
-        SDL_Rect dropRect{ x, y, size, size };
-        SDL_RenderFillRect(r, &dropRect);
-        SDL_RenderDrawLine(r, x + size/2, y + size, x + size/2, y + size + size/2);
+        // 使用新的血滴图片
+        CardRenderer::drawBloodDrop(r, x, y, size);
     }
 }
 
@@ -217,11 +268,25 @@ std::string CardRenderer::getClickedMark(const Card& card,
     if (!statFont || card.marks.empty()) return "";
     
     // 计算印记区域位置（与渲染逻辑保持一致）
+    // 需要重新计算lineY，与renderCard中的逻辑保持一致
     int lineY = 0;
-    // 这里需要重新计算lineY，与renderCard中的逻辑保持一致
-    // 简化处理：假设印记在卡牌下半部分
-    int startY = rect.y + rect.h * 0.6f; // 印记区域开始位置
+    if (statFont) {
+        // 模拟名称渲染来计算lineY
+        SDL_Surface* s = TTF_RenderUTF8_Blended(statFont, card.name.c_str(), {50, 40, 30, 255});
+        if (s) {
+            int desiredNameH = SDL_max(12, (int)(rect.h * 0.16f));
+            float scaleN = (float)desiredNameH / (float)s->h;
+            int scaledW = (int)(s->w * scaleN);
+            SDL_Rect ndst{ rect.x + (rect.w - scaledW)/2, rect.y + (int)(rect.h*0.04f), scaledW, desiredNameH };
+            int lineBase = ndst.y + ndst.h + SDL_max(2, (int)(rect.h * 0.015f));
+            lineY = lineBase;
+            SDL_FreeSurface(s);
+        }
+    }
+    
+    // 印记开始位置：lineY + 4 + desiredStatH + 8
     int desiredStatH = SDL_max(8, (int)(rect.h * 0.10f));
+    int startY = lineY + 4 + desiredStatH + 8;
     int lineHeight = desiredStatH + 2;
     
     int idx = 0;
@@ -251,6 +316,20 @@ void CardRenderer::handleMarkClick(const Card& card,
     if (!clickedMark.empty()) {
         std::string description = MarkEffectDatabase::instance().getMarkDescription(clickedMark);
         App::showMarkTooltip(clickedMark, description, mouseX, mouseY);
+    }
+}
+
+void CardRenderer::handleMarkHover(const Card& card, 
+                                  const SDL_Rect& rect, 
+                                  int mouseX, int mouseY,
+                                  _TTF_Font* statFont) {
+    std::string hoveredMark = getClickedMark(card, rect, mouseX, mouseY, statFont);
+    if (!hoveredMark.empty()) {
+        std::string description = MarkEffectDatabase::instance().getMarkDescription(hoveredMark);
+        App::showMarkTooltip(hoveredMark, description, mouseX, mouseY);
+    } else {
+        // 如果没有悬停在印记上，隐藏提示
+        App::hideMarkTooltip();
     }
 }
 

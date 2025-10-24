@@ -10,6 +10,7 @@
 #include "../core/ItemStore.h"
 #include "../core/ItemStore.h"
 #include "EnemyPresets.h"
+#include "../ui/CardRenderer.h"
 
 #include "../core/Cards.h"
 #include <SDL.h>
@@ -350,7 +351,29 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 		int mouseX = e.motion.x;
 		int mouseY = e.motion.y;
 
-		// 隐藏印记提示（鼠标移动时隐藏）
+		// 检查手牌中的印记悬停
+		for (int i = 0; i < (int)handCards_.size(); ++i) {
+			if (i >= (int)handCardRects_.size()) break;
+			const SDL_Rect& cardRect = handCardRects_[i];
+			if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+				mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+				CardRenderer::handleMarkHover(handCards_[i], cardRect, mouseX, mouseY, cardStatFont_);
+				return;
+			}
+		}
+		
+		// 检查战场上的印记悬停
+		for (int i = 0; i < TOTAL_BATTLEFIELD_SLOTS; ++i) {
+			if (!battlefield_[i].isAlive) continue;
+			const SDL_Rect& cardRect = battlefield_[i].rect;
+			if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+				mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+				CardRenderer::handleMarkHover(battlefield_[i].card, cardRect, mouseX, mouseY, cardStatFont_);
+				return;
+			}
+		}
+
+		// 如果没有悬停在任何印记上，隐藏提示
 		App::hideMarkTooltip();
 
 		// 重置悬停状态
@@ -6577,15 +6600,8 @@ void BattleState::renderUI(App& app) {
 			int x = progressX;
 			int y = progressY + i * dropSpacing;
 
-			// 绘制墨滴（黑色圆形）
-			SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
-			SDL_Rect drop{ x, y, dropSize, dropSize };
-			SDL_RenderFillRect(r, &drop);
-			SDL_SetRenderDrawColor(r, 50, 50, 50, 255);
-			SDL_RenderDrawRect(r, &drop);
-
-			// 绘制墨滴尾巴（向下）
-			SDL_RenderDrawLine(r, x + dropSize / 2, y + dropSize, x + dropSize / 2, y + dropSize + dropSize / 2);
+			// 使用血滴图片
+			CardRenderer::drawBloodDrop(r, x, y, dropSize);
 		}
 
 		// 显示进度文字（在墨滴下方）
@@ -6642,38 +6658,15 @@ void BattleState::renderUI(App& app) {
 		SDL_SetRenderDrawColor(r, 100, 100, 100, 255);
 		SDL_RenderDrawRect(r, &boneBg);*/
 
-		// 绘制白色骨头图案
+		// 绘制魂骨图片
 		for (int i = 0; i < boneCount_; ++i) {
 			int column = i / maxBonesPerColumn;
 			int row = i % maxBonesPerColumn;
 			int x = startX + column * (boneSize + columnSpacing);
 			int y = startY + row * boneSpacing;
 
-			// 绘制骨头图案（白色）
-			SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
-
-			// 骨头主体（椭圆形）
-			SDL_Rect boneBody{ x + 2, y + 4, boneSize - 4, boneSize - 8 };
-			SDL_RenderFillRect(r, &boneBody);
-
-			// 骨头两端（圆形）
-			SDL_Rect boneEnd1{ x, y + 2, 6, 6 };
-			SDL_Rect boneEnd2{ x + boneSize - 6, y + 2, 6, 6 };
-			SDL_Rect boneEnd3{ x, y + boneSize - 8, 6, 6 };
-			SDL_Rect boneEnd4{ x + boneSize - 6, y + boneSize - 8, 6, 6 };
-
-			SDL_RenderFillRect(r, &boneEnd1);
-			SDL_RenderFillRect(r, &boneEnd2);
-			SDL_RenderFillRect(r, &boneEnd3);
-			SDL_RenderFillRect(r, &boneEnd4);
-
-			// 骨头边框
-			SDL_SetRenderDrawColor(r, 200, 200, 200, 255);
-			SDL_RenderDrawRect(r, &boneBody);
-			SDL_RenderDrawRect(r, &boneEnd1);
-			SDL_RenderDrawRect(r, &boneEnd2);
-			SDL_RenderDrawRect(r, &boneEnd3);
-			SDL_RenderDrawRect(r, &boneEnd4);
+			// 使用新的魂骨图片
+			CardRenderer::drawBone(r, x, y, boneSize);
 		}
 	}
 

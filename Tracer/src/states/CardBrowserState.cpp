@@ -139,7 +139,20 @@ void CardBrowserState::onExit(App& app) {
 void CardBrowserState::handleEvent(App& app, const SDL_Event& event) {
     // 处理印记提示
     if (event.type == SDL_MOUSEMOTION) {
-        // 鼠标移动时隐藏印记提示
+        int mouseX = event.motion.x;
+        int mouseY = event.motion.y;
+        
+        // 检查卡牌中的印记悬停
+        for (int i = 0; i < (int)filteredCards_.size(); ++i) {
+            const SDL_Rect& cardRect = cardRects_[i];
+            if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+                mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+                CardRenderer::handleMarkHover(filteredCards_[i], cardRect, mouseX, mouseY, cardStatFont_);
+                return;
+            }
+        }
+        
+        // 如果没有悬停在任何印记上，隐藏提示
         App::hideMarkTooltip();
     }
     else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {

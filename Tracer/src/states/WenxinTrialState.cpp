@@ -79,11 +79,68 @@ void WenxinTrialState::handleEvent(App& app, const SDL_Event& e) {
         }
     }
     
+    // 处理印记右键点击
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+        int mx = e.button.x, my = e.button.y;
+        
+        // 检查奖励卡牌中的印记
+        if (rewardCardReady_) {
+            if (mx >= rewardCardRect_.x && mx <= rewardCardRect_.x + rewardCardRect_.w &&
+                my >= rewardCardRect_.y && my <= rewardCardRect_.y + rewardCardRect_.h) {
+                CardRenderer::handleMarkClick(rewardCard_, rewardCardRect_, mx, my, cardStatFont_);
+                if (App::isMarkTooltipVisible()) {
+                    return;
+                }
+            }
+        }
+        
+        // 检查试炼进行中抽到的卡牌中的印记
+        if (trialStarted_ && !cardsFadingOut_ && !rewardCardReady_) {
+            for (size_t i = 0; i < selectedCards_.size() && i < drawnCardRects_.size(); ++i) {
+                if (i < cardsDrawn_) {
+                    const SDL_Rect& rect = drawnCardRects_[i];
+                    if (mx >= rect.x && mx <= rect.x + rect.w && my >= rect.y && my <= rect.y + rect.h) {
+                        CardRenderer::handleMarkClick(selectedCards_[i], rect, mx, my, cardStatFont_);
+                        if (App::isMarkTooltipVisible()) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     // 处理鼠标移动事件，检查悬停
     if (e.type == SDL_MOUSEMOTION) {
         int mx = e.motion.x, my = e.motion.y;
-        hoveredTrialIndex_ = -1;
         
+        // 处理印记悬停
+        // 检查奖励卡牌中的印记悬停
+        if (rewardCardReady_) {
+            if (mx >= rewardCardRect_.x && mx <= rewardCardRect_.x + rewardCardRect_.w &&
+                my >= rewardCardRect_.y && my <= rewardCardRect_.y + rewardCardRect_.h) {
+                CardRenderer::handleMarkHover(rewardCard_, rewardCardRect_, mx, my, cardStatFont_);
+                return;
+            }
+        }
+        
+        // 检查试炼进行中抽到的卡牌中的印记悬停
+        if (trialStarted_ && !cardsFadingOut_ && !rewardCardReady_) {
+            for (size_t i = 0; i < selectedCards_.size() && i < drawnCardRects_.size(); ++i) {
+                if (i < cardsDrawn_) {
+                    const SDL_Rect& rect = drawnCardRects_[i];
+                    if (mx >= rect.x && mx <= rect.x + rect.w && my >= rect.y && my <= rect.y + rect.h) {
+                        CardRenderer::handleMarkHover(selectedCards_[i], rect, mx, my, cardStatFont_);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // 如果没有悬停在任何印记上，隐藏提示
+        App::hideMarkTooltip();
+        
+        hoveredTrialIndex_ = -1;
         for (size_t i = 0; i < trialCards_.size(); ++i) {
             const SDL_Rect& rect = trialCards_[i].rect;
             if (mx >= rect.x && mx <= rect.x + rect.w && my >= rect.y && my <= rect.y + rect.h) {
@@ -364,6 +421,9 @@ void WenxinTrialState::render(App& app) {
             SDL_FreeSurface(s);
         }
     }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, cardStatFont_);
 }
 
 void WenxinTrialState::buildTrialCards() {

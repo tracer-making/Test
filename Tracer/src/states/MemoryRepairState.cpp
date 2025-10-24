@@ -22,10 +22,8 @@ static void drawBackIcon(SDL_Renderer* r, bool bone, int x, int y, int size) {
         SDL_RenderDrawLine(r, x + 1, y + 1, x + size - 2, y + size - 2);
         SDL_RenderDrawLine(r, x + size - 2, y + 1, x + 1, y + size - 2);
     } else {
-        SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
-        SDL_Rect dropRect{ x, y, size, size };
-        SDL_RenderFillRect(r, &dropRect);
-        SDL_RenderDrawLine(r, x + size/2, y + size, x + size/2, y + size + size/2);
+        // 使用血滴图片
+        CardRenderer::drawBloodDrop(r, x, y, size);
     }
 }
 
@@ -119,7 +117,20 @@ void MemoryRepairState::onExit(App& app) {}
 void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
 	// 处理印记提示
 	if (e.type == SDL_MOUSEMOTION) {
-		// 鼠标移动时隐藏印记提示
+		int mouseX = e.motion.x;
+		int mouseY = e.motion.y;
+		
+		// 检查候选卡牌中的印记悬停
+		for (int i = 0; i < (int)candidates_.size(); ++i) {
+			const SDL_Rect& cardRect = candidates_[i].rect;
+			if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+				mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+				CardRenderer::handleMarkHover(candidates_[i].card, cardRect, mouseX, mouseY, cardStatFont_);
+				return;
+			}
+		}
+		
+		// 如果没有悬停在任何印记上，隐藏提示
 		App::hideMarkTooltip();
 	}
 	else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {

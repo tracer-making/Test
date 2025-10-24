@@ -62,7 +62,26 @@ void DeckState::handleEvent(App& app, const SDL_Event& e) {
 	
 	// 处理印记提示
 	if (e.type == SDL_MOUSEMOTION) {
-		// 鼠标移动时隐藏印记提示
+		int mouseX = e.motion.x;
+		int mouseY = e.motion.y;
+		
+		// 检查卡牌中的印记悬停
+		for (int i = 0; i < (int)cards_.size(); ++i) {
+			const SDL_Rect& cardRect = cards_[i].rect;
+			if (mouseX >= cardRect.x && mouseX <= cardRect.x + cardRect.w &&
+				mouseY >= cardRect.y && mouseY <= cardRect.y + cardRect.h) {
+				// 创建临时的Card对象用于印记悬停检测
+				Card tempCard;
+				tempCard.name = cards_[i].name;
+				tempCard.attack = cards_[i].attack;
+				tempCard.health = cards_[i].health;
+				tempCard.marks = cards_[i].marks;
+				CardRenderer::handleMarkHover(tempCard, cardRect, mouseX, mouseY, statFont_);
+				return;
+			}
+		}
+		
+		// 如果没有悬停在任何印记上，隐藏提示
 		App::hideMarkTooltip();
 	}
 	else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {

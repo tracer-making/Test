@@ -63,6 +63,141 @@ void DeckSelectState::handleEvent(App& app, const SDL_Event& e) {
             selectedDeckIndex_ = -1;
             return;
         }
+        
+        if (e.type == SDL_MOUSEMOTION) {
+            int mx = e.motion.x, my = e.motion.y;
+            
+            // 处理印记悬停
+            if (selectedDeckIndex_ >= 0 && selectedDeckIndex_ < static_cast<int>(initialDecks_.size())) {
+                const InitialDeck& deck = initialDecks_[selectedDeckIndex_];
+                
+                // 检查牌组中的卡牌
+                int cardWidth = 120;
+                int cardHeight = 180;
+                int cardSpacing = 20;
+                int cardsPerRow = 5;
+                
+                int totalCards = static_cast<int>(deck.cardIds.size());
+                int totalRows = (totalCards + cardsPerRow - 1) / cardsPerRow;
+                int totalCardsWidth = cardsPerRow * cardWidth + (cardsPerRow - 1) * cardSpacing;
+                int totalCardsHeight = totalRows * cardHeight + (totalRows - 1) * cardSpacing;
+                
+                int centerX = screenW_ / 2;
+                int centerY = screenH_ / 2;
+                int startX = centerX - cardWidth/2 - (cardWidth + cardSpacing);
+                int startY = centerY - totalCardsHeight / 2;
+                
+                for (size_t i = 0; i < deck.cardIds.size(); ++i) {
+                    int row = static_cast<int>(i) / cardsPerRow;
+                    int col = static_cast<int>(i) % cardsPerRow;
+                    
+                    int x = startX + col * (cardWidth + cardSpacing);
+                    int y = startY + row * (cardHeight + cardSpacing);
+                    
+                    SDL_Rect cardRect{ x, y, cardWidth, cardHeight };
+                    
+                    if (mx >= cardRect.x && mx <= cardRect.x + cardRect.w && 
+                        my >= cardRect.y && my <= cardRect.y + cardRect.h) {
+                        Card card = CardDB::instance().make(deck.cardIds[i]);
+                        if (!card.id.empty()) {
+                            CardRenderer::handleMarkHover(card, cardRect, mx, my, smallFont_);
+                            return;
+                        }
+                    }
+                }
+                
+                // 检查兔皮卡牌
+                int rabbitFurY = startY + totalCardsHeight + 30;
+                int rabbitFurX = centerX - cardWidth - cardSpacing/2;
+                
+                for (int i = 0; i < 2; ++i) {
+                    int x = rabbitFurX + i * (cardWidth + cardSpacing);
+                    int y = rabbitFurY;
+                    
+                    SDL_Rect rabbitRect{ x, y, cardWidth, cardHeight };
+                    
+                    if (mx >= rabbitRect.x && mx <= rabbitRect.x + rabbitRect.w && 
+                        my >= rabbitRect.y && my <= rabbitRect.y + rabbitRect.h) {
+                        Card rabbitCard = CardDB::instance().make("tuopi_mao");
+                        if (!rabbitCard.id.empty()) {
+                            CardRenderer::handleMarkHover(rabbitCard, rabbitRect, mx, my, smallFont_);
+                            return;
+                        }
+                    }
+                }
+            }
+            
+            // 如果没有悬停在任何印记上，隐藏提示
+            App::hideMarkTooltip();
+        }
+        // 处理印记右键点击
+        else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+            int mx = e.button.x, my = e.button.y;
+            
+            // 检查印记右键点击
+            if (selectedDeckIndex_ >= 0 && selectedDeckIndex_ < static_cast<int>(initialDecks_.size())) {
+                const InitialDeck& deck = initialDecks_[selectedDeckIndex_];
+                
+                // 检查牌组中的卡牌
+                int cardWidth = 120;
+                int cardHeight = 180;
+                int cardSpacing = 20;
+                int cardsPerRow = 5;
+                
+                int totalCards = static_cast<int>(deck.cardIds.size());
+                int totalRows = (totalCards + cardsPerRow - 1) / cardsPerRow;
+                int totalCardsWidth = cardsPerRow * cardWidth + (cardsPerRow - 1) * cardSpacing;
+                int totalCardsHeight = totalRows * cardHeight + (totalRows - 1) * cardSpacing;
+                
+                int centerX = screenW_ / 2;
+                int centerY = screenH_ / 2;
+                int startX = centerX - cardWidth/2 - (cardWidth + cardSpacing);
+                int startY = centerY - totalCardsHeight / 2;
+                
+                for (size_t i = 0; i < deck.cardIds.size(); ++i) {
+                    int row = static_cast<int>(i) / cardsPerRow;
+                    int col = static_cast<int>(i) % cardsPerRow;
+                    
+                    int x = startX + col * (cardWidth + cardSpacing);
+                    int y = startY + row * (cardHeight + cardSpacing);
+                    
+                    SDL_Rect cardRect{ x, y, cardWidth, cardHeight };
+                    
+                    if (mx >= cardRect.x && mx <= cardRect.x + cardRect.w && 
+                        my >= cardRect.y && my <= cardRect.y + cardRect.h) {
+                        Card card = CardDB::instance().make(deck.cardIds[i]);
+                        if (!card.id.empty()) {
+                            CardRenderer::handleMarkClick(card, cardRect, mx, my, smallFont_);
+                            if (App::isMarkTooltipVisible()) {
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // 检查兔皮卡牌
+                int rabbitFurY = startY + totalCardsHeight + 30;
+                int rabbitFurX = centerX - cardWidth - cardSpacing/2;
+                
+                for (int i = 0; i < 2; ++i) {
+                    int x = rabbitFurX + i * (cardWidth + cardSpacing);
+                    int y = rabbitFurY;
+                    
+                    SDL_Rect rabbitRect{ x, y, cardWidth, cardHeight };
+                    
+                    if (mx >= rabbitRect.x && mx <= rabbitRect.x + rabbitRect.w && 
+                        my >= rabbitRect.y && my <= rabbitRect.y + rabbitRect.h) {
+                        Card rabbitCard = CardDB::instance().make("tuopi_mao");
+                        if (!rabbitCard.id.empty()) {
+                            CardRenderer::handleMarkClick(rabbitCard, rabbitRect, mx, my, smallFont_);
+                            if (App::isMarkTooltipVisible()) {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     } else {
         // 选择牌组时的处理
         if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -375,4 +510,7 @@ void DeckSelectState::renderDeckView(App& app) {
             SDL_FreeSurface(hintSurf);
         }
     }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
 }

@@ -37,7 +37,79 @@ void TemperState::onExit(App& app) {}
 void TemperState::handleEvent(App& app, const SDL_Event& e) {
     if (backButton_) backButton_->handleEvent(e);
     if (confirmButton_) confirmButton_->handleEvent(e);
-    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+    
+    if (e.type == SDL_MOUSEMOTION) {
+        int mx = e.motion.x, my = e.motion.y;
+        
+        // 处理印记悬停
+        // 检查中央牌位中的印记悬停
+        if (selectedLibIndex_ >= 0 && selectedLibIndex_ < (int)libIndices_.size()) {
+            auto& lib = DeckStore::instance().library();
+            int idx = libIndices_[selectedLibIndex_];
+            if (idx >= 0 && idx < (int)lib.size()) {
+                if (mx >= slotRect_.x && mx <= slotRect_.x + slotRect_.w &&
+                    my >= slotRect_.y && my <= slotRect_.y + slotRect_.h) {
+                    CardRenderer::handleMarkHover(lib[idx], slotRect_, mx, my, smallFont_);
+                    return;
+                }
+            }
+        }
+        
+        // 检查选择网格中的印记悬停
+        if (selecting_ && !locked_) {
+            auto& lib = DeckStore::instance().library();
+            for (size_t i = 0; i < libIndices_.size() && i < libRects_.size(); ++i) {
+                int idx = libIndices_[i];
+                if (idx >= 0 && idx < (int)lib.size()) {
+                    const SDL_Rect& rc = libRects_[i];
+                    if (mx >= rc.x && mx <= rc.x + rc.w && my >= rc.y && my <= rc.y + rc.h) {
+                        CardRenderer::handleMarkHover(lib[idx], rc, mx, my, smallFont_);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // 如果没有悬停在任何印记上，隐藏提示
+        App::hideMarkTooltip();
+    }
+    // 处理印记右键点击
+    else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+        int mx = e.button.x, my = e.button.y;
+        
+        // 检查中央牌位中的印记
+        if (selectedLibIndex_ >= 0 && selectedLibIndex_ < (int)libIndices_.size()) {
+            auto& lib = DeckStore::instance().library();
+            int idx = libIndices_[selectedLibIndex_];
+            if (idx >= 0 && idx < (int)lib.size()) {
+                if (mx >= slotRect_.x && mx <= slotRect_.x + slotRect_.w &&
+                    my >= slotRect_.y && my <= slotRect_.y + slotRect_.h) {
+                    CardRenderer::handleMarkClick(lib[idx], slotRect_, mx, my, smallFont_);
+                    if (App::isMarkTooltipVisible()) {
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // 检查选择网格中的印记
+        if (selecting_ && !locked_) {
+            auto& lib = DeckStore::instance().library();
+            for (size_t i = 0; i < libIndices_.size() && i < libRects_.size(); ++i) {
+                int idx = libIndices_[i];
+                if (idx >= 0 && idx < (int)lib.size()) {
+                    const SDL_Rect& rc = libRects_[i];
+                    if (mx >= rc.x && mx <= rc.x + rc.w && my >= rc.y && my <= rc.y + rc.h) {
+                        CardRenderer::handleMarkClick(lib[idx], rc, mx, my, smallFont_);
+                        if (App::isMarkTooltipVisible()) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         int mx=e.button.x, my=e.button.y;
         // 点击中央牌位：若已完成首次成功，则直接返回；否则（未锁定）打开选择
         if (mx>=slotRect_.x && mx<=slotRect_.x+slotRect_.w && my>=slotRect_.y && my<=slotRect_.y+slotRect_.h) {
@@ -139,6 +211,9 @@ void TemperState::render(App& app) {
     }
 
     if (!message_.empty() && smallFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended_Wrapped(smallFont_, message_.c_str(), col, screenW_-40); if (s) { SDL_Texture* t=SDL_CreateTextureFromSurface(r,s); SDL_Rect d{20, screenH_-s->h-20, s->w, s->h}; SDL_RenderCopy(r,t,nullptr,&d); SDL_DestroyTexture(t); SDL_FreeSurface(s);} }
+    
+    // 渲染全局印记提示
+    CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
 }
 
 void TemperState::layoutUIRects() {
