@@ -39,18 +39,18 @@ void MainMenuState::onEnter(App& app) {
 
 
 	std::vector<Button*> owned;
-	owned.reserve(5); // Changed from 4 to 5
-	for (int i = 0; i < 5; ++i) owned.push_back(new Button()); // Changed from 4 to 5
+	owned.reserve(5); // 恢复原来的按钮数量
+	for (int i = 0; i < 5; ++i) owned.push_back(new Button()); // 恢复原来的按钮数量
 	buttons_[0] = owned[0];
 	buttons_[1] = owned[1];
 	buttons_[2] = owned[2];
 	buttons_[3] = owned[3];
-	buttons_[4] = owned[4]; // Added test button
+	buttons_[4] = owned[4]; // 上帝模式按钮
 
 	// 主按钮
 	int bw = 200, bh = 45; // 按钮更小
 	int cx = screenW_ / 2 - bw / 2;
-	int cy = screenH_ / 2 - (bh * 4 + 15 * 3) / 2 + 60; // 按钮往下移
+	int cy = screenH_ / 2 - (bh * 4 + 15 * 3) / 2 + 60; // 按钮往下移，调整为4个按钮
 	const char* labels[4] = {u8"开始游戏", u8"设置", u8"藏馆", u8"退出"};
 	for (int i = 0; i < 4; ++i) {
 		SDL_Rect r { cx, cy + i * (bh + 15), bw, bh };
@@ -68,9 +68,9 @@ void MainMenuState::onEnter(App& app) {
 	// 不设置按钮回调，在handleEvent中直接处理
 
 	// 不设置按钮回调，在handleEvent中直接处理
-	buttons_[1]->setOnClick([]() { SDL_Log("Settings clicked"); });
-	buttons_[2]->setOnClick([]() { SDL_Log("Collection clicked"); });
-	buttons_[3]->setOnClick([&app]() { SDL_Event quit; quit.type = SDL_QUIT; SDL_PushEvent(&quit); });
+	buttons_[2]->setOnClick([]() { SDL_Log("Settings clicked"); });
+	buttons_[3]->setOnClick([]() { SDL_Log("Collection clicked"); });
+	buttons_[4]->setOnClick([&app]() { SDL_Event quit; quit.type = SDL_QUIT; SDL_PushEvent(&quit); });
 
 	// 初始化乱码数据流（更快、多一点、小一点）
 	streams_.clear();
@@ -121,6 +121,7 @@ void MainMenuState::onEnter(App& app) {
 }
 
 void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
+	
 	// 处理按钮事件
 	for (auto* b : buttons_) if (b) b->handleEvent(e);
 
@@ -157,6 +158,7 @@ void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void MainMenuState::update(App& app, float dt) {
+	
 	// 处理状态切换
 	if (pendingGoMapExplore_) {
 		pendingGoMapExplore_ = false;
@@ -379,16 +381,16 @@ void MainMenuState::render(App& app) {
 	for (size_t i = 0; i < buttons_.size(); ++i) {
 		if (buttons_[i]) {
 			// 上帝模式按钮只在按T键后才显示
-			if (i == 4 && !App::isGodMode()) {
+			if (i == 5 && !App::isGodMode()) {
 				continue;
 			}
 			
 			// 动态更新按钮文本
-			if (i == 4) {
+			if (i == 5) {
 				if (App::isGodMode()) {
-					buttons_[4]->setText(u8"T"); // 上帝模式下显示T（测试）
+					buttons_[5]->setText(u8"T"); // 上帝模式下显示T（测试）
 				} else {
-					buttons_[4]->setText(u8"G"); // 非上帝模式下显示G（上帝模式切换）
+					buttons_[5]->setText(u8"G"); // 非上帝模式下显示G（上帝模式切换）
 				}
 			}
 			
@@ -430,6 +432,7 @@ void MainMenuState::render(App& app) {
 			SDL_RenderFillRect(r, &corner4);
 		}
 	}
+	
 }
 
 

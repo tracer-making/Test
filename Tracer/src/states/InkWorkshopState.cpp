@@ -6,6 +6,7 @@
 #include "../core/WenMaiStore.h"
 #include "../ui/Button.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <algorithm>
@@ -13,11 +14,15 @@
 
 InkWorkshopState::InkWorkshopState(int mapLayer) : mapLayer_(mapLayer) {
     backButton_ = new Button();
+    tutorialButton_ = new Button();
 }
 
 InkWorkshopState::~InkWorkshopState() {
     if (backButton_) {
         delete backButton_;
+    }
+    if (tutorialButton_) {
+        delete tutorialButton_;
     }
     if (titleFont_) TTF_CloseFont(titleFont_);
     if (smallFont_) TTF_CloseFont(smallFont_);
@@ -59,6 +64,17 @@ void InkWorkshopState::onEnter(App& app) {
         if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
         backButton_->setOnClick([&app]() {
             app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+        });
+    }
+    
+    // 教程按钮（右上角）
+    if (tutorialButton_) {
+        SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+        tutorialButton_->setRect(r);
+        tutorialButton_->setText(u8"?");
+        if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+        tutorialButton_->setOnClick([this]() {
+            startTutorial();
         });
     }
     
@@ -119,6 +135,9 @@ void InkWorkshopState::update(App& app, float deltaTime) {
         }
     }
     
+    // 更新教程系统
+    CardRenderer::updateTutorial(deltaTime);
+    
     // 处理动画
     if (isAnimating_) {
         animTime_ += deltaTime;
@@ -140,6 +159,9 @@ void InkWorkshopState::render(App& app) {
     
     // 渲染返回按钮（只在上帝模式下显示）
     if (backButton_ && App::isGodMode()) backButton_->render(r);
+    
+    // 渲染教程按钮（始终显示）
+    if (tutorialButton_) tutorialButton_->render(r);
     
     // 渲染标题
     renderTitle(app);
@@ -171,11 +193,23 @@ void InkWorkshopState::render(App& app) {
     
     // 渲染全局印记提示
     CardRenderer::renderGlobalMarkTooltip(app, cardStatFont_);
+    
+    // 渲染教程系统
+    CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
 }
 
 void InkWorkshopState::handleEvent(App& app, const SDL_Event& event) {
+    // 教程系统处理
+    if (CardRenderer::isTutorialActive()) {
+        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+            CardRenderer::handleTutorialClick();
+        }
+        return;
+    }
+    
     // 处理返回按钮事件
     if (backButton_) backButton_->handleEvent(event);
+    if (tutorialButton_) tutorialButton_->handleEvent(event);
     
     if (event.type == SDL_MOUSEMOTION) {
         int mx = event.motion.x;
@@ -733,4 +767,22 @@ void InkWorkshopState::renderGoldenCard(App& app, const Card& card, const SDL_Re
             SDL_FreeSurface(sh);
         }
     }
+}
+
+void InkWorkshopState::startTutorial() {
+    // 使用统一的教程文本
+    std::vector<std::string> tutorialTexts = TutorialTexts::getInkWorkshopTutorial();
+    
+    // 创建空的高亮区域（不使用高亮功能）
+    std::vector<SDL_Rect> highlightRects = {
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}  // 无高亮
+    };
+    
+    // 启动教程
+    CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }

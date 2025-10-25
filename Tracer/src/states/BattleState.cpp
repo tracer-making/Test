@@ -11,6 +11,7 @@
 #include "../core/ItemStore.h"
 #include "EnemyPresets.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 
 #include "../core/Cards.h"
 #include <SDL.h>
@@ -43,6 +44,9 @@ BattleState::BattleState(int battleId, bool isEngraveBattle) : currentBattleId_(
 	
 	std::cout << "[BATTLESTATE] 创建BattleState，battleId=" << battleId << ", isBossBattle_=" << isBossBattle_ << ", isEngraveBattle_=" << isEngraveBattle_ << std::endl;
 	
+	// 初始化教程按钮
+	tutorialButton_ = new Button();
+	
 	// Boss战入场费将在onEnter函数中处理
 }
 
@@ -54,6 +58,7 @@ BattleState::~BattleState() {
 	if (infoFont_) TTF_CloseFont(infoFont_);
 	if (enemyFont_) TTF_CloseFont(enemyFont_);
 	if (backButton_) delete backButton_;
+	if (tutorialButton_) delete tutorialButton_;
 }
 
 void BattleState::grantGravediggerBones(bool countEnemySide) {
@@ -107,6 +112,16 @@ void BattleState::onEnter(App& app) {
 			pendingGoMapExplore_ = true;
 			});
 	}
+	
+	// 设置教程按钮
+	if (tutorialButton_) {
+		tutorialButton_->setRect({ screenW_ - 120, 20, 100, 35 });
+		tutorialButton_->setText("?");
+		if (infoFont_) tutorialButton_->setFont(infoFont_, app.getRenderer());
+		tutorialButton_->setOnClick([this]() {
+			startTutorial();
+			});
+	}
 
 	// 移除结束回合按钮，功能移到砚台上
 
@@ -148,9 +163,21 @@ void BattleState::onExit(App& app) {
 }
 
 void BattleState::handleEvent(App& app, const SDL_Event& e) {
-	// 处理按钮事件（只在上帝模式下）
+	// 如果教程正在进行，只处理教程点击事件
+	if (CardRenderer::isTutorialActive()) {
+		if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+			CardRenderer::handleTutorialClick();
+		}
+		// 阻止所有其他事件
+		return;
+	}
+	
+	// 处理按钮事件
 	// 猎人Boss毛皮交换状态下禁用按钮交互
-	if (!isHunterBossFurExchange_ && backButton_ && App::isGodMode()) backButton_->handleEvent(e);
+	if (!isHunterBossFurExchange_) {
+		if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
+		if (tutorialButton_) tutorialButton_->handleEvent(e);
+	}
 
 	// 处理键盘事件
 	if (e.type == SDL_KEYDOWN) {
@@ -1217,6 +1244,8 @@ void BattleState::handleEvent(App& app, const SDL_Event& e) {
 	}
 }
 void BattleState::update(App& app, float dt) {
+	// 更新教程系统
+	CardRenderer::updateTutorial(dt);
 
 	// 处理状态转换
 	if (pendingBackToTest_) {
@@ -1844,10 +1873,10 @@ void BattleState::update(App& app, float dt) {
 			
 			// 生成新卡牌
 			if (!spawnCardId.empty()) {
-					Card spawnCard = CardDB::instance().make(spawnCardId);
-					if (!spawnCard.id.empty()) {
-						battlefield_[i].card = spawnCard;
-						battlefield_[i].isAlive = true;
+				Card spawnCard = CardDB::instance().make(spawnCardId);
+				if (!spawnCard.id.empty()) {
+				battlefield_[i].card = spawnCard;
+				battlefield_[i].isAlive = true;
 				battlefield_[i].health = spawnCard.health;
 				battlefield_[i].isPlayer = battlefield_[i].isPlayer; // 保持原有的玩家归属
 				battlefield_[i].moveDirection = 0;
@@ -1963,10 +1992,10 @@ void BattleState::update(App& app, float dt) {
 			
 			// 生成新卡牌
 			if (!spawnCardId.empty()) {
-					Card spawnCard = CardDB::instance().make(spawnCardId);
-					if (!spawnCard.id.empty()) {
-						battlefield_[i].card = spawnCard;
-						battlefield_[i].isAlive = true;
+				Card spawnCard = CardDB::instance().make(spawnCardId);
+				if (!spawnCard.id.empty()) {
+				battlefield_[i].card = spawnCard;
+				battlefield_[i].isAlive = true;
 				battlefield_[i].health = spawnCard.health;
 				battlefield_[i].isPlayer = battlefield_[i].isPlayer; // 保持原有的玩家归属
 				battlefield_[i].moveDirection = 0;
@@ -2088,6 +2117,8 @@ void BattleState::render(App& app) {
 	// 渲染印记提示
 	CardRenderer::renderGlobalMarkTooltip(app, cardStatFont_);
 	
+	// 渲染教程（如果有的话）
+	CardRenderer::renderTutorial(renderer, infoFont_, screenW_, screenH_);
 }
 
 // 私有方法实现
@@ -2424,14 +2455,14 @@ void BattleState::initializeBattle() {
                     int col = emptyCols[choose];
                     emptyCols.erase(emptyCols.begin() + choose);
                     int idx = 1 * BATTLEFIELD_COLS + col;
-                            Card c = CardDB::instance().make(id);
-                            if (!c.id.empty()) {
+                    Card c = CardDB::instance().make(id);
+                    if (!c.id.empty()) {
                                 // 应用敌人意境加成（只在意境之斗中）
                                 if (isEngraveBattle_) {
                                     EnemyEngraveStore::instance().applyToEnemyCard(c);
                                 }
-                                battlefield_[idx].card = c;
-                                battlefield_[idx].isPlayer = false;
+                        battlefield_[idx].card = c;
+                        battlefield_[idx].isPlayer = false;
                         battlefield_[idx].health = c.health;
                         battlefield_[idx].isAlive = true;
                         battlefield_[idx].moveDirection = 0;
@@ -2523,14 +2554,14 @@ void BattleState::initializeBattle() {
                     int col = emptyCols[choose];
                     emptyCols.erase(emptyCols.begin() + choose);
                     int idx = 0 * BATTLEFIELD_COLS + col;
-                            Card c = CardDB::instance().make(id);
-                            if (!c.id.empty()) {
+                    Card c = CardDB::instance().make(id);
+                    if (!c.id.empty()) {
                                 // 应用敌人意境加成（只在意境之斗中）
                                 if (isEngraveBattle_) {
                                     EnemyEngraveStore::instance().applyToEnemyCard(c);
                                 }
-                                battlefield_[idx].card = c;
-                                battlefield_[idx].isPlayer = false;
+                        battlefield_[idx].card = c;
+                        battlefield_[idx].isPlayer = false;
                         battlefield_[idx].health = c.health;
                         battlefield_[idx].isAlive = true;
                         battlefield_[idx].moveDirection = 0;
@@ -3160,14 +3191,14 @@ void BattleState::enemyTurn() {
 						if (!id.empty()) {
 							int idx = 0 * BATTLEFIELD_COLS + col;
 							if (!battlefield_[idx].isAlive) {
-                            Card c = CardDB::instance().make(id);
-                            if (!c.id.empty()) {
+								Card c = CardDB::instance().make(id);
+								if (!c.id.empty()) {
                                 // 应用敌人意境加成（只在意境之斗中）
                                 if (isEngraveBattle_) {
                                     EnemyEngraveStore::instance().applyToEnemyCard(c);
                                 }
-                                battlefield_[idx].card = c;
-                                battlefield_[idx].isPlayer = false;
+									battlefield_[idx].card = c;
+									battlefield_[idx].isPlayer = false;
 									battlefield_[idx].health = c.health;
 									battlefield_[idx].isAlive = true;
 									battlefield_[idx].moveDirection = 0;
@@ -3190,14 +3221,14 @@ void BattleState::enemyTurn() {
 						int col = emptyCols[choose];
 						emptyCols.erase(emptyCols.begin() + choose);
 						int idx = 0 * BATTLEFIELD_COLS + col;
-                            Card c = CardDB::instance().make(id);
-                            if (!c.id.empty()) {
+						Card c = CardDB::instance().make(id);
+						if (!c.id.empty()) {
                                 // 应用敌人意境加成（只在意境之斗中）
                                 if (isEngraveBattle_) {
                                     EnemyEngraveStore::instance().applyToEnemyCard(c);
                                 }
-                                battlefield_[idx].card = c;
-                                battlefield_[idx].isPlayer = false;
+							battlefield_[idx].card = c;
+							battlefield_[idx].isPlayer = false;
 							battlefield_[idx].health = c.health;
 							battlefield_[idx].isAlive = true;
 							battlefield_[idx].moveDirection = 0;
@@ -3716,14 +3747,14 @@ void BattleState::switchToBossPhase2() {
 					if (!id.empty()) {
 						int idx = 1 * BATTLEFIELD_COLS + col;
 						if (!battlefield_[idx].isAlive) {
-                            Card c = CardDB::instance().make(id);
-                            if (!c.id.empty()) {
+							Card c = CardDB::instance().make(id);
+							if (!c.id.empty()) {
                                 // 应用敌人意境加成（只在意境之斗中）
                                 if (isEngraveBattle_) {
                                     EnemyEngraveStore::instance().applyToEnemyCard(c);
                                 }
-                                battlefield_[idx].card = c;
-                                battlefield_[idx].isPlayer = false;
+								battlefield_[idx].card = c;
+								battlefield_[idx].isPlayer = false;
 								battlefield_[idx].health = c.health;
 								battlefield_[idx].isAlive = true;
 								battlefield_[idx].moveDirection = 0;
@@ -3746,14 +3777,14 @@ void BattleState::switchToBossPhase2() {
 					int col = emptyCols[choose];
 					emptyCols.erase(emptyCols.begin() + choose);
 					int idx = 1 * BATTLEFIELD_COLS + col;
-                            Card c = CardDB::instance().make(id);
-                            if (!c.id.empty()) {
+					Card c = CardDB::instance().make(id);
+					if (!c.id.empty()) {
                                 // 应用敌人意境加成（只在意境之斗中）
                                 if (isEngraveBattle_) {
                                     EnemyEngraveStore::instance().applyToEnemyCard(c);
                                 }
-                                battlefield_[idx].card = c;
-                                battlefield_[idx].isPlayer = false;
+						battlefield_[idx].card = c;
+						battlefield_[idx].isPlayer = false;
 						battlefield_[idx].health = c.health;
 						battlefield_[idx].isAlive = true;
 						battlefield_[idx].moveDirection = 0;
@@ -3816,14 +3847,14 @@ void BattleState::switchToBossPhase2() {
 					if (!id.empty()) {
 						int idx = 0 * BATTLEFIELD_COLS + col;
 						if (!battlefield_[idx].isAlive) {
-                            Card c = CardDB::instance().make(id);
-                            if (!c.id.empty()) {
+							Card c = CardDB::instance().make(id);
+							if (!c.id.empty()) {
                                 // 应用敌人意境加成（只在意境之斗中）
                                 if (isEngraveBattle_) {
                                     EnemyEngraveStore::instance().applyToEnemyCard(c);
                                 }
-                                battlefield_[idx].card = c;
-                                battlefield_[idx].isPlayer = false;
+								battlefield_[idx].card = c;
+								battlefield_[idx].isPlayer = false;
 								battlefield_[idx].health = c.health;
 								battlefield_[idx].isAlive = true;
 								battlefield_[idx].moveDirection = 0;
@@ -3846,14 +3877,14 @@ void BattleState::switchToBossPhase2() {
 					int col = emptyCols[choose];
 					emptyCols.erase(emptyCols.begin() + choose);
 					int idx = 0 * BATTLEFIELD_COLS + col;
-                            Card c = CardDB::instance().make(id);
-                            if (!c.id.empty()) {
+					Card c = CardDB::instance().make(id);
+					if (!c.id.empty()) {
                                 // 应用敌人意境加成（只在意境之斗中）
                                 if (isEngraveBattle_) {
                                     EnemyEngraveStore::instance().applyToEnemyCard(c);
                                 }
-                                battlefield_[idx].card = c;
-                                battlefield_[idx].isPlayer = false;
+						battlefield_[idx].card = c;
+						battlefield_[idx].isPlayer = false;
 						battlefield_[idx].health = c.health;
 						battlefield_[idx].isAlive = true;
 						battlefield_[idx].moveDirection = 0;
@@ -6877,7 +6908,32 @@ void BattleState::renderUI(App& app) {
 			y += 20;
 		}
 	}
+	
+	// 渲染教程按钮
+	if (tutorialButton_) {
+		tutorialButton_->render(r);
+	}
 }
+void BattleState::startTutorial() {
+	// 使用统一的教程文本
+	std::vector<std::string> tutorialTexts = TutorialTexts::getBattleTutorial();
+	
+	// 创建空的高亮区域（不使用高亮功能）
+	std::vector<SDL_Rect> highlightRects = {
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}  // 无高亮
+	};
+	
+	// 启动教程
+	CardRenderer::startTutorial(tutorialTexts, highlightRects);
+}
+
 // 冲刺能手相关方法实现
 void BattleState::startRushing(int cardIndex) {
 	if (cardIndex < 0 || cardIndex >= TOTAL_BATTLEFIELD_SLOTS) {

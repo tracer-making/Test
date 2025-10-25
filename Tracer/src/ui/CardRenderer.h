@@ -52,6 +52,25 @@ public:
     
     // 全局印记提示渲染（供所有状态使用）
     static void renderGlobalMarkTooltip(App& app, _TTF_Font* font);
+    
+    // 统一的状态消息渲染（供所有状态使用）
+    static void renderStatusMessage(SDL_Renderer* renderer, const std::string& message, 
+                                   _TTF_Font* font, int screenW, int screenH);
+    
+    // 教程系统
+    static void startTutorial(const std::vector<std::string>& texts, 
+                             const std::vector<SDL_Rect>& highlightRects = {});
+    static void startInteractiveTutorial(const std::vector<std::string>& texts,
+                                        const std::vector<std::string>& actions,
+                                        const std::vector<SDL_Rect>& highlightRects = {});
+    static void updateTutorial(float dt);
+    static void renderTutorial(SDL_Renderer* renderer, _TTF_Font* font, int screenW, int screenH);
+    static void handleTutorialClick();
+    static bool isTutorialActive();
+    static bool isInteractiveTutorialActive();
+    static void endTutorial();
+    static void nextTutorialStep();
+    static void waitForUserAction();
 };
 
 

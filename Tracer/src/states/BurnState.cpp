@@ -189,11 +189,12 @@ void BurnState::render(App& app) {
 		SDL_RenderDrawPoint(r, x, y);
 	}
 
-	if (titleTex_) {
-		int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th);
-		SDL_Rect dst{ (screenW_-tw)/2, 80, tw, th };
-		SDL_RenderCopy(r, titleTex_, nullptr, &dst);
-	}
+	// 标题（已删除）
+	// if (titleTex_) {
+	// 	int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th);
+	// 	SDL_Rect dst{ (screenW_-tw)/2, 80, tw, th };
+	// 	SDL_RenderCopy(r, titleTex_, nullptr, &dst);
+	// }
 
 	if (smallFont_) {
 		SDL_Color col{210, 200, 180, 255};

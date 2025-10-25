@@ -16,11 +16,14 @@ public:
 	MemoryRepairState(bool isBossVictory);  // Boss战胜利专用构造函数
 	~MemoryRepairState();
 
-	void onEnter(App& app) override;
+    void onEnter(App& app) override;
 	void onExit(App& app) override;
 	void handleEvent(App& app, const SDL_Event& e) override;
 	void update(App& app, float dt) override;
 	void render(App& app) override;
+    
+    // 状态消息系统
+    void setStatusMessage(const std::string& message, float duration = 2.0f);
     
     // 公共枚举和静态方法
     enum class BackHintType { Unknown, KnownTribe, KnownCost };
@@ -42,13 +45,23 @@ private:
     bool isBossVictory_ = false; // 是否为Boss战胜利奖励
     Button* backButton_ = nullptr;
     Button* rerollButton_ = nullptr; // 重新抽卡按钮
+    Button* tutorialButton_ = nullptr;
     bool rerollUsed_ = false; // 是否已使用重新抽卡功能
     _TTF_Font* titleFont_ = nullptr;
     _TTF_Font* smallFont_ = nullptr;
     _TTF_Font* cardNameFont_ = nullptr;
     _TTF_Font* cardStatFont_ = nullptr;
+    
+    // 状态消息系统
+    std::string statusMessage_;
+    float messageTime_ = 0.0f;
+    float messageDuration_ = 2.0f;
+    
     void buildCandidates();
 	void layoutCandidates();
+    
+    // 教程系统
+    void startTutorial();
     
     // 静态变量用于存储地图传递的提示类型
     static BackHintType mapHintType_;

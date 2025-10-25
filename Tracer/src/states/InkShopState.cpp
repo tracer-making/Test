@@ -2,6 +2,8 @@
 #include "TestState.h"
 #include "MapExploreState.h"
 #include "../core/App.h"
+#include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 
 InkShopState::InkShopState() = default;
 InkShopState::~InkShopState() {
@@ -9,6 +11,7 @@ InkShopState::~InkShopState() {
 	if (titleFont_) TTF_CloseFont(titleFont_);
 	if (smallFont_) TTF_CloseFont(smallFont_);
 	delete backButton_;
+	delete tutorialButton_;
 }
 
 void InkShopState::onEnter(App& app) {
@@ -29,6 +32,18 @@ void InkShopState::onEnter(App& app) {
 		backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; });
 	}
 
+	// 教程按钮（右上角）
+	tutorialButton_ = new Button();
+	if (tutorialButton_) {
+		SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+		tutorialButton_->setRect(r);
+		tutorialButton_->setText(u8"?");
+		if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+		tutorialButton_->setOnClick([this]() {
+			startTutorial();
+		});
+	}
+
 	grantEntryGift();
 	buildShopItems();
 	layoutItems();
@@ -37,7 +52,14 @@ void InkShopState::onEnter(App& app) {
 void InkShopState::onExit(App& app) {}
 
 void InkShopState::handleEvent(App& app, const SDL_Event& e) {
+	// 教程系统交互锁定
+	if (CardRenderer::isTutorialActive()) {
+		CardRenderer::handleTutorialClick();
+		return;
+	}
+	
 	if (backButton_) backButton_->handleEvent(e);
+	if (tutorialButton_) tutorialButton_->handleEvent(e);
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx=e.button.x, my=e.button.y;
 		for (auto& it : shopItems_) {
@@ -51,6 +73,9 @@ void InkShopState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void InkShopState::update(App& app, float dt) {
+	// 更新教程系统
+	CardRenderer::updateTutorial(dt);
+	
 	if (pendingBackToTest_) {
 		pendingBackToTest_ = false;
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
@@ -70,6 +95,7 @@ void InkShopState::render(App& app) {
 
 	if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect dst{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r, titleTex_, nullptr, &dst);} 
 	if (backButton_ && App::isGodMode()) backButton_->render(r);
+	if (tutorialButton_) tutorialButton_->render(r);
 
 	// 文脉与持有之墨
 	if (smallFont_) {
@@ -122,6 +148,9 @@ void InkShopState::render(App& app) {
 			y += 20;
 		}
 	}
+	
+	// 渲染教程
+	CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
 }
 
 void InkShopState::grantEntryGift() {
@@ -140,6 +169,24 @@ void InkShopState::buildShopItems() {
 void InkShopState::layoutItems() {
 	int w = 320, h = 80; int gap = 14; int cols = 2; int totalW = cols*w + (cols-1)*gap; int x0 = (screenW_-totalW)/2; int y0 = 220; 
 	for (int i=0;i<(int)shopItems_.size(); ++i) { int r=i/cols, c=i%cols; shopItems_[i].rect = { x0 + c*(w+gap), y0 + r*(h+gap), w, h }; }
+}
+
+void InkShopState::startTutorial() {
+	// 使用统一的教程文本
+	std::vector<std::string> tutorialTexts = TutorialTexts::getInkShopTutorial();
+	
+	// 创建空的高亮区域（不使用高亮功能）
+	std::vector<SDL_Rect> highlightRects = {
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}  // 无高亮
+	};
+	
+	// 启动教程
+	CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }
 
 

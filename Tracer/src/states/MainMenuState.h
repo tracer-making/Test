@@ -28,7 +28,7 @@ public:
 private:
 	// 状态切换
 	bool pendingGoMapExplore_ = false;
-	std::array<Button*, 5> buttons_ {nullptr, nullptr, nullptr, nullptr, nullptr}; // Changed from 4 to 5
+	std::array<Button*, 5> buttons_ {nullptr, nullptr, nullptr, nullptr, nullptr}; // 恢复原来的按钮数量
 	int screenW_ = 1280;
 	int screenH_ = 720;
 

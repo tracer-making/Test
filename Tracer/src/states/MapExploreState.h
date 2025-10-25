@@ -25,6 +25,9 @@ public:
     // Boss战胜利返回处理
     static void setBossVictoryReturn(bool value) { s_bossVictoryReturn_ = value; }
     
+    // 状态消息系统
+    void setStatusMessage(const std::string& message, float duration = 2.0f);
+    
     // 玩家移动动画
     void startPlayerMoveAnimation(int fromNode, int toNode);
     void updatePlayerMoveAnimation(float dt);
@@ -45,6 +48,10 @@ private:
     Button* testMinerButton_ = nullptr;
     Button* testFishermanButton_ = nullptr;
     Button* testHunterButton_ = nullptr;
+    Button* tutorialButton_ = nullptr;
+    
+    // 教程系统
+    void startTutorial();
     Button* testFinalBossButton_ = nullptr;
     bool pendingGoTest_ = false;
     
@@ -89,6 +96,7 @@ private:
     
     // 事件图标系统方法声明
     void renderEventIcon(SDL_Renderer* renderer, const MapNode& node, int x, int y);
+    void renderEventIconScaled(SDL_Renderer* renderer, const MapNode& node, int x, int y, int size);
     std::string getIconNameForNode(const MapNode& node);
     
     // 事件图标系统
@@ -145,6 +153,7 @@ private:
     void drawDashedLine(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int dashLength, int gapLength); // 绘制虚线
     void drawTriangleMarker(SDL_Renderer* renderer, int x, int y, int size); // 绘制倒三角标注
     void drawTriangleMarkerWithAlpha(SDL_Renderer* renderer, int x, int y, int size, Uint8 alpha); // 绘制带透明度的倒三角标注
+    void drawDirectionArrow(SDL_Renderer* renderer, int fromX, int fromY, int toX, int toY); // 绘制方向箭头
     
     // 辅助方法
     int getGlobalNodeIndex(int layer, int localIndex) const;
@@ -226,4 +235,13 @@ private:
     float moveDuration_ = 0.5f; // 秒
     SDL_FPoint moveStartPos_{0.f, 0.f};
     SDL_FPoint moveEndPos_{0.f, 0.f};
+    
+    // 状态消息系统
+    std::string statusMessage_;
+    float messageTime_ = 0.0f;
+    float messageDuration_ = 2.0f;
+    
+    // 鼠标悬停系统
+    int hoveredNode_ = -1;           // 当前悬停的节点索引
+    float hoverScale_ = 1.0f;        // 悬停时的缩放比例
 };

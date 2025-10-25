@@ -18,6 +18,8 @@
 #include "WenxinTrialState.h"
 #include "DeckViewState.h"
 #include "../core/App.h"
+#include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include "../core/Deck.h"
 #include "../ui/Button.h"
 #include <SDL.h>
@@ -44,6 +46,7 @@ MapExploreState::~MapExploreState() {
     delete testMinerButton_;
     delete testFishermanButton_;
     delete testHunterButton_;
+    delete tutorialButton_;
 }
 
 void MapExploreState::onEnter(App& app) {
@@ -502,6 +505,18 @@ void MapExploreState::onEnter(App& app) {
             pendingGoFinalBoss_ = true;
         });
     }
+    
+    // 教程按钮（右上角）
+    tutorialButton_ = new Button();
+    if (tutorialButton_) {
+        SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+        tutorialButton_->setRect(r);
+        tutorialButton_->setText(u8"?");
+        if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+        tutorialButton_->setOnClick([this]() {
+            startTutorial();
+        });
+    }
     // 进入时更新滚动边界
     updateScrollBounds();
     
@@ -538,6 +553,15 @@ void MapExploreState::onExit(App& app) {
 }
 
 void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
+    // 如果教程正在进行，只处理教程点击事件
+    if (CardRenderer::isTutorialActive()) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            CardRenderer::handleTutorialClick();
+        }
+        // 阻止所有其他事件
+        return;
+    }
+    
     // 检查是否在猎人Boss毛皮交换状态，如果是则禁用所有交互
     // 注意：这里需要从BattleState获取状态，但MapExploreState无法直接访问
     // 所以我们需要通过其他方式来判断，比如检查当前状态或添加全局标志
@@ -606,6 +630,9 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         return;
     }
     
+    // 教程按钮（始终处理）
+    if (tutorialButton_) tutorialButton_->handleEvent(e);
+    
     // 分发到UI按钮（悬停与点击）- 只在上帝模式下处理
     if (godMode_) {
         if (regenerateButton_) {
@@ -653,6 +680,29 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         SDL_Log("Player coordinates: AbsoluteY=%d, ScreenY=%d", playerAbsoluteY, playerScreenY);
     }
 
+    // 处理鼠标悬停
+    if (e.type == SDL_MOUSEMOTION) {
+        int mx = e.motion.x, my = e.motion.y;
+        int newHoveredNode = -1;
+        
+        // 检查鼠标是否悬停在节点上
+        for (int layer = 0; layer <= numLayers_; ++layer) {
+            for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
+                const MapNode& node = layerNodes_[layer][i];
+                int sx, sy; nodeToScreenXY(node, sx, sy);
+                int dx = mx - sx;
+                int dy = my - sy;
+                if (dx * dx + dy * dy <= node.size * node.size) {
+                    newHoveredNode = getGlobalNodeIndex(layer, static_cast<int>(i));
+                    break;
+                }
+            }
+        }
+        
+        // 更新悬停状态（插值动画会自动处理过渡）
+        hoveredNode_ = newHoveredNode;
+    }
+    
     // 处理鼠标点击到节点
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         int mx = e.button.x, my = e.button.y;
@@ -674,6 +724,8 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
                     } else if (globalIndex == playerCurrentNode_) {
                         SDL_Log("Player is already at node %d", globalIndex);
                     } else {
+                        // 显示不可移动的状态消息
+                        setStatusMessage("无法移动到该位置", 2.0f);
                         SDL_Log("Node %d is not accessible from current position", globalIndex);
                     }
                     break;
@@ -684,6 +736,31 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void MapExploreState::update(App& app, float dt) {
+    // 更新教程系统
+    CardRenderer::updateTutorial(dt);
+    
+    // 处理状态消息显示时间
+    if (messageTime_ > 0.0f) {
+        messageTime_ -= dt;
+        if (messageTime_ <= 0.0f) {
+            statusMessage_ = "";
+        }
+    }
+    
+    // 处理悬停动画（参考战斗界面手牌动画的平滑插值方式）
+    float targetScale = 1.0f;
+    if (hoveredNode_ != -1) {
+        targetScale = 1.2f; // 悬停时的目标缩放
+    }
+    
+    // 使用插值动画实现平滑过渡（参考战斗界面的animationSpeed_方式）
+    float animationSpeed = 8.0f; // 动画速度，参考战斗界面的5.0f，这里稍快一些
+    float diff = targetScale - hoverScale_;
+    hoverScale_ += diff * animationSpeed * dt;
+    
+    // 确保缩放值在合理范围内
+    hoverScale_ = std::max(0.8f, std::min(1.5f, hoverScale_));
+    
     // 更新玩家移动动画
     updatePlayerMoveAnimation(dt);
     
@@ -867,7 +944,7 @@ void MapExploreState::render(App& app) {
     SDL_RenderClear(r);
     
     // 渲染标题（已删除"地图探索"标题）
-    renderTitle(r);
+    // renderTitle(r); // 完全去掉标题渲染
     
     // 渲染地图
     renderMap(r);
@@ -908,44 +985,45 @@ void MapExploreState::render(App& app) {
         if (testFinalBossButton_) {
             try { testFinalBossButton_->render(r); } catch (...) {}
         }
+        if (tutorialButton_) {
+            try { tutorialButton_->render(r); } catch (...) {}
+        }
     }
+    
+    // 教程按钮（始终显示）
+    if (tutorialButton_) {
+        try { tutorialButton_->render(r); } catch (...) {}
+    }
+    
+    // 渲染状态消息
+    CardRenderer::renderStatusMessage(r, statusMessage_, smallFont_, screenW_, screenH_);
+    
+    // 渲染教程（如果有的话）
+    CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
     
     // 渲染上帝模式提示
     if (godMode_) {
         renderGodModeIndicator(r);
     }
+}
+
+void MapExploreState::startTutorial() {
+    // 使用统一的教程文本
+    std::vector<std::string> tutorialTexts = TutorialTexts::getMapExploreTutorial();
     
-    // 绘制操作说明（右下角）
-    if (smallFont_) {
-        SDL_Color helpColor{ 180, 180, 180, 255 }; // 灰色文字
-        const char* helpLines[] = {
-            u8"地图探索操作说明：",
-            u8"• 点击节点进入战斗/商店/其他功能",
-            u8"• 不同颜色节点代表不同类型",
-            u8"• 战斗节点：红色（普通战斗）",
-            u8"• 商店节点：蓝色（购买道具）",
-            u8"• 特殊节点：绿色（特殊功能）",
-            u8"• 按ESC返回主菜单"
-        };
-        
-        int lineCount = sizeof(helpLines) / sizeof(helpLines[0]);
-        int x = screenW_ - 300;
-        int y = screenH_ - 200;
-        
-        for (int i = 0; i < lineCount; ++i) {
-            SDL_Surface* s = TTF_RenderUTF8_Blended(smallFont_, helpLines[i], helpColor);
-            if (s) {
-                SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
-                if (t) {
-                    SDL_Rect dst{ x, y, s->w, s->h };
-                    SDL_RenderCopy(r, t, nullptr, &dst);
-                    SDL_DestroyTexture(t);
-                }
-                SDL_FreeSurface(s);
-            }
-            y += 18;
-        }
-    }
+    // 创建空的高亮区域（不使用高亮功能）
+    std::vector<SDL_Rect> highlightRects = {
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}  // 无高亮
+    };
+    
+    // 启动教程
+    CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }
 
 void MapExploreState::renderTitle(SDL_Renderer* renderer) {
@@ -2024,19 +2102,20 @@ void MapExploreState::renderMap(SDL_Renderer* renderer) {
         }
     }
 
-    // 绘制移动中的玩家位置（小白点）
+    // 绘制移动中的玩家路径（蓝色粗线逐渐覆盖虚线）
     if (isMoving_) {
-        // 插值世界坐标
-        float px = moveStartPos_.x + (moveEndPos_.x - moveStartPos_.x) * moveT_;
-        float py = moveStartPos_.y + (moveEndPos_.y - moveStartPos_.y) * moveT_;
-        int sx = mapOffsetX_ + static_cast<int>(px);
-        int sy = mapOffsetY_ + static_cast<int>(py + scrollY_);
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_Rect r{ sx - 10, sy - 10, 20, 20 };  // 从12x12增大到20x20
-        SDL_RenderFillRect(renderer, &r);
+        // 计算移动路径的起点和当前点
+        int startX = mapOffsetX_ + static_cast<int>(moveStartPos_.x);
+        int startY = mapOffsetY_ + static_cast<int>(moveStartPos_.y + scrollY_);
         
-        // 绘制移动中的倒三角标注
-        drawTriangleMarker(renderer, sx, sy - 25, 30);
+        float currentX = moveStartPos_.x + (moveEndPos_.x - moveStartPos_.x) * moveT_;
+        float currentY = moveStartPos_.y + (moveEndPos_.y - moveStartPos_.y) * moveT_;
+        int currentScreenX = mapOffsetX_ + static_cast<int>(currentX);
+        int currentScreenY = mapOffsetY_ + static_cast<int>(currentY + scrollY_);
+        
+        // 绘制蓝色粗线表示已走过的路径
+        SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255); // 蓝色
+        drawDashedLine(renderer, startX, startY, currentScreenX, currentScreenY, 16, 2); // 更粗的蓝色虚线
     }
     
     // 绘制玩家移动动画（Boss战胜利后的向上移动）
@@ -2050,18 +2129,12 @@ void MapExploreState::renderMap(SDL_Renderer* renderer) {
         int sx = mapOffsetX_ + static_cast<int>(px);
         int sy = mapOffsetY_ + static_cast<int>(py + scrollY_);
         
-        // 绘制更大的白色圆点表示玩家移动
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_Rect r{ sx - 15, sy - 15, 30, 30 };  // 更大的圆点
-        SDL_RenderFillRect(renderer, &r);
+        // 绘制蓝色粗线表示玩家移动路径
+        int startX = mapOffsetX_ + static_cast<int>(playerMoveStartX_);
+        int startY = mapOffsetY_ + static_cast<int>(playerMoveStartY_ + scrollY_);
         
-        // 添加一个发光效果
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 100);
-        SDL_Rect glow{ sx - 20, sy - 20, 40, 40 };
-        SDL_RenderFillRect(renderer, &glow);
-        
-        // 绘制移动中的倒三角标注
-        drawTriangleMarker(renderer, sx, sy - 25, 30);
+        SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255); // 蓝色
+        drawDashedLine(renderer, startX, startY, sx, sy, 16, 2); // 更粗的蓝色虚线
     }
 }
 
@@ -2073,14 +2146,47 @@ void MapExploreState::renderNode(SDL_Renderer* renderer, const MapNode& node, in
     bool isCurrentNode = (playerCurrentNode_ != -1 && index == playerCurrentNode_);
     bool isAccessible = (playerCurrentNode_ != -1 && isNodeAccessible(index));
     
-    // 不再绘制节点的颜色方块，只保留图标
+    // 检查是否为悬停节点且可移动
+    bool isHovered = (hoveredNode_ == index);
+    bool canMove = isAccessible;
+    float scale = (isHovered && canMove) ? hoverScale_ : 1.0f;
     
-    // 渲染事件图标
-    renderEventIcon(renderer, node, x, y);
+    // 应用悬停缩放效果（只有可移动节点才有悬停效果）
+    if (isHovered && canMove && scale != 1.0f) {
+        // 计算缩放后的尺寸
+        int scaledSize = static_cast<int>(node.size * scale);
+        int offsetX = (node.size - scaledSize) / 2;
+        int offsetY = (node.size - scaledSize) / 2;
+        
+        // 调整渲染位置，使缩放以节点中心为基准
+        x += offsetX;
+        y += offsetY;
+        
+        // 创建缩放后的渲染区域
+        SDL_Rect scaledRect = {x, y, scaledSize, scaledSize};
+        
+        // 渲染事件图标（带缩放）
+        renderEventIconScaled(renderer, node, x, y, scaledSize);
+    } else {
+        // 正常渲染事件图标
+        renderEventIcon(renderer, node, x, y);
+    }
     
-    // 如果是当前位置，在节点上方绘制倒三角标注
+    // 为当前节点添加细圆形边框
     if (isCurrentNode) {
-        drawTriangleMarker(renderer, x, y - node.size/2 - 25, 30);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); // 白色细边框
+        // 图标是以中心点定位的，所以边框也要以中心点定位
+        int centerX = x;
+        int centerY = y;
+        int radius = node.size / 2 + 8; // 比节点稍大一点
+        
+        // 绘制圆形边框（使用多个点来近似圆形）
+        for (int angle = 0; angle < 360; angle += 2) {
+            float rad = angle * 3.14159f / 180.0f;
+            int px = centerX + static_cast<int>(radius * cosf(rad));
+            int py = centerY + static_cast<int>(radius * sinf(rad));
+            SDL_RenderDrawPoint(renderer, px, py);
+        }
     }
 }
 
@@ -2260,9 +2366,39 @@ void MapExploreState::renderConnection(SDL_Renderer* renderer, int fromGlobalInd
     // 使用全局索引获取显示坐标（含随机美化位移）
     int fx, fy; getScreenXYForGlobalIndex(fromGlobalIndex, fx, fy);
     int tx, ty; getScreenXYForGlobalIndex(toGlobalIndex, tx, ty);
-    // 使用深灰色粗虚线，在灰白色背景下更清晰
-    SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
-    drawDashedLine(renderer, fx, fy, tx, ty, 8, 4); // 8像素线段，4像素间隔
+    
+    // 检查连接的两个节点是否都已经访问过
+    const MapNode* fromNode = getNodeByGlobalIndex(fromGlobalIndex);
+    const MapNode* toNode = getNodeByGlobalIndex(toGlobalIndex);
+    
+    bool isPathWalked = false;
+    if (fromNode && toNode) {
+        // 如果两个节点都已经访问过，说明这条路径已经走过
+        isPathWalked = fromNode->visited && toNode->visited;
+    }
+    
+    // 检查是否需要绘制方向箭头（从当前节点到可移动节点）
+    bool shouldDrawArrow = false;
+    if (playerCurrentNode_ != -1) {
+        bool isFromCurrent = (fromGlobalIndex == playerCurrentNode_);
+        bool isToAccessible = (toGlobalIndex != playerCurrentNode_ && isNodeAccessible(toGlobalIndex));
+        shouldDrawArrow = isFromCurrent && isToAccessible;
+    }
+    
+    if (isPathWalked) {
+        // 走过的路径使用蓝色粗虚线
+        SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
+        drawDashedLine(renderer, fx, fy, tx, ty, 16, 2); // 更粗的蓝色虚线：16像素线段，2像素间隔
+    } else {
+        // 未走过的路径使用深灰色虚线
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+        drawDashedLine(renderer, fx, fy, tx, ty, 8, 4); // 8像素线段，4像素间隔
+    }
+    
+    // 绘制方向箭头
+    if (shouldDrawArrow) {
+        drawDirectionArrow(renderer, fx, fy, tx, ty);
+    }
 }
 
 SDL_Point MapExploreState::gridToScreen(int gridX, int gridY) const {
@@ -2511,6 +2647,13 @@ void MapExploreState::movePlayerToNode(int nodeIndex) {
     }
     
     playerCurrentNode_ = nodeIndex;
+    
+    // 标记当前节点为已访问
+    MapNode* currentNode = getNodeByGlobalIndex(nodeIndex);
+    if (currentNode) {
+        currentNode->visited = true;
+    }
+    
     updateAccessibleNodes();
     
     // 检查是否需要自动滚动到玩家位置
@@ -2923,6 +3066,12 @@ void MapExploreState::loadEventIcons(SDL_Renderer* renderer) {
     }
 }
 
+void MapExploreState::setStatusMessage(const std::string& message, float duration) {
+    statusMessage_ = message;
+    messageTime_ = duration;
+    messageDuration_ = duration;
+}
+
 void MapExploreState::updateEventIcons(float dt) {
     // 静态图标不需要动画更新
     // 如果需要动画，可以在这里添加动画逻辑
@@ -2960,6 +3109,31 @@ void MapExploreState::renderEventIcon(SDL_Renderer* renderer, const MapNode& nod
         y - renderSize/2 + offsetY,
         renderSize,
         renderSize
+    };
+    
+    SDL_RenderCopy(renderer, icon.texture, nullptr, &destRect);
+}
+
+void MapExploreState::renderEventIconScaled(SDL_Renderer* renderer, const MapNode& node, int x, int y, int size) {
+    std::string iconName = getIconNameForNode(node);
+    if (iconName.empty()) {
+        return;
+    }
+    
+    auto it = eventIcons_.find(iconName);
+    if (it == eventIcons_.end()) {
+        return;
+    }
+    
+    const auto& icon = it->second;
+    if (!icon.texture) return;
+    
+    // 使用指定的尺寸进行渲染
+    SDL_Rect destRect = {
+        x - size/2,
+        y - size/2,
+        size,
+        size
     };
     
     SDL_RenderCopy(renderer, icon.texture, nullptr, &destRect);
@@ -3091,8 +3265,9 @@ void MapExploreState::drawDashedLine(SDL_Renderer* renderer, int x1, int y1, int
             float endX = x1 + endDistance * unitX;
             float endY = y1 + endDistance * unitY;
             
-            // 绘制粗线条（5像素宽）
-            for (int i = 0; i < 5; ++i) {
+            // 绘制粗线条（根据dashLength调整宽度）
+            int lineWidth = std::max(1, dashLength / 4); // 根据dashLength计算线条宽度
+            for (int i = 0; i < lineWidth; ++i) {
                 SDL_RenderDrawLine(renderer, 
                     static_cast<int>(startX), static_cast<int>(startY + i), 
                     static_cast<int>(endX), static_cast<int>(endY + i));
@@ -3140,4 +3315,47 @@ void MapExploreState::drawTriangleMarkerWithAlpha(SDL_Renderer* renderer, int x,
         int rightX = x + currentWidth / 2;
         SDL_RenderDrawLine(renderer, leftX, scanY, rightX, scanY);
     }
+}
+
+void MapExploreState::drawDirectionArrow(SDL_Renderer* renderer, int fromX, int fromY, int toX, int toY) {
+    // 设置箭头颜色（黑灰色）
+    SDL_SetRenderDrawColor(renderer, 60, 60, 60, 255);
+    
+    // 计算箭头位置（在虚线的中段）
+    float dx = toX - fromX;
+    float dy = toY - fromY;
+    float length = sqrtf(dx * dx + dy * dy);
+    
+    if (length < 10) return; // 距离太近不绘制箭头
+    
+    // 归一化方向向量
+    dx /= length;
+    dy /= length;
+    
+    // 箭头大小
+    int arrowSize = 14;
+    float arrowLength = static_cast<float>(arrowSize);
+    
+    // 箭头位置（在虚线的中段）
+    float arrowX = fromX + dx * (length * 0.5f);
+    float arrowY = fromY + dy * (length * 0.5f);
+    
+    // 计算箭头的两个侧边点
+    float perpX = -dy; // 垂直方向
+    float perpY = dx;
+    
+    // 箭头顶点
+    int tipX = static_cast<int>(arrowX + dx * arrowLength);
+    int tipY = static_cast<int>(arrowY + dy * arrowLength);
+    
+    // 箭头底部的两个点
+    int leftX = static_cast<int>(arrowX - dx * arrowLength * 0.5f + perpX * arrowLength * 0.3f);
+    int leftY = static_cast<int>(arrowY - dy * arrowLength * 0.5f + perpY * arrowLength * 0.3f);
+    int rightX = static_cast<int>(arrowX - dx * arrowLength * 0.5f - perpX * arrowLength * 0.3f);
+    int rightY = static_cast<int>(arrowY - dy * arrowLength * 0.5f - perpY * arrowLength * 0.3f);
+    
+    // 绘制箭头（三角形）
+    SDL_RenderDrawLine(renderer, tipX, tipY, leftX, leftY);
+    SDL_RenderDrawLine(renderer, tipX, tipY, rightX, rightY);
+    SDL_RenderDrawLine(renderer, leftX, leftY, rightX, rightY);
 }

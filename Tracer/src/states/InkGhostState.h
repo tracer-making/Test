@@ -32,6 +32,7 @@ private:
     
     // 返回按钮
     Button* backButton_ = nullptr;
+    Button* tutorialButton_ = nullptr;
     
     // 手牌相关
     std::vector<Card> handCards_;
@@ -61,4 +62,7 @@ private:
     // 屏幕尺寸
     int screenW_ = 0;
     int screenH_ = 0;
+    
+    // 教程系统
+    void startTutorial();
 };

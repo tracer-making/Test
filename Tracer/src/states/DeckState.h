@@ -36,10 +36,14 @@ private:
 	_TTF_Font* statFont_ = nullptr;
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
+	Button* tutorialButton_ = nullptr;
 
 	std::vector<CardView> cards_;
 	// 背景水墨点阵
 	std::vector<std::pair<int,int>> bgDots_;
+
+	// 教程系统
+	void startTutorial();
 
 
 

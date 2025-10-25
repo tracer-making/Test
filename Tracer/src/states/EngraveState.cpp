@@ -2,6 +2,8 @@
 #include "TestState.h"
 #include "MapExploreState.h"
 #include "../core/App.h"
+#include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include <random>
 #include <cmath>
 
@@ -12,6 +14,7 @@ EngraveState::~EngraveState() {
 	if (smallFont_) TTF_CloseFont(smallFont_);
 	if (choiceFont_) TTF_CloseFont(choiceFont_);
 	delete backButton_;
+	delete tutorialButton_;
 }
 
 void EngraveState::onEnter(App& app) {
@@ -33,6 +36,18 @@ void EngraveState::onEnter(App& app) {
 		backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; });
 	}
 
+	// 教程按钮（右上角）
+	tutorialButton_ = new Button();
+	if (tutorialButton_) {
+		SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+		tutorialButton_->setRect(r);
+		tutorialButton_->setText(u8"?");
+		if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+		tutorialButton_->setOnClick([this]() {
+			startTutorial();
+		});
+	}
+
     // 不再需要确认按钮
 
 	buildRandomChoices();
@@ -42,7 +57,16 @@ void EngraveState::onEnter(App& app) {
 void EngraveState::onExit(App& app) {}
 
 void EngraveState::handleEvent(App& app, const SDL_Event& e) {
+	// 教程系统交互阻止
+	if (CardRenderer::isTutorialActive()) {
+		if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+			CardRenderer::handleTutorialClick();
+		}
+		return;
+	}
+
 	if (backButton_) backButton_->handleEvent(e);
+	if (tutorialButton_) tutorialButton_->handleEvent(e);
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx=e.button.x, my=e.button.y;
 		for (int i=0;i<(int)choices_.size();++i) {
@@ -146,6 +170,9 @@ void EngraveState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void EngraveState::update(App& app, float dt) {
+	// 更新教程系统
+	CardRenderer::updateTutorial(dt);
+
 	if (pendingBackToTest_) {
 		pendingBackToTest_ = false;
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
@@ -433,6 +460,12 @@ void EngraveState::render(App& app) {
             }
         }
     }
+    
+    // 渲染教程按钮
+    if (tutorialButton_) tutorialButton_->render(r);
+    
+    // 渲染教程
+    CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
 }
 
 void EngraveState::buildRandomChoices() {
@@ -482,6 +515,24 @@ void EngraveState::buildRandomChoices() {
 void EngraveState::layoutChoices() {
     int size = 240; int gap = 36; int totalW = 3*size + 2*gap; int x0 = (screenW_-totalW)/2; int y = 220;
     for (int i=0;i<3;++i) { choices_[i].rect = { x0 + i*(size+gap), y, size, size }; }
+}
+
+void EngraveState::startTutorial() {
+	// 使用统一的教程文本
+	std::vector<std::string> tutorialTexts = TutorialTexts::getEngraveTutorial();
+	
+	// 创建空的高亮区域（不使用高亮功能）
+	std::vector<SDL_Rect> highlightRects = {
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}  // 无高亮
+	};
+	
+	// 启动教程
+	CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }
 
 

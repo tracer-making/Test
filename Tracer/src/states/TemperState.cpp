@@ -3,6 +3,7 @@
 #include "MapExploreState.h"
 #include "../core/App.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include <random>
 
 TemperState::TemperState() = default;
@@ -12,6 +13,7 @@ TemperState::~TemperState() {
 	if (smallFont_) TTF_CloseFont(smallFont_);
 	delete backButton_;
 	delete confirmButton_;
+	delete tutorialButton_;
 }
 
 void TemperState::onEnter(App& app) {
@@ -22,6 +24,7 @@ void TemperState::onEnter(App& app) {
 
 	backButton_ = new Button(); if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回地图"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; }); }
 	confirmButton_ = new Button(); if (confirmButton_) { confirmButton_->setRect({screenW_/2 - 20, screenH_/2 + 160, 40, 40}); confirmButton_->setText(u8"+"); if (smallFont_) confirmButton_->setFont(smallFont_, app.getRenderer()); confirmButton_->setOnClick([this]() { applyTemper(); }); }
+	tutorialButton_ = new Button(); if (tutorialButton_) { tutorialButton_->setRect({screenW_ - 120, 20, 100, 35}); tutorialButton_->setText(u8"?"); if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer()); tutorialButton_->setOnClick([this]() { startTutorial(); }); }
 
 	// 进入时随机方案：+1攻 或 +2血（概率各50%）
 	{
@@ -35,8 +38,17 @@ void TemperState::onEnter(App& app) {
 void TemperState::onExit(App& app) {}
 
 void TemperState::handleEvent(App& app, const SDL_Event& e) {
+    // 教程系统处理
+    if (CardRenderer::isTutorialActive()) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            CardRenderer::handleTutorialClick();
+        }
+        return;
+    }
+    
     if (backButton_) backButton_->handleEvent(e);
     if (confirmButton_) confirmButton_->handleEvent(e);
+    if (tutorialButton_) tutorialButton_->handleEvent(e);
     
     if (e.type == SDL_MOUSEMOTION) {
         int mx = e.motion.x, my = e.motion.y;
@@ -137,6 +149,9 @@ void TemperState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void TemperState::update(App& app, float dt) {
+    // 更新教程系统
+    CardRenderer::updateTutorial(dt);
+    
 	if (pendingBackToTest_) { pendingBackToTest_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState()))); return; }
     if (animActive_) {
         animTime_ += dt;
@@ -152,6 +167,7 @@ void TemperState::render(App& app) {
 	SDL_Renderer* r = app.getRenderer(); SDL_SetRenderDrawColor(r, 18,22,32,255); SDL_RenderClear(r);
     if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect d{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r,titleTex_,nullptr,&d); }
     if (backButton_ && App::isGodMode()) backButton_->render(r); if (confirmButton_) confirmButton_->render(r);
+    if (tutorialButton_) tutorialButton_->render(r);
 
     // 中央牌位：若已选择，则显示该牌；否则显示提示底板
     if (selectedLibIndex_ >= 0 && selectedLibIndex_ < (int)libIndices_.size()) {
@@ -214,6 +230,9 @@ void TemperState::render(App& app) {
     
     // 渲染全局印记提示
     CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
+    
+    // 渲染教程系统
+    CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
 }
 
 void TemperState::layoutUIRects() {
@@ -315,6 +334,25 @@ void TemperState::buildSelectionGrid() {
     int remainingH = screenH_ - availableTop - 40; // 底部留 40
     int y = availableTop + SDL_max(0, (remainingH - totalH)/2);
     for (int i=0;i<n; ++i) { int r=i/cols, c=i%cols; SDL_Rect rc{ startX + c*(thumbW+gap), y + r*(thumbH+gap), thumbW, thumbH }; libRects_.push_back(rc); }
+}
+
+void TemperState::startTutorial() {
+    // 使用统一的教程文本
+    std::vector<std::string> tutorialTexts = TutorialTexts::getTemperTutorial();
+    
+    // 创建空的高亮区域（不使用高亮功能）
+    std::vector<SDL_Rect> highlightRects = {
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}  // 无高亮
+    };
+    
+    // 启动教程
+    CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }
 
 

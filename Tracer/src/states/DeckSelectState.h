@@ -54,7 +54,13 @@ private:
     // 状态切换
     bool pendingGoMapExplore_ = false;
     
+    // 教程按钮
+    Button* tutorialButton_ = nullptr;
+    
     void initializeDecks();
     void layoutDecks();
     void renderDeckView(App& app);
+    
+    // 教程系统
+    void startTutorial();
 };

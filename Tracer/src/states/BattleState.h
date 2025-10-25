@@ -219,6 +219,10 @@ private:
 	bool pendingGoVictory_ = false;  // 跳转到胜利界面
 	int hoveredItemIndex_ = -1; // 当前悬停的道具索引
 	
+	// 教程按钮
+	Button* tutorialButton_ = nullptr;
+	void startTutorial();
+	
 	// 风雅扇效果跟踪
 	std::vector<int> fengyaShanAirstrikeSlots_;  // 记录获得风雅扇空袭效果的卡牌位置
 	

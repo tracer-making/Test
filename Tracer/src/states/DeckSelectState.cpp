@@ -3,6 +3,7 @@
 #include "../core/App.h"
 #include "../core/Cards.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
 
@@ -14,6 +15,7 @@ DeckSelectState::~DeckSelectState() {
     if (smallFont_) TTF_CloseFont(smallFont_);
     if (deckNameFont_) TTF_CloseFont(deckNameFont_);
     if (deckDescFont_) TTF_CloseFont(deckDescFont_);
+    if (tutorialButton_) delete tutorialButton_;
 }
 
 void DeckSelectState::onEnter(App& app) {
@@ -45,11 +47,33 @@ void DeckSelectState::onEnter(App& app) {
     // 初始化六大初始牌组
     initializeDecks();
     layoutDecks();
+    
+    // 教程按钮（右上角）
+    tutorialButton_ = new Button();
+    if (tutorialButton_) {
+        SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+        tutorialButton_->setRect(r);
+        tutorialButton_->setText(u8"?");
+        if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+        tutorialButton_->setOnClick([this]() {
+            startTutorial();
+        });
+    }
 }
 
 void DeckSelectState::onExit(App& app) {}
 
 void DeckSelectState::handleEvent(App& app, const SDL_Event& e) {
+    // 教程系统处理
+    if (CardRenderer::isTutorialActive()) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            CardRenderer::handleTutorialClick();
+        }
+        return;
+    }
+    
+    if (tutorialButton_) tutorialButton_->handleEvent(e);
+    
     if (viewingDeck_) {
         // 查看牌组内容时的处理
         if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_s) {
@@ -236,6 +260,9 @@ void DeckSelectState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void DeckSelectState::update(App& app, float dt) {
+    // 更新教程系统
+    CardRenderer::updateTutorial(dt);
+    
     if (pendingGoMapExplore_) {
         pendingGoMapExplore_ = false;
         app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
@@ -247,16 +274,19 @@ void DeckSelectState::render(App& app) {
     SDL_SetRenderDrawColor(r, 18, 22, 32, 255);
     SDL_RenderClear(r);
 
+    // 渲染教程按钮（始终显示）
+    if (tutorialButton_) tutorialButton_->render(r);
+    
     if (viewingDeck_) {
         // 渲染牌组内容查看界面
         renderDeckView(app);
     } else {
         // 渲染牌组选择界面
-        // 渲染标题
-        if (titleTex_) {
-            SDL_Rect titleRect{ (screenW_ - titleW_) / 2, 20, titleW_, titleH_ };
-            SDL_RenderCopy(r, titleTex_, nullptr, &titleRect);
-        }
+        // 渲染标题（已删除）
+        // if (titleTex_) {
+        //     SDL_Rect titleRect{ (screenW_ - titleW_) / 2, 20, titleW_, titleH_ };
+        //     SDL_RenderCopy(r, titleTex_, nullptr, &titleRect);
+        // }
 
         // 渲染六大初始牌组
         for (size_t i = 0; i < initialDecks_.size(); ++i) {
@@ -498,8 +528,8 @@ void DeckSelectState::renderDeckView(App& app) {
         }
     }
     
-    // 渲染操作提示（居中显示）
-    if (deckDescFont_) {
+    // 渲染操作提示（居中显示）- 教程激活时不显示
+    if (deckDescFont_ && !CardRenderer::isTutorialActive()) {
         SDL_Color hintCol{ 150, 160, 170, 255 };
         SDL_Surface* hintSurf = TTF_RenderUTF8_Blended(deckDescFont_, u8"按S键进入地图，按右键返回选择", hintCol);
         if (hintSurf) {
@@ -513,4 +543,26 @@ void DeckSelectState::renderDeckView(App& app) {
     
     // 渲染全局印记提示
     CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
+    
+    // 渲染教程系统
+    CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
+}
+
+void DeckSelectState::startTutorial() {
+    // 使用统一的教程文本
+    std::vector<std::string> tutorialTexts = TutorialTexts::getDeckSelectTutorial();
+    
+    // 创建空的高亮区域（不使用高亮功能）
+    std::vector<SDL_Rect> highlightRects = {
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}  // 无高亮
+    };
+    
+    // 启动教程
+    CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }

@@ -49,6 +49,10 @@ private:
     // 状态切换
     bool pendingGoMapExplore_ = false;
     
+    // 教程按钮
+    Button* tutorialButton_ = nullptr;
+    
     void layoutCards();
     void updateScrollBounds();
+    void startTutorial();
 };

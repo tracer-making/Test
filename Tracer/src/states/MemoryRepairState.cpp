@@ -3,6 +3,7 @@
 #include "../core/Deck.h"
 #include "../core/Cards.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include "MapExploreState.h"
 #include <random>
 #include <algorithm>
@@ -30,15 +31,18 @@ static void drawBackIcon(SDL_Renderer* r, bool bone, int x, int y, int size) {
 MemoryRepairState::MemoryRepairState() {
 	backButton_ = new Button();
 	rerollButton_ = new Button();
+	tutorialButton_ = new Button();
 }
 
 MemoryRepairState::MemoryRepairState(bool isBossVictory) : isBossVictory_(isBossVictory) {
 	backButton_ = new Button();
 	rerollButton_ = new Button();
+	tutorialButton_ = new Button();
 }
 MemoryRepairState::~MemoryRepairState() {
 	if (backButton_) { delete backButton_; backButton_ = nullptr; }
 	if (rerollButton_) { delete rerollButton_; rerollButton_ = nullptr; }
+	if (tutorialButton_) { delete tutorialButton_; tutorialButton_ = nullptr; }
 	if (titleFont_) { TTF_CloseFont(titleFont_); titleFont_ = nullptr; }
 	if (smallFont_) { TTF_CloseFont(smallFont_); smallFont_ = nullptr; }
 	if (cardNameFont_) { TTF_CloseFont(cardNameFont_); cardNameFont_ = nullptr; }
@@ -84,6 +88,18 @@ void MemoryRepairState::onEnter(App& app) {
 			}
 		});
 	}
+	
+	// 教程按钮（右上角）
+	if (tutorialButton_) {
+		SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+		tutorialButton_->setRect(r);
+		tutorialButton_->setText(u8"?");
+		if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+		tutorialButton_->setOnClick([this]() {
+			startTutorial();
+		});
+	}
+	
 	// 使用地图传递的提示类型，如果没有则随机选择
 	if (mapHintType_ != BackHintType::Unknown) {
 		sessionHint_ = mapHintType_;
@@ -115,6 +131,12 @@ void MemoryRepairState::onEnter(App& app) {
 }
 void MemoryRepairState::onExit(App& app) {}
 void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
+	// 教程系统交互锁定
+	if (CardRenderer::isTutorialActive()) {
+		CardRenderer::handleTutorialClick();
+		return;
+	}
+	
 	// 处理印记提示
 	if (e.type == SDL_MOUSEMOTION) {
 		int mouseX = e.motion.x;
@@ -155,6 +177,8 @@ void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
 	if (backButton_) backButton_->handleEvent(e);
 	// 处理重新抽卡按钮事件（Boss战胜利时不处理）
 	if (rerollButton_ && !rerollUsed_ && !isBossVictory_) rerollButton_->handleEvent(e);
+	// 处理教程按钮事件
+	if (tutorialButton_) tutorialButton_->handleEvent(e);
 	
 	if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int mx = e.button.x, my = e.button.y;
@@ -188,30 +212,43 @@ void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
 		}
 	}
 }
-void MemoryRepairState::update(App& app, float dt) {}
+void MemoryRepairState::update(App& app, float dt) {
+    // 更新教程系统
+    CardRenderer::updateTutorial(dt);
+    
+    // 处理状态消息显示时间
+    if (messageTime_ > 0.0f) {
+        messageTime_ -= dt;
+        if (messageTime_ <= 0.0f) {
+            statusMessage_ = "";
+        }
+    }
+}
 void MemoryRepairState::render(App& app) {
 	SDL_Renderer* r = app.getRenderer();
 	SDL_SetRenderDrawColor(r, 18, 22, 32, 255);
 	SDL_RenderClear(r);
 
-	// 标题
-	if (titleFont_) {
-		SDL_Color col{220,230,255,255};
-		const char* titleText = isBossVictory_ ? u8"Boss战胜利奖励（三选一）" : u8"记忆修复（三选一）";
-		SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, titleText, col);
-		if (s) {
-			SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
-			SDL_Rect dst{ (screenW_-s->w)/2, 60, s->w, s->h };
-			SDL_RenderCopy(r, t, nullptr, &dst);
-			SDL_DestroyTexture(t);
-			SDL_FreeSurface(s);
-		}
-	}
+	// 标题（已删除）
+	// if (titleFont_) {
+	// 	SDL_Color col{220,230,255,255};
+	// 	const char* titleText = isBossVictory_ ? u8"Boss战胜利奖励（三选一）" : u8"记忆修复（三选一）";
+	// 	SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, titleText, col);
+	// 	if (s) {
+	// 		SDL_Texture* t = SDL_CreateTextureFromSurface(r, s);
+	// 		SDL_Rect dst{ (screenW_-s->w)/2, 60, s->w, s->h };
+	// 		SDL_RenderCopy(r, t, nullptr, &dst);
+	// 		SDL_DestroyTexture(t);
+	// 		SDL_FreeSurface(s);
+	// 	}
+	// }
 
 	// 返回按钮（只在上帝模式下显示）
 	if (backButton_ && App::isGodMode()) backButton_->render(r);
 	// 重新抽卡按钮（Boss战胜利时不渲染）
 	if (rerollButton_ && !rerollUsed_ && !isBossVictory_) rerollButton_->render(r);
+	// 教程按钮
+	if (tutorialButton_) tutorialButton_->render(r);
 
     // 渲染三张候选卡（使用与战斗界面相近尺寸）
 	for (int i=0;i<(int)candidates_.size(); ++i) {
@@ -314,8 +351,20 @@ void MemoryRepairState::render(App& app) {
 		}
 	}
 	
+	// 渲染状态消息
+	CardRenderer::renderStatusMessage(r, statusMessage_, smallFont_, screenW_, screenH_);
+	
 	// 渲染印记提示
 	CardRenderer::renderGlobalMarkTooltip(app, cardStatFont_);
+	
+	// 渲染教程
+	CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
+}
+
+void MemoryRepairState::setStatusMessage(const std::string& message, float duration) {
+	statusMessage_ = message;
+	messageTime_ = duration;
+	messageDuration_ = duration;
 }
 
 void MemoryRepairState::buildCandidates() {
@@ -478,4 +527,22 @@ void MemoryRepairState::layoutCandidates() {
 		SDL_Rect buttonRect{ buttonX, buttonY, 120, 40 };
 		rerollButton_->setRect(buttonRect);
 	}
+}
+
+void MemoryRepairState::startTutorial() {
+	// 使用统一的教程文本
+	std::vector<std::string> tutorialTexts = TutorialTexts::getMemoryRepairTutorial();
+	
+	// 创建空的高亮区域（不使用高亮功能）
+	std::vector<SDL_Rect> highlightRects = {
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}  // 无高亮
+	};
+	
+	// 启动教程
+	CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }

@@ -27,6 +27,7 @@ private:
 	_TTF_Font* statFont_ = nullptr;
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
+	Button* tutorialButton_ = nullptr;
 	int screenW_ = 1600, screenH_ = 1000;
 
 	// 状态切换
@@ -49,4 +50,7 @@ private:
 
 	void buildEntries();
 	void layoutEntries();
+	
+	// 教程系统
+	void startTutorial();
 };

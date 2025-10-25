@@ -26,7 +26,8 @@ private:
 	_TTF_Font* smallFont_ = nullptr;
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
-    Button* confirmButton_ = nullptr; // “+”按钮
+    Button* confirmButton_ = nullptr; // "+"按钮
+    Button* tutorialButton_ = nullptr;
 	int screenW_ = 1280, screenH_ = 720;
 	
 	// 状态切换
@@ -57,6 +58,9 @@ private:
     void openSelection();
     void buildSelectionGrid();
     void applyTemper();
+    
+    // 教程系统
+    void startTutorial();
 };
 
 

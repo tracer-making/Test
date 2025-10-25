@@ -3,6 +3,7 @@
 #include "MapExploreState.h"
 #include "../core/App.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include <set>
 #include <iostream>
 
@@ -16,6 +17,7 @@ HeritageState::~HeritageState() {
 	delete backButton_;
 	delete confirmButton_;
 	delete plusButton_;
+	delete tutorialButton_;
 }
 
 void HeritageState::onEnter(App& app) {
@@ -47,6 +49,18 @@ void HeritageState::onEnter(App& app) {
 		plusButton_->setOnClick([this]() { performInheritance(); });
 	}
 
+	// 教程按钮（右上角）
+	tutorialButton_ = new Button();
+	if (tutorialButton_) {
+		SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+		tutorialButton_->setRect(r);
+		tutorialButton_->setText(u8"?");
+		if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+		tutorialButton_->setOnClick([this]() {
+			startTutorial();
+		});
+	}
+
 	// 使用玩家的实际牌堆
 	auto& store = DeckStore::instance();
 	
@@ -63,7 +77,16 @@ void HeritageState::onEnter(App& app) {
 void HeritageState::onExit(App& app) {}
 
 void HeritageState::handleEvent(App& app, const SDL_Event& e) {
+	// 教程系统交互阻止
+	if (CardRenderer::isTutorialActive()) {
+		if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+			CardRenderer::handleTutorialClick();
+		}
+		return;
+	}
+
 	if (backButton_) backButton_->handleEvent(e);
+	if (tutorialButton_) tutorialButton_->handleEvent(e);
 	
 	// 只有两个牌位都有卡牌时才处理+按钮事件
 	if (hasSourceCard_ && hasTargetCard_ && plusButton_) {
@@ -261,6 +284,9 @@ void HeritageState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void HeritageState::update(App& app, float dt) {
+	// 更新教程系统
+	CardRenderer::updateTutorial(dt);
+
 	if (pendingBackToTest_) {
 		pendingBackToTest_ = false;
 		app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState())));
@@ -364,6 +390,12 @@ void HeritageState::render(App& app) {
 	
 	// 渲染全局印记提示
 	CardRenderer::renderGlobalMarkTooltip(app, cardStatFont_);
+	
+	// 渲染教程按钮
+	if (tutorialButton_) tutorialButton_->render(r);
+	
+	// 渲染教程
+	CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
 }
 
 void HeritageState::renderMainInterface(App& app) {
@@ -846,6 +878,24 @@ std::unordered_map<std::string, std::pair<int, int>> HeritageState::getPendingCa
 	// 由于无法直接访问，我们返回空映射
 	// 实际实现中可能需要通过App或其他方式传递这个信息
 	return {};
+}
+
+void HeritageState::startTutorial() {
+	// 使用统一的教程文本
+	std::vector<std::string> tutorialTexts = TutorialTexts::getHeritageTutorial();
+	
+	// 创建空的高亮区域（不使用高亮功能）
+	std::vector<SDL_Rect> highlightRects = {
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}  // 无高亮
+	};
+	
+	// 启动教程
+	CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }
 
 

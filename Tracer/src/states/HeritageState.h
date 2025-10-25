@@ -32,6 +32,7 @@ private:
 	SDL_Texture* titleTex_ = nullptr;
 	Button* backButton_ = nullptr;
 	Button* confirmButton_ = nullptr;  // 动态创建的确认按钮
+	Button* tutorialButton_ = nullptr;
 
 	// 屏幕
 	int screenW_ = 1280;
@@ -93,6 +94,9 @@ private:
 	
 	// 获取战斗中的待更新数值
 	std::unordered_map<std::string, std::pair<int, int>> getPendingCardUpdates();
+	
+	// 教程系统
+	void startTutorial();
 };
 
 

@@ -55,6 +55,7 @@ private:
     
     // 返回按钮
     Button* backButton_ = nullptr;
+    Button* tutorialButton_ = nullptr;
     
     // 牌位相关
     SDL_Rect rabbitSlotRect_;    // 兔皮牌位
@@ -94,4 +95,7 @@ private:
     
     // 地图层级
     int mapLayer_ = 1;
+    
+    // 教程系统
+    void startTutorial();
 };

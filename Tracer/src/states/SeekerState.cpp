@@ -4,6 +4,7 @@
 #include "../core/Deck.h"
 #include "../core/Cards.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include <algorithm>
 #include <random>
 
@@ -16,6 +17,7 @@ SeekerState::~SeekerState() {
 	if (statFont_) TTF_CloseFont(statFont_);
 	if (titleTex_) SDL_DestroyTexture(titleTex_);
 	if (backButton_) delete backButton_;
+	if (tutorialButton_) delete tutorialButton_;
 }
 
 void SeekerState::onEnter(App& app) {
@@ -28,6 +30,7 @@ void SeekerState::onEnter(App& app) {
 	if (titleFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, u8"寻物人", col); if (s) { titleTex_ = SDL_CreateTextureFromSurface(app.getRenderer(), s); SDL_FreeSurface(s);} }
 
 	backButton_ = new Button(); if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回地图"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; }); }
+	tutorialButton_ = new Button(); if (tutorialButton_) { tutorialButton_->setRect({screenW_ - 120, 20, 100, 35}); tutorialButton_->setText(u8"?"); if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer()); tutorialButton_->setOnClick([this]() { startTutorial(); }); }
 
 	buildEntries();
 	layoutEntries();
@@ -36,8 +39,17 @@ void SeekerState::onEnter(App& app) {
 void SeekerState::onExit(App& app) {}
 
 void SeekerState::handleEvent(App& app, const SDL_Event& e) {
+	// 教程系统处理
+	if (CardRenderer::isTutorialActive()) {
+		if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+			CardRenderer::handleTutorialClick();
+		}
+		return;
+	}
+	
 	// 处理按钮事件（只在上帝模式下）
 	if (backButton_ && App::isGodMode()) backButton_->handleEvent(e);
+	if (tutorialButton_ && App::isGodMode()) tutorialButton_->handleEvent(e);
 	
 	if (e.type == SDL_MOUSEMOTION) {
 		int mx = e.motion.x, my = e.motion.y;
@@ -86,6 +98,9 @@ void SeekerState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void SeekerState::update(App& app, float dt) {
+    // 更新教程系统
+    CardRenderer::updateTutorial(dt);
+    
     if (animActive_) {
         animTime_ += dt;
         if (animTime_ >= animDuration_) { animActive_ = false; pendingGoMapExplore_ = true; }
@@ -95,9 +110,13 @@ void SeekerState::update(App& app, float dt) {
 
 void SeekerState::render(App& app) {
 	SDL_Renderer* r = app.getRenderer(); SDL_SetRenderDrawColor(r, 18,22,32,255); SDL_RenderClear(r);
-	if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect d{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r,titleTex_,nullptr,&d); }
+	// 标题（已删除）
+	// if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect d{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r,titleTex_,nullptr,&d); }
 	// 返回按钮（只在上帝模式下显示）
 	if (backButton_ && App::isGodMode()) backButton_->render(r);
+	
+	// 教程按钮（始终显示）
+	if (tutorialButton_) tutorialButton_->render(r);
 
 	for (const auto& en : entries_) {
 		if (en.revealed) {
@@ -142,6 +161,9 @@ void SeekerState::render(App& app) {
 	
 	// 渲染全局印记提示
 	CardRenderer::renderGlobalMarkTooltip(app, statFont_);
+	
+	// 渲染教程系统
+	CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
 }
 
 void SeekerState::buildEntries() {
@@ -195,4 +217,21 @@ void SeekerState::buildEntries() {
 void SeekerState::layoutEntries() {
 	int w = 150, h = 210, gap = 30; int totalW = 3*w + 2*gap; int x0 = (screenW_-totalW)/2; int y = (screenH_-h)/2;
 	for (int i=0;i<3;++i) entries_[i].rect = { x0 + i*(w+gap), y, w, h };
+}
+
+void SeekerState::startTutorial() {
+    // 使用统一的教程文本
+    std::vector<std::string> tutorialTexts = TutorialTexts::getSeekerTutorial();
+    
+    // 创建空的高亮区域（不使用高亮功能）
+    std::vector<SDL_Rect> highlightRects = {
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}  // 无高亮
+    };
+    
+    // 启动教程
+    CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }

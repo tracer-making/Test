@@ -4,6 +4,7 @@
 #include "../core/Deck.h"
 #include "../core/Cards.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 
 BarterState::BarterState() = default;
 
@@ -12,6 +13,7 @@ BarterState::~BarterState() {
 	if (smallFont_) TTF_CloseFont(smallFont_);
     if (titleTex_) SDL_DestroyTexture(titleTex_);
     if (backButton_) delete backButton_;
+    if (tutorialButton_) delete tutorialButton_;
 }
 
 void BarterState::onEnter(App& app) {
@@ -34,6 +36,18 @@ void BarterState::onEnter(App& app) {
         backButton_->setText(u8"返回地图"); 
         if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); 
         backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; }); 
+    }
+    
+    // 教程按钮（右上角）
+    tutorialButton_ = new Button();
+    if (tutorialButton_) {
+        SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+        tutorialButton_->setRect(r);
+        tutorialButton_->setText(u8"?");
+        if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+        tutorialButton_->setOnClick([this]() {
+            startTutorial();
+        });
     }
 
     checkFurCards();
@@ -361,6 +375,17 @@ void BarterState::nextTradeType() {
 }
 
 void BarterState::handleEvent(App& app, const SDL_Event& e) {
+	// 教程系统处理
+	if (CardRenderer::isTutorialActive()) {
+		if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+			CardRenderer::handleTutorialClick();
+		}
+		return;
+	}
+	
+	if (backButton_) backButton_->handleEvent(e);
+	if (tutorialButton_) tutorialButton_->handleEvent(e);
+	
 	// 处理印记提示
 	if (e.type == SDL_MOUSEMOTION) {
 		int mouseX = e.motion.x;
@@ -451,6 +476,9 @@ void BarterState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void BarterState::update(App& app, float dt) {
+	// 更新教程系统
+	CardRenderer::updateTutorial(dt);
+	
     // 更新动画
     if (animActive_) {
         animTime_ += dt;
@@ -617,6 +645,30 @@ void BarterState::render(App& app) {
         }
     }
     
+    // 渲染教程按钮
+    if (tutorialButton_) tutorialButton_->render(app.getRenderer());
+    
     // 渲染全局印记提示
     CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
+    
+    // 渲染教程系统
+    CardRenderer::renderTutorial(app.getRenderer(), smallFont_, screenW_, screenH_);
+}
+
+void BarterState::startTutorial() {
+	// 使用统一的教程文本
+	std::vector<std::string> tutorialTexts = TutorialTexts::getBarterTutorial();
+	
+	// 创建空的高亮区域（不使用高亮功能）
+	std::vector<SDL_Rect> highlightRects = {
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}  // 无高亮
+	};
+	
+	// 启动教程
+	CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }

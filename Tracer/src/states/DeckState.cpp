@@ -2,6 +2,7 @@
 #include "TestState.h"
 #include "../core/App.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include "../core/Deck.h"
 #include <cmath>
 
@@ -14,6 +15,7 @@ DeckState::~DeckState() {
 	if (nameFont_) TTF_CloseFont(nameFont_);
 	if (statFont_) TTF_CloseFont(statFont_);
 	delete backButton_;
+	delete tutorialButton_;
 }
 
 void DeckState::onEnter(App& app) {
@@ -42,6 +44,18 @@ void DeckState::onEnter(App& app) {
 		});
 	}
 
+	// 教程按钮（右上角）
+	tutorialButton_ = new Button();
+	if (tutorialButton_) {
+		SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+		tutorialButton_->setRect(r);
+		tutorialButton_->setText(u8"?");
+		if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+		tutorialButton_->setOnClick([this]() {
+			startTutorial();
+		});
+	}
+
 	buildGlobalDeck();
 	layoutGrid();
 
@@ -58,7 +72,14 @@ void DeckState::onEnter(App& app) {
 void DeckState::onExit(App& app) {}
 
 void DeckState::handleEvent(App& app, const SDL_Event& e) {
+	// 教程系统交互锁定
+	if (CardRenderer::isTutorialActive()) {
+		CardRenderer::handleTutorialClick();
+		return;
+	}
+	
 	if (backButton_) backButton_->handleEvent(e);
+	if (tutorialButton_) tutorialButton_->handleEvent(e);
 	
 	// 处理印记提示
 	if (e.type == SDL_MOUSEMOTION) {
@@ -109,7 +130,10 @@ void DeckState::handleEvent(App& app, const SDL_Event& e) {
 	}
 }
 
-void DeckState::update(App& app, float dt) {}
+void DeckState::update(App& app, float dt) {
+	// 更新教程系统
+	CardRenderer::updateTutorial(dt);
+}
 
 void DeckState::render(App& app) {
 	SDL_Renderer* r = app.getRenderer();
@@ -122,13 +146,15 @@ void DeckState::render(App& app) {
 		SDL_RenderDrawPoint(r, p.first, p.second);
 	}
 
-	if (titleTex_) {
-		int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th);
-		SDL_Rect dst{ (screenW_-tw)/2, 60, tw, th };
-		SDL_RenderCopy(r, titleTex_, nullptr, &dst);
-	}
+	// 标题（已删除）
+	// if (titleTex_) {
+	// 	int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th);
+	// 	SDL_Rect dst{ (screenW_-tw)/2, 60, tw, th };
+	// 	SDL_RenderCopy(r, titleTex_, nullptr, &dst);
+	// }
 
 	if (backButton_ && App::isGodMode()) backButton_->render(r);
+	if (tutorialButton_) tutorialButton_->render(r);
 
 	// 绘制卡牌网格（统一水墨风格）
 	for (const auto& c : cards_) {
@@ -161,6 +187,9 @@ void DeckState::render(App& app) {
 	
 	// 渲染印记提示
 	CardRenderer::renderGlobalMarkTooltip(app, statFont_);
+	
+	// 渲染教程
+	CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
 }
 
 void DeckState::buildGlobalDeck() {
@@ -215,6 +244,23 @@ void DeckState::layoutGrid() {
 		int c = i % bestCols;
 		cards_[i].rect = { startX + c * (bestCardW + gap), startY + r * (bestCardH + gap), bestCardW, bestCardH };
 	}
+}
+
+void DeckState::startTutorial() {
+	// 使用统一的教程文本
+	std::vector<std::string> tutorialTexts = TutorialTexts::getDeckTutorial();
+	
+	// 创建空的高亮区域（不使用高亮功能）
+	std::vector<SDL_Rect> highlightRects = {
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}  // 无高亮
+	};
+	
+	// 启动教程
+	CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }
 
 

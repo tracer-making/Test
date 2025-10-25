@@ -19,6 +19,7 @@
 #include "WenxinTrialState.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
+#include "../ui/CardRenderer.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <vector>
@@ -101,7 +102,8 @@ void TestState::onEnter(App& app) {
 		u8"文心试炼",
 		u8"合卷",
 		u8"卡牌图鉴",
-		u8"牌库"
+		u8"牌库",
+		u8"教程测试"
 	};
 	SDL_Log("Button labels initialized: %zu buttons", buttonLabels.size());
 
@@ -149,6 +151,15 @@ void TestState::onEnter(App& app) {
 }
 
 void TestState::handleEvent(App& app, const SDL_Event& e) {
+	// 如果教程正在进行，只处理教程点击事件
+	if (CardRenderer::isTutorialActive()) {
+		if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+			CardRenderer::handleTutorialClick();
+		}
+		// 阻止所有其他事件
+		return;
+	}
+	
 	// 处理返回按钮事件
 	if (backButton_) backButton_->handleEvent(e);
 	
@@ -186,6 +197,7 @@ void TestState::handleEvent(App& app, const SDL_Event& e) {
         case 13: pendingTarget_ = 13; break; // 文心试炼
         case 14: pendingTarget_ = 14; break; // 合卷
         case 15: pendingTarget_ = 15; break; // 卡牌图鉴
+        case 17: pendingTarget_ = 17; break; // 教程测试
 					default: break;
 					}
 				}
@@ -195,6 +207,8 @@ void TestState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void TestState::update(App& app, float dt) {
+	// 更新教程系统
+	CardRenderer::updateTutorial(dt);
 
 	// 延迟切换状态，避免在事件处理中销毁当前对象
 	if (pendingTarget_ != -1) {
@@ -256,6 +270,10 @@ void TestState::update(App& app, float dt) {
 		case 16:
 			app.setState(std::unique_ptr<State>(static_cast<State*>(new DeckState())));
 			break;
+		case 17:
+			// 教程测试 - 启动教程系统
+			startTutorialTest();
+			break;
 		default:
 			break;
 		}
@@ -283,4 +301,34 @@ void TestState::render(App& app) {
 	for (auto* button : testButtons_) {
 		if (button) button->render(r);
 	}
+	
+	// 渲染教程（如果有的话）
+	CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
+}
+
+void TestState::startTutorialTest() {
+	// 创建教程文本
+	std::vector<std::string> tutorialTexts = {
+		u8"欢迎来到教程测试！",
+		u8"这是一个文本提示模式的演示。",
+		u8"在这个模式下，其他所有交互都被阻止。",
+		u8"你只能通过点击来显示下一个文本。",
+		u8"教程系统支持高亮区域显示。",
+		u8"现在你可以看到高亮效果了！",
+		u8"教程结束，感谢测试！"
+	};
+	
+	// 创建高亮区域（屏幕中央的一个矩形）
+	std::vector<SDL_Rect> highlightRects = {
+		{0, 0, 0, 0}, // 第一个文本没有高亮
+		{0, 0, 0, 0}, // 第二个文本没有高亮
+		{0, 0, 0, 0}, // 第三个文本没有高亮
+		{0, 0, 0, 0}, // 第四个文本没有高亮
+		{0, 0, 0, 0}, // 第五个文本没有高亮
+		{screenW_/2 - 100, screenH_/2 - 50, 200, 100}, // 第六个文本有高亮
+		{0, 0, 0, 0}  // 最后一个文本没有高亮
+	};
+	
+	// 启动教程
+	CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }

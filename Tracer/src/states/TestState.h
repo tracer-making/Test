@@ -16,6 +16,9 @@ public:
 	void handleEvent(App& app, const SDL_Event& e) override;
 	void update(App& app, float dt) override;
 	void render(App& app) override;
+	
+	// 教程测试
+	void startTutorialTest();
 
 private:
 	// 返回主菜单按钮

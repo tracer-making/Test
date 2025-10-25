@@ -215,11 +215,12 @@ void WenxinTrialState::render(App& app) {
     SDL_SetRenderDrawColor(r, 18, 22, 32, 255);
     SDL_RenderClear(r);
     
-    if (titleTex_) { 
-        int tw, th; SDL_QueryTexture(titleTex_, nullptr, nullptr, &tw, &th); 
-        SDL_Rect d{ (screenW_ - tw) / 2, 60, tw, th }; 
-        SDL_RenderCopy(r, titleTex_, nullptr, &d); 
-    }
+    // 标题（已删除）
+    // if (titleTex_) { 
+    //     int tw, th; SDL_QueryTexture(titleTex_, nullptr, nullptr, &tw, &th); 
+    //     SDL_Rect d{ (screenW_ - tw) / 2, 60, tw, th }; 
+    //     SDL_RenderCopy(r, titleTex_, nullptr, &d); 
+    // }
     
     // 返回按钮（只在上帝模式下显示）
     if (backButton_ && App::isGodMode()) backButton_->render(r);

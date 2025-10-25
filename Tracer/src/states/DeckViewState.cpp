@@ -2,6 +2,7 @@
 #include "MapExploreState.h"
 #include "../core/App.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
 
@@ -11,6 +12,7 @@ DeckViewState::~DeckViewState() {
     if (titleTex_) SDL_DestroyTexture(titleTex_);
     if (titleFont_) TTF_CloseFont(titleFont_);
     if (smallFont_) TTF_CloseFont(smallFont_);
+    if (tutorialButton_) delete tutorialButton_;
 }
 
 void DeckViewState::onEnter(App& app) {
@@ -43,11 +45,27 @@ void DeckViewState::onEnter(App& app) {
     
     // 布局卡牌
     layoutCards();
+    
+    // 创建教程按钮
+    tutorialButton_ = new Button();
+    tutorialButton_->setText(u8"?");
+    tutorialButton_->setRect({ screenW_ - 60, 20, 40, 40 });
+    tutorialButton_->setOnClick([this]() { startTutorial(); });
 }
 
 void DeckViewState::onExit(App& app) {}
 
 void DeckViewState::handleEvent(App& app, const SDL_Event& e) {
+    // 教程系统处理
+    if (CardRenderer::isTutorialActive()) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            CardRenderer::handleTutorialClick();
+        }
+        return;
+    }
+    
+    if (tutorialButton_) tutorialButton_->handleEvent(e);
+    
     // 处理S键返回地图
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_s) {
         pendingGoMapExplore_ = true;
@@ -108,6 +126,9 @@ void DeckViewState::handleEvent(App& app, const SDL_Event& e) {
 }
 
 void DeckViewState::update(App& app, float dt) {
+    // 更新教程系统
+    CardRenderer::updateTutorial(dt);
+    
     if (pendingGoMapExplore_) {
         pendingGoMapExplore_ = false;
         app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
@@ -119,11 +140,11 @@ void DeckViewState::render(App& app) {
     SDL_SetRenderDrawColor(r, 18, 22, 32, 255);
     SDL_RenderClear(r);
 
-    // 渲染标题
-    if (titleTex_) {
-        SDL_Rect titleRect{ (screenW_ - titleW_) / 2, 20, titleW_, titleH_ };
-        SDL_RenderCopy(r, titleTex_, nullptr, &titleRect);
-    }
+    // 渲染标题（已删除）
+    // if (titleTex_) {
+    //     SDL_Rect titleRect{ (screenW_ - titleW_) / 2, 20, titleW_, titleH_ };
+    //     SDL_RenderCopy(r, titleTex_, nullptr, &titleRect);
+    // }
 
     // 渲染提示信息
     if (smallFont_) {
@@ -152,6 +173,14 @@ void DeckViewState::render(App& app) {
     
     // 渲染全局印记提示
     CardRenderer::renderGlobalMarkTooltip(app, smallFont_);
+    
+    // 渲染教程按钮
+    if (tutorialButton_) {
+        tutorialButton_->render(r);
+    }
+    
+    // 渲染教程系统
+    CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
 }
 
 void DeckViewState::layoutCards() {
@@ -202,4 +231,21 @@ void DeckViewState::updateScrollBounds() {
     maxScrollY_ = std::max(0, totalHeight - availableHeight);
     
     if (scrollY_ > maxScrollY_) scrollY_ = maxScrollY_;
+}
+
+void DeckViewState::startTutorial() {
+	// 使用统一的教程文本
+	std::vector<std::string> tutorialTexts = TutorialTexts::getDeckViewTutorial();
+	
+	// 创建空的高亮区域（不使用高亮功能）
+	std::vector<SDL_Rect> highlightRects = {
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}, // 无高亮
+		{0, 0, 0, 0}  // 无高亮
+	};
+	
+	// 启动教程
+	CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }

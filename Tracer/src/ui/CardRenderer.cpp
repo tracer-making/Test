@@ -2,6 +2,7 @@
 #include "../core/App.h"
 #include "../core/MarkEffectDatabase.h"
 #include <SDL_image.h>
+#include <algorithm>
 
 // 静态成员变量定义
 SDL_Texture* CardRenderer::bloodTexture_ = nullptr;
@@ -399,6 +400,233 @@ void CardRenderer::renderGlobalMarkTooltip(App& app, _TTF_Font* font) {
     App::getMarkTooltipInfo(markName, description, x, y);
     
     renderMarkTooltip(app, markName, description, x, y, font);
+}
+
+// 统一的状态消息渲染（供所有状态使用）
+void CardRenderer::renderStatusMessage(SDL_Renderer* renderer, const std::string& message, 
+                                      _TTF_Font* font, int screenW, int screenH) {
+    if (message.empty() || !font) return;
+    
+    // 使用更大的字体（2倍大小）
+    SDL_Color messageColor{255, 200, 100, 255};
+    SDL_Surface* messageSurface = TTF_RenderUTF8_Blended(font, message.c_str(), messageColor);
+    if (messageSurface) {
+        SDL_Texture* messageTexture = SDL_CreateTextureFromSurface(renderer, messageSurface);
+        
+        // 放大2倍
+        int scale = 2;
+        SDL_Rect messageRect{
+            (screenW - messageSurface->w * scale) / 2, 
+            100, 
+            messageSurface->w * scale, 
+            messageSurface->h * scale
+        };
+        
+        // 不绘制背景框，直接渲染文字
+        SDL_RenderCopy(renderer, messageTexture, nullptr, &messageRect);
+        SDL_DestroyTexture(messageTexture);
+        SDL_FreeSurface(messageSurface);
+    }
+}
+
+// 教程系统静态变量
+static bool tutorialActive_ = false;
+static bool interactiveTutorialActive_ = false;
+static std::vector<std::string> tutorialTexts_;
+static std::vector<std::string> tutorialActions_;
+static std::vector<SDL_Rect> tutorialHighlightRects_;
+static int currentTutorialIndex_ = 0;
+static float tutorialFadeTime_ = 0.0f;
+static float tutorialFadeDuration_ = 0.3f;
+static bool tutorialFadingIn_ = true;
+static bool waitingForUserAction_ = false;
+
+void CardRenderer::startTutorial(const std::vector<std::string>& texts, 
+                                const std::vector<SDL_Rect>& highlightRects) {
+    tutorialActive_ = true;
+    interactiveTutorialActive_ = false;
+    tutorialTexts_ = texts;
+    tutorialHighlightRects_ = highlightRects;
+    currentTutorialIndex_ = 0;
+    tutorialFadeTime_ = 0.0f;
+    tutorialFadingIn_ = true;
+    waitingForUserAction_ = false;
+}
+
+void CardRenderer::startInteractiveTutorial(const std::vector<std::string>& texts,
+                                          const std::vector<std::string>& actions,
+                                          const std::vector<SDL_Rect>& highlightRects) {
+    tutorialActive_ = true;
+    interactiveTutorialActive_ = true;
+    tutorialTexts_ = texts;
+    tutorialActions_ = actions;
+    tutorialHighlightRects_ = highlightRects;
+    currentTutorialIndex_ = 0;
+    tutorialFadeTime_ = 0.0f;
+    tutorialFadingIn_ = true;
+    waitingForUserAction_ = false;
+}
+
+void CardRenderer::updateTutorial(float dt) {
+    if (!tutorialActive_) return;
+    
+    tutorialFadeTime_ += dt;
+    if (tutorialFadeTime_ >= tutorialFadeDuration_) {
+        tutorialFadeTime_ = tutorialFadeDuration_;
+    }
+}
+
+void CardRenderer::renderTutorial(SDL_Renderer* renderer, _TTF_Font* font, int screenW, int screenH) {
+    if (!tutorialActive_ || tutorialTexts_.empty() || !font) return;
+    
+    // 计算淡入淡出透明度
+    float alpha = tutorialFadingIn_ ? 
+        (tutorialFadeTime_ / tutorialFadeDuration_) : 
+        (1.0f - tutorialFadeTime_ / tutorialFadeDuration_);
+    alpha = std::max(0.0f, std::min(1.0f, alpha));
+    
+    // 绘制半透明覆盖层
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, static_cast<Uint8>(128 * alpha));
+    SDL_Rect overlayRect{0, 0, screenW, screenH};
+    SDL_RenderFillRect(renderer, &overlayRect);
+    
+    // 绘制高亮区域
+    if (currentTutorialIndex_ < static_cast<int>(tutorialHighlightRects_.size())) {
+        const SDL_Rect& highlightRect = tutorialHighlightRects_[currentTutorialIndex_];
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, static_cast<Uint8>(100 * alpha));
+        SDL_RenderFillRect(renderer, &highlightRect);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, static_cast<Uint8>(255 * alpha));
+        SDL_RenderDrawRect(renderer, &highlightRect);
+    }
+    
+    // 创建更大的字体用于教程文本
+    _TTF_Font* tutorialFont = TTF_OpenFont("assets/fonts/simkai.ttf", 32); // 使用32号字体
+    if (!tutorialFont) {
+        // 如果无法加载大字体，使用原字体
+        tutorialFont = font;
+    }
+    
+    // 绘制教程文本
+    if (currentTutorialIndex_ < static_cast<int>(tutorialTexts_.size())) {
+        const std::string& text = tutorialTexts_[currentTutorialIndex_];
+        SDL_Color textColor{255, 255, 255, static_cast<Uint8>(255 * alpha)};
+        SDL_Surface* textSurface = TTF_RenderUTF8_Blended(tutorialFont, text.c_str(), textColor);
+        if (textSurface) {
+            SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+            
+            // 计算文本位置（屏幕中央）
+            SDL_Rect textRect{
+                (screenW - textSurface->w) / 2,
+                screenH / 2 - textSurface->h / 2,
+                textSurface->w,
+                textSurface->h
+            };
+            
+            SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+            SDL_DestroyTexture(textTexture);
+            SDL_FreeSurface(textSurface);
+        }
+    }
+    
+    // 绘制点击提示（使用稍小的字体）
+    _TTF_Font* hintFont = TTF_OpenFont("assets/fonts/simkai.ttf", 24); // 使用24号字体
+    if (!hintFont) {
+        hintFont = font;
+    }
+    
+    SDL_Color hintColor{200, 200, 200, static_cast<Uint8>(200 * alpha)};
+    std::string hintText;
+    if (interactiveTutorialActive_ && waitingForUserAction_) {
+        // 交互式教程等待用户操作
+        if (currentTutorialIndex_ < static_cast<int>(tutorialActions_.size())) {
+            hintText = "请按照提示进行操作: " + tutorialActions_[currentTutorialIndex_];
+        } else {
+            hintText = "请按照提示进行操作";
+        }
+    } else {
+        // 普通教程或交互式教程显示文本阶段
+        hintText = "点击继续...";
+    }
+    
+    SDL_Surface* hintSurface = TTF_RenderUTF8_Blended(hintFont, hintText.c_str(), hintColor);
+    if (hintSurface) {
+        SDL_Texture* hintTexture = SDL_CreateTextureFromSurface(renderer, hintSurface);
+        SDL_Rect hintRect{
+            (screenW - hintSurface->w) / 2,
+            screenH - 100,
+            hintSurface->w,
+            hintSurface->h
+        };
+        SDL_RenderCopy(renderer, hintTexture, nullptr, &hintRect);
+        SDL_DestroyTexture(hintTexture);
+        SDL_FreeSurface(hintSurface);
+    }
+    
+    // 清理临时字体
+    if (tutorialFont != font) {
+        TTF_CloseFont(tutorialFont);
+    }
+    if (hintFont != font && hintFont != tutorialFont) {
+        TTF_CloseFont(hintFont);
+    }
+}
+
+void CardRenderer::handleTutorialClick() {
+    if (!tutorialActive_) return;
+    
+    if (interactiveTutorialActive_ && waitingForUserAction_) {
+        // 交互式教程等待用户操作阶段，点击后进入文本显示阶段
+        waitingForUserAction_ = false;
+        tutorialFadeTime_ = 0.0f;
+        tutorialFadingIn_ = true;
+    } else {
+        // 普通教程或交互式教程显示文本阶段
+        currentTutorialIndex_++;
+        if (currentTutorialIndex_ >= static_cast<int>(tutorialTexts_.size())) {
+            endTutorial();
+        } else {
+            // 重置淡入效果
+            tutorialFadeTime_ = 0.0f;
+            tutorialFadingIn_ = true;
+        }
+    }
+}
+
+bool CardRenderer::isTutorialActive() {
+    return tutorialActive_;
+}
+
+bool CardRenderer::isInteractiveTutorialActive() {
+    return interactiveTutorialActive_;
+}
+
+void CardRenderer::nextTutorialStep() {
+    if (!interactiveTutorialActive_) return;
+    
+    // 进入下一个步骤：显示文本
+    waitingForUserAction_ = false;
+    tutorialFadeTime_ = 0.0f;
+    tutorialFadingIn_ = true;
+}
+
+void CardRenderer::waitForUserAction() {
+    if (!interactiveTutorialActive_) return;
+    
+    // 等待用户操作
+    waitingForUserAction_ = true;
+}
+
+void CardRenderer::endTutorial() {
+    tutorialActive_ = false;
+    interactiveTutorialActive_ = false;
+    tutorialTexts_.clear();
+    tutorialActions_.clear();
+    tutorialHighlightRects_.clear();
+    currentTutorialIndex_ = 0;
+    tutorialFadeTime_ = 0.0f;
+    tutorialFadingIn_ = true;
+    waitingForUserAction_ = false;
 }
 
 
