@@ -51,6 +51,9 @@ public:
 	static bool isMarkTooltipVisible() { return showMarkTooltip_; }
 	static void getMarkTooltipInfo(std::string& markName, std::string& description, int& x, int& y);
 	static void renderMarkTooltip();
+	
+	// 初始化叙事跳转
+	static void initializeNarrativeTransitions();
 
 private:
 	SDL_Window* window_ = nullptr;

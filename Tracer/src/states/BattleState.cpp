@@ -5,6 +5,7 @@
 #include "MapExploreState.h"
 #include "MemoryRepairState.h"
 #include "VictoryState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
 #include "../core/ItemStore.h"
@@ -1256,21 +1257,24 @@ void BattleState::update(App& app, float dt) {
 	
 	if (pendingGoMapExplore_) {
 		pendingGoMapExplore_ = false;
-		app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+		// 进入地图探索界面，先播放叙事文本
+		NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::BattleToMapExplore);
 		return;
 	}
 	
 	if (pendingGoMemoryRepair_) {
 		std::cout << "[BATTLE STATE] 跳转到记忆修复界面，isBossVictory=true" << std::endl;
 		pendingGoMemoryRepair_ = false;
-		app.setState(std::unique_ptr<State>(static_cast<State*>(new MemoryRepairState(true))));
+		// 进入记忆修复界面，先播放叙事文本
+		NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::BattleToMemoryRepair);
 		return;
 	}
 	
 	if (pendingGoVictory_) {
 		std::cout << "[BATTLE STATE] 跳转到胜利界面" << std::endl;
 		pendingGoVictory_ = false;
-		app.setState(std::unique_ptr<State>(static_cast<State*>(new VictoryState())));
+		// 进入胜利界面，先播放叙事文本
+		NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::BattleToVictory);
 		return;
 	}
 

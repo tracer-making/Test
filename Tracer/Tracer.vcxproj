@@ -139,6 +139,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\core\App.cpp" />
+    <ClCompile Include="src\core\NarrativeManager.cpp" />
     <ClCompile Include="src\core\ItemStore.cpp" />
     <ClCompile Include="src\core\Deck.cpp" />
     <ClCompile Include="src\core\Cards.cpp" />
@@ -169,10 +170,12 @@
     <ClCompile Include="src\states\DeckSelectState.cpp" />
     <ClCompile Include="src\states\EnemyPresets.cpp" />
     <ClCompile Include="src\states\VictoryState.cpp" />
+    <ClCompile Include="src\states\TextPlayerState.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\App.h" />
+    <ClInclude Include="src\core\NarrativeManager.h" />
     <ClInclude Include="src\core\ItemStore.h" />
     <ClInclude Include="src\core\Card.h" />
     <ClInclude Include="src\core\Deck.h" />
@@ -204,6 +207,7 @@
     <ClInclude Include="src\states\DeckSelectState.h" />
     <ClInclude Include="src\states\EnemyPresets.h" />
     <ClInclude Include="src\states\VictoryState.h" />
+    <ClInclude Include="src\states\TextPlayerState.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

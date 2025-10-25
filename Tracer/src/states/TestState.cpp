@@ -17,6 +17,7 @@
 #include "CombineState.h"
 #include "CardBrowserState.h"
 #include "WenxinTrialState.h"
+#include "TextPlayerState.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
 #include "../ui/CardRenderer.h"
@@ -103,7 +104,8 @@ void TestState::onEnter(App& app) {
 		u8"合卷",
 		u8"卡牌图鉴",
 		u8"牌库",
-		u8"教程测试"
+		u8"教程测试",
+		u8"文本播放"
 	};
 	SDL_Log("Button labels initialized: %zu buttons", buttonLabels.size());
 
@@ -198,6 +200,7 @@ void TestState::handleEvent(App& app, const SDL_Event& e) {
         case 14: pendingTarget_ = 14; break; // 合卷
         case 15: pendingTarget_ = 15; break; // 卡牌图鉴
         case 17: pendingTarget_ = 17; break; // 教程测试
+        case 18: pendingTarget_ = 18; break; // 文本播放
 					default: break;
 					}
 				}
@@ -273,6 +276,10 @@ void TestState::update(App& app, float dt) {
 		case 17:
 			// 教程测试 - 启动教程系统
 			startTutorialTest();
+			break;
+		case 18:
+			// 文本播放
+			app.setState(std::unique_ptr<State>(static_cast<State*>(new TextPlayerState())));
 			break;
 		default:
 			break;

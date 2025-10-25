@@ -3,6 +3,8 @@
 #include "TestState.h" // Added include
 #include "MapExploreState.h"
 #include "DeckSelectState.h"
+#include "TextPlayerState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
 #include <SDL.h>
@@ -141,8 +143,8 @@ void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
 			const SDL_Rect& rect = buttons_[0]->getRect();
 			if (mx >= rect.x && mx <= rect.x + rect.w &&
 				my >= rect.y && my <= rect.y + rect.h) {
-				// 进入牌组选择界面
-				app.setState(std::unique_ptr<State>(static_cast<State*>(new DeckSelectState())));
+				// 进入牌组选择界面，先播放叙事文本
+				NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MainMenuToDeckSelect);
 			}
 		}
 		// 处理上帝模式切换/功能测试按钮点击

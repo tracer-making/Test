@@ -1,5 +1,6 @@
 #include "App.h"
 #include "State.h"
+#include "NarrativeManager.h"
 #include <SDL.h>
 #if __has_include(<SDL2/SDL_ttf.h>)
 #include <SDL2/SDL_ttf.h>
@@ -9,6 +10,11 @@
 #include <memory>
 #include "Cards.h"
 #include "Deck.h"
+#include "../states/DeckSelectState.h"
+#include "../states/MapExploreState.h"
+#include "../states/BattleState.h"
+#include "../states/VictoryState.h"
+#include "../states/MemoryRepairState.h"
 
 // 定义静态成员变量
 bool App::godMode_ = false;
@@ -50,6 +56,9 @@ bool App::init(const char* title, int width, int height) {
 
 	// 加载内置卡牌数据库
 	CardDB::instance().loadBuiltinCards();
+	
+	// 初始化叙事管理器
+	initializeNarrativeTransitions();
 	
 	// 注意：不在这里初始化玩家牌堆，等用户选择牌组后再初始化
 
@@ -118,6 +127,64 @@ void App::renderMarkTooltip() {
 	
 	// 这里需要字体，但我们没有全局字体，所以让各个状态自己处理
 	// 或者我们可以在这里实现一个简单的文本渲染
+}
+
+void App::initializeNarrativeTransitions() {
+	// 主菜单 -> 牌组选择
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MainMenuToDeckSelect,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<DeckSelectState>(); }
+	);
+	
+	// 牌组选择 -> 地图探索
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::DeckSelectToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	// 地图探索 -> 战斗
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToBattle,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<BattleState>(); }
+	);
+	
+	// 战斗 -> 地图探索
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::BattleToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	// 地图探索 -> 节点
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToNode,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	// 节点 -> 地图探索
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::NodeToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	// 战斗 -> 胜利
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::BattleToVictory,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<VictoryState>(); }
+	);
+	
+	// 战斗 -> 记忆修复
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::BattleToMemoryRepair,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MemoryRepairState>(true); }
+	);
 }
 
 

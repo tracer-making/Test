@@ -1,6 +1,7 @@
 #include "MemoryRepairState.h"
 #include "MapExploreState.h"
 #include "BattleState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/ItemStore.h"
 #include "../core/WenMaiStore.h"
 #include "TestState.h"
@@ -823,7 +824,8 @@ void MapExploreState::update(App& app, float dt) {
         
         // 根据战斗类型决定是否为意境之斗
         bool isEngraveBattle = (currentBattleType_ == u8"意境之斗");
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new BattleState(battleId, isEngraveBattle))));
+        // 进入战斗界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToBattle);
         return;
     }
     

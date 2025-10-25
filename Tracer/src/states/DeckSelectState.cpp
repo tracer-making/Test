@@ -1,5 +1,7 @@
 #include "DeckSelectState.h"
 #include "MapExploreState.h"
+#include "TextPlayerState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "../core/Cards.h"
 #include "../ui/CardRenderer.h"
@@ -265,7 +267,8 @@ void DeckSelectState::update(App& app, float dt) {
     
     if (pendingGoMapExplore_) {
         pendingGoMapExplore_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+        // 进入地图探索界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::DeckSelectToMapExplore);
     }
 }
 
