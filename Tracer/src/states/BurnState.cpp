@@ -1,5 +1,6 @@
 #include "BurnState.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "../core/ItemStore.h"
 #include <SDL.h>
@@ -172,7 +173,7 @@ void BurnState::handleEvent(App& app, const SDL_Event& e) {
 
 void BurnState::update(App& app, float dt) {
     if (animActive_) { animTime_ += dt; if (animTime_ >= animDuration_) { animActive_ = false; pendingGoMapExplore_ = true; } }
-    if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); }
+    if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::BurnToMapExplore); }
 }
 
 void BurnState::render(App& app) {

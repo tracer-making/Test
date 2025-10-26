@@ -3,6 +3,7 @@
 #include "../core/Deck.h"
 #include "../core/Cards.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/WenMaiStore.h"
 #include "../ui/Button.h"
 #include "../ui/CardRenderer.h"
@@ -63,7 +64,8 @@ void InkWorkshopState::onEnter(App& app) {
         backButton_->setText(u8"返回地图");
         if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
         backButton_->setOnClick([&app]() {
-            app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+            // 返回地图探索界面，先播放叙事文本
+            NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::InkWorkshopToMapExplore);
         });
     }
     
@@ -145,7 +147,8 @@ void InkWorkshopState::update(App& app, float deltaTime) {
             isAnimating_ = false;
             animTime_ = 0.0f;
             // 动画完成后返回地图
-            app.setState(std::make_unique<MapExploreState>());
+            // 返回地图探索界面，先播放叙事文本
+            NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::InkWorkshopToMapExplore);
         }
     }
 }
@@ -177,6 +180,11 @@ void InkWorkshopState::render(App& app) {
     
     // 渲染可获得的毛皮
     renderAvailableSkins(app);
+    
+    // 渲染收集动画
+    if (isAnimating_) {
+        renderCollectionAnimation(app);
+    }
     
     // 渲染状态消息
     if (!statusMessage_.empty() && smallFont_) {
@@ -330,14 +338,21 @@ void InkWorkshopState::handleEvent(App& app, const SDL_Event& event) {
                  my >= toolRect_.y && my <= toolRect_.y + toolRect_.h) {
             tryGetTool();
         }
-        // 检查毛皮点击
-        else if (hoveredSkinIndex_ >= 0 && hoveredSkinIndex_ < (int)availableSkins_.size()) {
-            collectAllSkins();
+        // 检查毛皮点击（下方区域）
+        else if (!availableSkins_.empty()) {
+            // 检查是否点击了下方的毛皮区域
+            SDL_Rect skinArea{0, screenH_ - 200, screenW_, 200};
+            if (mx >= skinArea.x && mx <= skinArea.x + skinArea.w &&
+                my >= skinArea.y && my <= skinArea.y + skinArea.h) {
+                SDL_Log("点击了下方毛皮区域，收集所有毛皮");
+                collectAllSkins();
+            }
         }
     }
     else if (event.type == SDL_KEYDOWN) {
         if (event.key.keysym.sym == SDLK_ESCAPE) {
-            app.setState(std::make_unique<MapExploreState>());
+            // 返回地图探索界面，先播放叙事文本
+            NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::InkWorkshopToMapExplore);
         }
     }
 }
@@ -785,4 +800,55 @@ void InkWorkshopState::startTutorial() {
     
     // 启动教程
     CardRenderer::startTutorial(tutorialTexts, highlightRects);
+}
+
+
+void InkWorkshopState::renderCollectionAnimation(App& app) {
+    SDL_Renderer* r = app.getRenderer();
+    
+    // 计算动画进度 (0.0 到 1.0)
+    float progress = animTime_ / animDuration_;
+    if (progress > 1.0f) progress = 1.0f;
+    
+    // 渲染收集动画效果
+    if (progress < 0.5f) {
+        // 前半段：毛皮向上移动并淡出
+        float moveProgress = progress * 2.0f; // 0.0 到 1.0
+        float alpha = 255 * (1.0f - moveProgress);
+        
+        for (size_t i = 0; i < availableSkins_.size() && i < skinRects_.size(); ++i) {
+            SDL_Rect animRect = skinRects_[i];
+            animRect.y -= (int)(moveProgress * 100); // 向上移动100像素
+            
+            // 设置透明度
+            SDL_SetTextureAlphaMod(nullptr, (Uint8)alpha);
+            
+            // 渲染毛皮卡牌（简化版本）
+            SDL_SetRenderDrawColor(r, 200, 150, 100, (Uint8)alpha);
+            SDL_RenderFillRect(r, &animRect);
+            SDL_SetRenderDrawColor(r, 100, 80, 60, (Uint8)alpha);
+            SDL_RenderDrawRect(r, &animRect);
+        }
+    } else {
+        // 后半段：显示收集完成效果
+        float fadeProgress = (progress - 0.5f) * 2.0f; // 0.0 到 1.0
+        float alpha = 255 * fadeProgress;
+        
+        // 渲染收集完成文字
+        if (smallFont_) {
+            SDL_Color color{255, 255, 100, (Uint8)alpha};
+            std::string text = u8"收集完成！";
+            SDL_Surface* surface = TTF_RenderUTF8_Blended(smallFont_, text.c_str(), color);
+            if (surface) {
+                SDL_Texture* texture = SDL_CreateTextureFromSurface(r, surface);
+                SDL_Rect rect{(screenW_ - surface->w) / 2, screenH_ / 2 - 50, surface->w, surface->h};
+                SDL_RenderCopy(r, texture, nullptr, &rect);
+                SDL_DestroyTexture(texture);
+                SDL_FreeSurface(surface);
+            }
+        }
+    }
+    
+    // 重置透明度
+    SDL_SetTextureAlphaMod(nullptr, 255);
 }

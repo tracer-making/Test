@@ -1,5 +1,6 @@
 #include "SeekerState.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
 #include "../core/Cards.h"
@@ -105,7 +106,7 @@ void SeekerState::update(App& app, float dt) {
         animTime_ += dt;
         if (animTime_ >= animDuration_) { animActive_ = false; pendingGoMapExplore_ = true; }
     }
-    if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); }
+    if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::SeekerToMapExplore); }
 }
 
 void SeekerState::render(App& app) {

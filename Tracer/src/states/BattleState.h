@@ -217,6 +217,7 @@ private:
 	bool pendingGoMapExplore_ = false;  // 返回地图探索
 	bool pendingGoMemoryRepair_ = false;  // 跳转到记忆修复界面
 	bool pendingGoVictory_ = false;  // 跳转到胜利界面
+	bool pendingGoFinalVictory_ = false;  // 跳转到最终胜利叙事
 	int hoveredItemIndex_ = -1; // 当前悬停的道具索引
 	
 	// 教程按钮

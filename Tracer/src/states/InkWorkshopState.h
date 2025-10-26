@@ -36,6 +36,7 @@ private:
     void renderTool(App& app);
     void renderWenMai(App& app);
     void renderGoldenCard(App& app, const Card& card, const SDL_Rect& rect);
+    void renderCollectionAnimation(App& app);
     void tryGetSkin(int skinType);
     void tryGetTool();
     void collectAllSkins();

@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "d:/C++Project/Tracer/Tracer/src/states",
-      "program": "d:/C++Project/Tracer/Tracer/src/states/build/Debug/outDebug",
+      "cwd": "${workspaceFolder}/Tracer",
+      "program": "${workspaceFolder}/Tracer/x64/Debug/Tracer.exe",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

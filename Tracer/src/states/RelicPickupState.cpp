@@ -1,6 +1,7 @@
 #include "RelicPickupState.h"
 #include "TestState.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "BattleState.h" // 为了复用 AVAILABLE_ITEMS 列表
 #include "../core/Cards.h"
@@ -155,7 +156,7 @@ void RelicPickupState::update(App& app, float dt) {
 	}
 	
 	if (pendingBackToTest_) { pendingBackToTest_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new TestState()))); return; }
-	if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); return; }
+	if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::RelicPickupToMapExplore); return; }
 }
 
 void RelicPickupState::render(App& app) {

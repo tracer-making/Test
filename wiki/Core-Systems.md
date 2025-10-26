@@ -98,3 +98,21 @@ App类维护多个全局状态变量：
 ### WenMaiStore
 
 [WenMaiStore](../Tracer/src/core/WenMaiStore.h) 管理文脉值，记录战斗中对敌人本体造成的溢出伤害总量。
+
+### NarrativeManager
+
+[NarrativeManager](../Tracer/src/core/NarrativeManager.h) 是叙事管理器，用于在界面跳转间插入文本播放。它管理各种游戏状态间的文本过渡，并提供预设的文本段落。
+
+#### 主要功能
+
+- 管理叙事跳转类型和对应的文本文件
+- 提供预设名称映射
+- 执行文本播放状态跳转
+- 支持自定义叙事跳转
+
+#### 核心方法
+
+- `setNarrativeTransition()` - 设置叙事跳转
+- `performNarrativeTransition()` - 执行叙事跳转
+- `performCustomNarrativeTransition()` - 执行自定义叙事跳转
+- `getPresetName()` - 获取预设名称

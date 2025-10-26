@@ -10,11 +10,23 @@
 #include <memory>
 #include "Cards.h"
 #include "Deck.h"
+#include "../states/MainMenuState.h"
 #include "../states/DeckSelectState.h"
 #include "../states/MapExploreState.h"
 #include "../states/BattleState.h"
 #include "../states/VictoryState.h"
 #include "../states/MemoryRepairState.h"
+#include "../states/HeritageState.h"
+#include "../states/EngraveState.h"
+#include "../states/InkWorkshopState.h"
+#include "../states/InkGhostState.h"
+#include "../states/BarterState.h"
+#include "../states/RelicPickupState.h"
+#include "../states/SeekerState.h"
+#include "../states/TemperState.h"
+#include "../states/BurnState.h"
+#include "../states/CombineState.h"
+#include "../states/InkShopState.h"
 
 // 定义静态成员变量
 bool App::godMode_ = false;
@@ -184,6 +196,159 @@ void App::initializeNarrativeTransitions() {
 		NarrativeManager::NarrativeType::BattleToMemoryRepair,
 		"assets/narrative/all_narratives.txt",
 		[]() -> std::unique_ptr<State> { return std::make_unique<MemoryRepairState>(true); }
+	);
+	
+	// 地图探索到各个节点
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToHeritage,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<HeritageState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToEngrave,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<EngraveState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToInkWorkshop,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<InkWorkshopState>(0); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToInkGhost,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<InkGhostState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToBarter,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<BarterState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToMemoryRepair,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MemoryRepairState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToRelicPickup,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<RelicPickupState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToSeeker,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<SeekerState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToTemper,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<TemperState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToBurn,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<BurnState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToCombine,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<CombineState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToInkShop,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<InkShopState>(); }
+	);
+	
+	// 各个节点到地图探索
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::HeritageToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::EngraveToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::InkWorkshopToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::InkGhostToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::BarterToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MemoryRepairToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::RelicPickupToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::SeekerToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::TemperToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::BurnToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::CombineToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::InkShopToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+	
+	// 最终Boss胜利 -> 主菜单
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::FinalBossVictory,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MainMenuState>(); }
 	);
 }
 

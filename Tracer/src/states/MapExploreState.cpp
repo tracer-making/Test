@@ -534,6 +534,28 @@ void MapExploreState::onEnter(App& app) {
     // 保存scrollY_值到MapStore
     ms.scrollY() = scrollY_;
     
+    // 第四层地图特殊处理：调整mapOffsetY_让起始节点出现在Y=680位置
+    if (currentMapLayer_ == 4 && playerCurrentNode_ >= 0) {
+        // 获取玩家当前节点
+        const MapNode* playerNode = getNodeByGlobalIndex(playerCurrentNode_);
+        if (playerNode) {
+            // 计算起始节点当前应该的屏幕Y坐标
+            int startNodeY = mapOffsetY_ + (playerNode->y + scrollY_);
+            // 计算需要的偏移，让起始节点出现在Y=680位置
+            int targetY = 680;
+            int yOffset = targetY - startNodeY;
+            
+            SDL_Log("=== 第四层地图调试信息 ===");
+            SDL_Log("playerNode->y=%d, mapOffsetY_=%d, scrollY_=%d", playerNode->y, mapOffsetY_, scrollY_);
+            SDL_Log("当前起始节点Y=%d, 目标Y=%d, 偏移=%d", startNodeY, targetY, yOffset);
+            SDL_Log("调整前mapOffsetY_=%d, 调整后mapOffsetY_=%d", mapOffsetY_, mapOffsetY_ + yOffset);
+            SDL_Log("=== 第四层地图调试信息结束 ===");
+            
+            // 调整mapOffsetY_让整个地图向上移动
+            mapOffsetY_ += yOffset;
+        }
+    }
+    
     SDL_Log("Final map scroll position: scrollY_=%d, maxScrollY_=%d", scrollY_, maxScrollY_);
 }
 
@@ -690,11 +712,13 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         for (int layer = 0; layer <= numLayers_; ++layer) {
             for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
                 const MapNode& node = layerNodes_[layer][i];
-                int sx, sy; nodeToScreenXY(node, sx, sy);
+                int globalIndex = getGlobalNodeIndex(layer, static_cast<int>(i));
+                int sx, sy;
+                getScreenXYForGlobalIndex(globalIndex, sx, sy);
                 int dx = mx - sx;
                 int dy = my - sy;
                 if (dx * dx + dy * dy <= node.size * node.size) {
-                    newHoveredNode = getGlobalNodeIndex(layer, static_cast<int>(i));
+                    newHoveredNode = globalIndex;
                     break;
                 }
             }
@@ -711,11 +735,12 @@ void MapExploreState::handleEvent(App& app, const SDL_Event& e) {
         for (int layer = 0; layer <= numLayers_; ++layer) {
             for (size_t i = 0; i < layerNodes_[layer].size(); ++i) {
                 const MapNode& node = layerNodes_[layer][i];
-                int sx, sy; nodeToScreenXY(node, sx, sy);
+                int globalIndex = getGlobalNodeIndex(layer, static_cast<int>(i));
+                int sx, sy;
+                getScreenXYForGlobalIndex(globalIndex, sx, sy);
                 int dx = mx - sx;
                 int dy = my - sy;
                 if (dx * dx + dy * dy <= node.size * node.size) {
-                    int globalIndex = getGlobalNodeIndex(layer, static_cast<int>(i));
                     SDL_Log("Clicked node %d (layer %d, local %zu)", globalIndex, layer, i);
                     
                     // 如果点击的是可访问的节点，移动玩家
@@ -877,63 +902,71 @@ void MapExploreState::update(App& app, float dt) {
     
     if (pendingGoBarter_) {
         pendingGoBarter_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new BarterState())));
+        // 进入以物易物界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToBarter);
         return;
     }
     
     if (pendingGoEngrave_) {
         pendingGoEngrave_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new EngraveState())));
+        // 进入意境刻画界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToEngrave);
         return;
     }
     
     if (pendingGoHeritage_) {
         pendingGoHeritage_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new HeritageState())));
+        // 进入文脉传承界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToHeritage);
         return;
     }
     
     if (pendingGoInkGhost_) {
         pendingGoInkGhost_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new InkGhostState())));
+        // 进入墨鬼界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToInkGhost);
         return;
     }
     
     if (pendingGoInkWorkshop_) {
         pendingGoInkWorkshop_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new InkWorkshopState(currentMapLayer_))));
+        // 进入墨工坊界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToInkWorkshop);
         return;
     }
     
     if (pendingGoInkShop_) {
         pendingGoInkShop_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new InkShopState())));
+        // 进入墨店界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToInkShop);
         return;
     }
     
     if (pendingGoMemoryRepair_) {
         pendingGoMemoryRepair_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new MemoryRepairState())));
+        // 进入记忆修复界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToMemoryRepair);
         return;
     }
     
     if (pendingGoRelicPickup_) {
         pendingGoRelicPickup_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new RelicPickupState())));
+        // 进入墨宝拾遗界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToRelicPickup);
         return;
     }
     
     if (pendingGoSeeker_) {
         pendingGoSeeker_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new SeekerState())));
+        // 进入寻求者界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToSeeker);
         return;
     }
     
     if (pendingGoTemper_) {
         pendingGoTemper_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new TemperState())));
-        // 新增：合卷入口（可根据你的地图节点绑定按键/区域触发）
-        // 这里示例：按键'H'进入合卷（请替换为你的真实事件逻辑）
+        // 进入锤炼界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToTemper);
         return;
     }
 }
@@ -2439,6 +2472,34 @@ void MapExploreState::getScreenXYForGlobalIndex(int globalIndex, int& sx, int& s
     }
     sx = baseX + extra.x;
     sy = baseY + extra.y;
+    
+    // 第四层地图特殊处理：所有节点都按比例移动，让起始节点出现在Y=680位置
+    if (currentMapLayer_ == 4) {
+        // 获取起始节点的原始坐标
+        const MapNode* startNode = getNodeByGlobalIndex(playerCurrentNode_);
+        if (startNode && playerCurrentNode_ >= 0) {
+            int startBaseX, startBaseY; 
+            nodeToScreenXY(*startNode, startBaseX, startBaseY);
+            SDL_Point startExtra{0,0};
+            if (playerCurrentNode_ >= 0 && playerCurrentNode_ < static_cast<int>(nodeDisplayOffset_.size())) {
+                startExtra = nodeDisplayOffset_[playerCurrentNode_];
+            }
+            int startOriginalY = startBaseY + startExtra.y;
+            
+            // 计算需要的Y偏移，让起始节点出现在Y=680位置
+            int targetY = 680;
+            int yOffset = targetY - startOriginalY;
+            
+            // 所有节点都应用相同的偏移
+            sy += yOffset;
+            
+            // 只在起始节点时输出调试信息
+            if (globalIndex == playerCurrentNode_) {
+                SDL_Log("第四层地图节点坐标调整: 起始节点原始Y=%d, 目标Y=%d, 偏移=%d, 最终sy=%d", 
+                        startOriginalY, targetY, yOffset, sy);
+            }
+        }
+    }
 }
 
 void MapExploreState::buildDisplayOffsets() {

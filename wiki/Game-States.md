@@ -97,6 +97,16 @@
 
 [VictoryState](../Tracer/src/states/VictoryState.h)在玩家击败最终Boss后显示。
 
+### TextPlayerState - 文本播放状态
+
+[TextPlayerState](../Tracer/src/states/TextPlayerState.h)是游戏的文本播放状态，用于在游戏流程中播放叙事文本。该状态支持预设文本段落播放、背景图片切换、多种播放模式等功能。
+
+#### 核心功能
+- **预设文本播放**：支持按预设名称播放特定文本段落
+- **背景图片切换**：支持在文本播放过程中切换背景图片
+- **多种播放模式**：支持手动、自动和跳过播放模式
+- **状态跳转**：播放完成后可跳转到指定游戏状态
+
 ## 状态切换机制
 
 游戏状态通过在当前状态中设置标志位并在主循环中检查这些标志位来实现切换。例如，在[BattleState](../Tracer/src/states/BattleState.h)中：

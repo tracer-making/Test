@@ -1,5 +1,6 @@
 #include "BarterState.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "../core/Deck.h"
 #include "../core/Cards.h"
@@ -470,7 +471,8 @@ void BarterState::handleEvent(App& app, const SDL_Event& e) {
     
     if (pendingGoMapExplore_) {
         if (e.type == SDL_KEYDOWN) {
-            app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+            // 返回地图探索界面，先播放叙事文本
+            NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::BarterToMapExplore);
 		}
 	}
 }
@@ -500,7 +502,8 @@ void BarterState::update(App& app, float dt) {
     
     if (pendingGoMapExplore_) {
         pendingGoMapExplore_ = false;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+        // 返回地图探索界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::BarterToMapExplore);
     }
 }
 

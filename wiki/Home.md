@@ -8,11 +8,15 @@
 
 ## 目录
 
+- [项目概览](Project-Overview.md) - 完整项目概述（5-10分钟阅读）
 - [项目结构](Project-Structure.md) - 项目文件和目录结构说明
 - [核心系统](Core-Systems.md) - 核心类和系统架构
 - [游戏状态](Game-States.md) - 所有游戏状态的详细说明
+- [游戏界面](Game-Interfaces.md) - 游戏界面系统详解
 - [卡牌系统](Card-System.md) - 卡牌设计和机制
 - [道具系统](Item-System.md) - 道具和物品管理
+- [文本播放系统](Text-Player-System.md) - 叙事文本播放系统
+- [文本编辑指南](Text-Editing-Guide.md) - 如何编辑游戏文本内容
 - [构建指南](Build-Guide.md) - 如何构建和运行项目
 - [开发规范](Development-Guidelines.md) - 编码规范和最佳实践
 
@@ -20,10 +24,10 @@
 
 要快速了解项目，建议按以下顺序阅读：
 
-1. [构建指南](Build-Guide.md) - 了解如何编译和运行游戏
-2. [项目结构](Project-Structure.md) - 理解项目组织方式
-3. [核心系统](Core-Systems.md) - 掌握基础架构
-4. [游戏状态](Game-States.md) - 了解游戏流程和各个界面
+1. [项目概览](Project-Overview.md) - 完整了解项目架构和功能
+2. [构建指南](Build-Guide.md) - 了解如何编译和运行游戏
+3. [项目结构](Project-Structure.md) - 理解项目组织方式
+4. [核心系统](Core-Systems.md) - 掌握基础架构
 
 ## 技术栈
 
@@ -40,6 +44,7 @@
 - 独特的意境刻画系统
 - 道具和遗物收集系统
 - 多种敌人和Boss战设计
+- 叙事文本播放系统
 
 ## 贡献
 

@@ -1277,6 +1277,14 @@ void BattleState::update(App& app, float dt) {
 		NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::BattleToVictory);
 		return;
 	}
+	
+	if (pendingGoFinalVictory_) {
+		std::cout << "[BATTLE STATE] 跳转到最终胜利叙事" << std::endl;
+		pendingGoFinalVictory_ = false;
+		// 进入最终胜利叙事，播放完成后返回主菜单
+		NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::FinalBossVictory);
+		return;
+	}
 
 	// 敌人前进动画更新（若有）
 	updateEnemyAdvance(dt);
@@ -4125,9 +4133,9 @@ void BattleState::checkGameOver() {
 				statusMessage_ = "最终Boss三阶段胜利！恢复一根蜡烛！剩余蜡烛: " + std::to_string(App::getRemainingCandles());
 				std::cout << "[VICTORY] 最终Boss三阶段胜利，恢复一根蜡烛！剩余蜡烛: " << App::getRemainingCandles() << std::endl;
 				
-				// 三阶段胜利后跳转到胜利界面
-				std::cout << "[VICTORY] 最终Boss三阶段胜利，跳转到胜利界面！" << std::endl;
-				pendingGoVictory_ = true;
+				// 三阶段胜利后跳转到最终胜利叙事
+				std::cout << "[VICTORY] 最终Boss三阶段胜利，跳转到最终胜利叙事！" << std::endl;
+				pendingGoFinalVictory_ = true;
 				return;
 			}
 		}
@@ -4213,7 +4221,7 @@ void BattleState::renderBattlefield(App& app) {
 				SDL_Rect moonRect;
 				moonRect.x = battlefield_[0].rect.x;  // 第一行第一列
 				moonRect.y = battlefield_[0].rect.y;   // 第一行第一列
-				moonRect.w = battlefield_[0].rect.w * 4;  // 4列宽度
+				moonRect.w = battlefield_[0].rect.w * 4 + 40 ;  // 4列宽度
 				moonRect.h = battlefield_[0].rect.h * 2;   // 2行高度
 				
 				// 渲染月球卡牌

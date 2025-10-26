@@ -21,6 +21,33 @@ public:
         NodeToMapExplore,          // 节点 -> 地图探索
         BattleToVictory,           // 战斗 -> 胜利
         BattleToMemoryRepair,      // 战斗 -> 记忆修复
+        // 地图探索到各个节点
+        MapExploreToHeritage,      // 地图探索 -> 文脉传承
+        MapExploreToEngrave,       // 地图探索 -> 意境刻画
+        MapExploreToInkWorkshop,   // 地图探索 -> 墨工坊
+        MapExploreToInkGhost,      // 地图探索 -> 墨鬼
+        MapExploreToBarter,        // 地图探索 -> 以物易物
+        MapExploreToMemoryRepair,  // 地图探索 -> 记忆修复
+        MapExploreToRelicPickup,   // 地图探索 -> 墨宝拾遗
+        MapExploreToSeeker,        // 地图探索 -> 寻求者
+        MapExploreToTemper,        // 地图探索 -> 锤炼
+        MapExploreToBurn,          // 地图探索 -> 燃烧
+        MapExploreToCombine,       // 地图探索 -> 融合
+        MapExploreToInkShop,       // 地图探索 -> 墨店
+        // 各个节点到地图探索
+        HeritageToMapExplore,      // 文脉传承 -> 地图探索
+        EngraveToMapExplore,       // 意境刻画 -> 地图探索
+        InkWorkshopToMapExplore,   // 墨工坊 -> 地图探索
+        InkGhostToMapExplore,      // 墨鬼 -> 地图探索
+        BarterToMapExplore,        // 以物易物 -> 地图探索
+        MemoryRepairToMapExplore,  // 记忆修复 -> 地图探索
+        RelicPickupToMapExplore,   // 墨宝拾遗 -> 地图探索
+        SeekerToMapExplore,        // 寻求者 -> 地图探索
+        TemperToMapExplore,        // 锤炼 -> 地图探索
+        BurnToMapExplore,          // 燃烧 -> 地图探索
+        CombineToMapExplore,       // 融合 -> 地图探索
+        InkShopToMapExplore,       // 墨店 -> 地图探索
+        FinalBossVictory,          // 最终Boss胜利 -> 主菜单
         Custom                     // 自定义跳转
     };
     

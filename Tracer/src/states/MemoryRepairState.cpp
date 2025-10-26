@@ -5,6 +5,7 @@
 #include "../ui/CardRenderer.h"
 #include "../core/TutorialTexts.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include <random>
 #include <algorithm>
 #include <unordered_set>
@@ -66,7 +67,8 @@ void MemoryRepairState::onEnter(App& app) {
 		backButton_->setText(u8"返回地图");
 		if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
 		backButton_->setOnClick([&app, this]() {
-			app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+			// 返回地图探索界面，先播放叙事文本
+			NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MemoryRepairToMapExplore);
 		});
 	}
 	// 重新抽卡按钮（Boss战胜利时不显示）
@@ -204,7 +206,8 @@ void MemoryRepairState::handleEvent(App& app, const SDL_Event& e) {
 							std::cout << "[MEMORY REPAIR] 普通记忆修复选牌完成" << std::endl;
 						}
 						
-						app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+						// 返回地图探索界面，先播放叙事文本
+			NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MemoryRepairToMapExplore);
 					}
 				}
 				break;

@@ -29,6 +29,7 @@ private:
     SDL_Texture* titleTex_ = nullptr;
     Button* backButton_ = nullptr;
     Button* combineButton_ = nullptr; // 合卷按钮
+    Button* tutorialButton_ = nullptr; // 教程按钮
 
     int screenW_ = 1600, screenH_ = 1000;
     bool pendingGoMapExplore_ = false;
@@ -73,6 +74,7 @@ private:
     void buildAllPairs();
     void layoutPairsGrid();
     void combineSelectedPair();
+    void startTutorial(); // 开始教程
 };
 
 

@@ -1,13 +1,20 @@
 #include "CombineState.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "../ui/CardRenderer.h"
+#include "../core/TutorialTexts.h"
 #include <algorithm>
 #include <unordered_map>
 #include <cstdlib>
 #include <ctime>
 
-CombineState::CombineState() = default;
+CombineState::CombineState() {
+    backButton_ = new Button();
+    combineButton_ = new Button();
+    tutorialButton_ = new Button();
+}
+
 CombineState::~CombineState() {
     if (titleTex_) SDL_DestroyTexture(titleTex_);
     if (titleFont_) TTF_CloseFont(titleFont_);
@@ -15,6 +22,8 @@ CombineState::~CombineState() {
     if (nameFont_) TTF_CloseFont(nameFont_);
     if (statFont_) TTF_CloseFont(statFont_);
     delete backButton_;
+    delete combineButton_;
+    delete tutorialButton_;
 }
 
 void CombineState::onEnter(App& app) {
@@ -25,8 +34,19 @@ void CombineState::onEnter(App& app) {
     statFont_  = TTF_OpenFont("assets/fonts/Sanji.ttf", 18);
     if (titleFont_) { SDL_Color col{200,230,255,255}; SDL_Surface* s = TTF_RenderUTF8_Blended(titleFont_, u8"合卷", col); if (s) { titleTex_ = SDL_CreateTextureFromSurface(app.getRenderer(), s); SDL_FreeSurface(s);} }
 
-    backButton_ = new Button(); if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回地图"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; }); }
-    combineButton_ = new Button(); if (combineButton_) { combineButton_->setRect({ screenW_/2 - 60, slotLeft_.y + slotLeft_.h + 12, 120, 36 }); combineButton_->setText(u8"合卷"); if (smallFont_) combineButton_->setFont(smallFont_, app.getRenderer()); combineButton_->setOnClick([this]() { combineSelectedPair(); }); }
+    if (backButton_) { backButton_->setRect({20,20,120,36}); backButton_->setText(u8"返回地图"); if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer()); backButton_->setOnClick([this]() { pendingGoMapExplore_ = true; }); }
+    if (combineButton_) { combineButton_->setRect({ screenW_/2 - 60, slotLeft_.y + slotLeft_.h + 12, 120, 36 }); combineButton_->setText(u8"合卷"); if (smallFont_) combineButton_->setFont(smallFont_, app.getRenderer()); combineButton_->setOnClick([this]() { combineSelectedPair(); }); }
+    
+    // 教程按钮（右上角）
+    if (tutorialButton_) {
+        SDL_Rect r{ screenW_ - 120, 20, 100, 35 };
+        tutorialButton_->setRect(r);
+        tutorialButton_->setText(u8"?");
+        if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
+        tutorialButton_->setOnClick([this]() {
+            startTutorial();
+        });
+    }
 
     // 初始化随机数种子
     srand((unsigned int)time(nullptr));
@@ -39,6 +59,19 @@ void CombineState::onEnter(App& app) {
 void CombineState::onExit(App& app) {}
 
 void CombineState::handleEvent(App& app, const SDL_Event& e) {
+	// 教程系统处理
+	if (CardRenderer::isTutorialActive()) {
+		if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+			CardRenderer::handleTutorialClick();
+		}
+		return;
+	}
+	
+	// 处理按钮点击
+	if (tutorialButton_) tutorialButton_->handleEvent(e);
+	if (backButton_) backButton_->handleEvent(e);
+	if (combineButton_) combineButton_->handleEvent(e);
+	
 	// 处理印记提示
 	if (e.type == SDL_MOUSEMOTION) {
 		int mouseX = e.motion.x;
@@ -290,13 +323,35 @@ void CombineState::update(App& app, float dt) {
         }
     }
     
-    if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); }
+    // 更新教程系统
+    CardRenderer::updateTutorial(dt);
+    
+    if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::CombineToMapExplore); }
+}
+
+void CombineState::startTutorial() {
+    // 使用统一的教程文本
+    std::vector<std::string> tutorialTexts = TutorialTexts::getCombineTutorial();
+    
+    // 创建空的高亮区域（不使用高亮功能）
+    std::vector<SDL_Rect> highlightRects = {
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}, // 无高亮
+        {0, 0, 0, 0}  // 无高亮
+    };
+    
+    // 启动教程
+    CardRenderer::startTutorial(tutorialTexts, highlightRects);
 }
 
 void CombineState::render(App& app) {
     SDL_Renderer* r = app.getRenderer(); SDL_SetRenderDrawColor(r, 18,22,32,255); SDL_RenderClear(r);
     if (titleTex_) { int tw,th; SDL_QueryTexture(titleTex_,nullptr,nullptr,&tw,&th); SDL_Rect d{ (screenW_-tw)/2, 60, tw, th }; SDL_RenderCopy(r,titleTex_,nullptr,&d); }
     if (backButton_ && App::isGodMode()) backButton_->render(r);
+    if (tutorialButton_) tutorialButton_->render(r);
     if (combineButton_ && pairLibIndexA_ >= 0 && pairLibIndexB_ >= 0) combineButton_->render(r);
 
     // 渲染融合动画
@@ -426,6 +481,9 @@ void CombineState::render(App& app) {
     
     // 渲染全局印记提示
     CardRenderer::renderGlobalMarkTooltip(app, statFont_);
+    
+    // 渲染教程系统
+    CardRenderer::renderTutorial(r, smallFont_, screenW_, screenH_);
 }
 
 void CombineState::layoutUI() {

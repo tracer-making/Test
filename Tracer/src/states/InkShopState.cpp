@@ -1,6 +1,7 @@
 #include "InkShopState.h"
 #include "TestState.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "../ui/CardRenderer.h"
 #include "../core/TutorialTexts.h"
@@ -83,7 +84,8 @@ void InkShopState::update(App& app, float dt) {
 	}
 	if (pendingGoMapExplore_) {
 		pendingGoMapExplore_ = false;
-		app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+		// 返回地图探索界面，先播放叙事文本
+		NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::InkShopToMapExplore);
 		return;
 	}
 }
@@ -170,6 +172,7 @@ void InkShopState::layoutItems() {
 	int w = 320, h = 80; int gap = 14; int cols = 2; int totalW = cols*w + (cols-1)*gap; int x0 = (screenW_-totalW)/2; int y0 = 220; 
 	for (int i=0;i<(int)shopItems_.size(); ++i) { int r=i/cols, c=i%cols; shopItems_[i].rect = { x0 + c*(w+gap), y0 + r*(h+gap), w, h }; }
 }
+
 
 void InkShopState::startTutorial() {
 	// 使用统一的教程文本

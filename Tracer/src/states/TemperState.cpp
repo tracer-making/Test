@@ -1,6 +1,7 @@
 #include "TemperState.h"
 #include "TestState.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include "../core/App.h"
 #include "../ui/CardRenderer.h"
 #include "../core/TutorialTexts.h"
@@ -160,7 +161,7 @@ void TemperState::update(App& app, float dt) {
             pendingGoMapExplore_ = true;
         }
     }
-    if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState()))); return; }
+    if (pendingGoMapExplore_) { pendingGoMapExplore_ = false; NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::TemperToMapExplore); return; }
 }
 
 void TemperState::render(App& app) {

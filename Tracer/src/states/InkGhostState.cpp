@@ -3,6 +3,7 @@
 #include "../core/Deck.h"
 #include "../core/Cards.h"
 #include "MapExploreState.h"
+#include "../core/NarrativeManager.h"
 #include "../ui/Button.h"
 #include "../ui/CardRenderer.h"
 #include "../core/TutorialTexts.h"
@@ -43,7 +44,8 @@ void InkGhostState::onEnter(App& app) {
         backButton_->setText(u8"返回地图");
         if (smallFont_) backButton_->setFont(smallFont_, app.getRenderer());
         backButton_->setOnClick([&app]() {
-            app.setState(std::unique_ptr<State>(static_cast<State*>(new MapExploreState())));
+            // 返回地图探索界面，先播放叙事文本
+            NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::InkGhostToMapExplore);
         });
     }
     
@@ -137,7 +139,8 @@ void InkGhostState::update(App& app, float deltaTime) {
             isAnimating_ = false;
             animTime_ = 0.0f;
             // 动画完成后返回地图
-            app.setState(std::make_unique<MapExploreState>());
+            // 返回地图探索界面，先播放叙事文本
+            NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::InkGhostToMapExplore);
         }
     }
 }
@@ -322,7 +325,8 @@ void InkGhostState::handleEvent(App& app, const SDL_Event& event) {
     }
     else if (event.type == SDL_KEYDOWN) {
         if (event.key.keysym.sym == SDLK_ESCAPE) {
-            app.setState(std::make_unique<MapExploreState>());
+            // 返回地图探索界面，先播放叙事文本
+            NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::InkGhostToMapExplore);
         }
     }
 }
