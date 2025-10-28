@@ -117,6 +117,9 @@
     <ClCompile Include="src\main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\MusicManager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\App.h">
@@ -219,6 +222,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="src\states\TextPlayerState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\MusicManager.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

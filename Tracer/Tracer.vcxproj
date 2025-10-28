@@ -125,7 +125,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>SDL2.lib;SDL2main.lib;SDL2_ttf.lib;SDL2_image.lib;SDL2_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\SDL2_mixer-2.8.1\lib\x64;D:\C++Project\SDL2_image-2.8.8\lib\x64;D:\C++Project\SDL2-2.32.10\lib\x64;D:\C++Project\SDL2_ttf-2.22.0\lib\x64;D:\C++Project\SDL2_mixer-2.8.0\lib\x64;D:\yingjian\SDL2_mixer-2.8.0\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>D:\C++Project\SDL2_image-2.8.8\lib\x64;D:\C++Project\SDL2-2.32.10\lib\x64;D:\C++Project\SDL2_ttf-2.22.0\lib\x64;D:\C++Project\SDL2_mixer-2.8.1\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
