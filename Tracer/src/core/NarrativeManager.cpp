@@ -87,6 +87,8 @@ std::string NarrativeManager::getPresetName(NarrativeType type) {
             return "map_explore_to_combine";
         case NarrativeType::MapExploreToInkShop:
             return "map_explore_to_ink_shop";
+        case NarrativeType::MapExploreToWenxinTrial:
+            return "map_explore_to_wenxin_trial";
         // 各个节点到地图探索
         case NarrativeType::HeritageToMapExplore:
             return "heritage_to_map_explore";
@@ -112,6 +114,8 @@ std::string NarrativeManager::getPresetName(NarrativeType type) {
             return "combine_to_map_explore";
         case NarrativeType::InkShopToMapExplore:
             return "ink_shop_to_map_explore";
+        case NarrativeType::WenxinTrialToMapExplore:
+            return "wenxin_trial_to_map_explore";
         case NarrativeType::FinalBossVictory:
             return "final_boss_victory";
         case NarrativeType::Custom:
@@ -119,4 +123,22 @@ std::string NarrativeManager::getPresetName(NarrativeType type) {
         default:
             return "unknown";
     }
+}
+
+// 按层与索引的战斗预设过渡
+void NarrativeManager::performBattlePreset(App& app,
+                                           int layer,
+                                           int index,
+                                           bool before,
+                                           std::function<std::unique_ptr<State>()> nextStateFactory,
+                                           const std::string& textFile) {
+    // 组装预设名，如 battle_1_1_before 或 battle_3_3_after
+    std::string preset = "battle_" + std::to_string(layer) + "_" + std::to_string(index) + (before ? "_before" : "_after");
+
+    // 构造文本播放状态
+    auto textPlayer = std::make_unique<TextPlayerState>();
+    textPlayer->setTextFile(textFile);
+    textPlayer->setPresetName(preset);
+    textPlayer->setNextStateFactory(nextStateFactory);
+    app.setState(std::move(textPlayer));
 }

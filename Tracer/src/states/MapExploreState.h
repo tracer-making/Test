@@ -40,6 +40,8 @@ private:
     // 屏幕尺寸
     int screenW_ = 1280;
     int screenH_ = 720;
+    // 地图背景
+    SDL_Texture* mapBackgroundTex_ = nullptr;
     
     // UI按钮
     Button* regenerateButton_ = nullptr;
@@ -72,6 +74,8 @@ private:
     bool pendingGoTemper_ = false;
     bool pendingGoInkGhost_ = false;
     bool pendingGoInkWorkshop_ = false;
+    bool pendingGoCombine_ = false;
+    bool pendingGoWenxinTrial_ = false;
     
     // 字体
     _TTF_Font* font_ = nullptr;

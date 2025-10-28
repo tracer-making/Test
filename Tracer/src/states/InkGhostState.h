@@ -33,6 +33,7 @@ private:
     // 返回按钮
     Button* backButton_ = nullptr;
     Button* tutorialButton_ = nullptr;
+    Button* generateButton_ = nullptr; // 确认生成按钮
     
     // 手牌相关
     std::vector<Card> handCards_;

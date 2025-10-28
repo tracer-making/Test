@@ -127,6 +127,7 @@ void MapExploreState::onEnter(App& app) {
         // 直接跳转到下一层，不添加节点
         if (currentMapLayer_ < 4) {
             currentMapLayer_++;
+            App::resetBattleCounter();
             numLayers_++;
             std::cout << "[BOSS VICTORY] 进入第" << currentMapLayer_ << "层" << std::endl;
             
@@ -849,8 +850,39 @@ void MapExploreState::update(App& app, float dt) {
         
         // 根据战斗类型决定是否为意境之斗
         bool isEngraveBattle = (currentBattleType_ == u8"意境之斗");
-        // 进入战斗界面，先播放叙事文本
-        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToBattle);
+        // 计算该层当前第几个战斗：已访问的战斗节点数量 + 1（Boss 固定为4）
+        int battleIndexInLayer = 1;
+        // 尝试根据玩家当前节点判断是否为Boss节点
+        int playerNodeIdx = playerCurrentNode_;
+        bool isBossNode = false;
+        if (playerNodeIdx >= 0) {
+            const MapNode* node = getNodeByGlobalIndex(playerNodeIdx);
+            if (node) {
+                isBossNode = (node->type == MapNode::NodeType::BOSS);
+            }
+        }
+        if (isBossNode) {
+            battleIndexInLayer = 4; // Boss 统一视为第4个
+        } else {
+            // 使用全局战斗计数器决定 index：按 1..4 循环，非Boss只取 1..3
+            int cnt = App::incrementBattleCounter();
+            int mod = cnt % 4;
+            int idx = (mod == 0 ? 4 : mod);
+            if (idx == 4) idx = 3; // 非Boss不使用4
+            battleIndexInLayer = idx;
+        }
+
+        // 记录当前战斗位置信息，供战后返回时使用
+        App::setCurrentBattlePosition(currentLayer, battleIndexInLayer);
+
+        // 进入战斗前叙事：battle_{layer}_{index}_before
+        NarrativeManager::performBattlePreset(
+            app,
+            currentLayer,
+            battleIndexInLayer,
+            /*before=*/true,
+            [battleId, isEngraveBattle]() -> std::unique_ptr<State> { return std::make_unique<BattleState>(battleId, isEngraveBattle); }
+        );
         return;
     }
     
@@ -858,9 +890,15 @@ void MapExploreState::update(App& app, float dt) {
         pendingGoMinerBoss_ = false;
         std::cout << "[MINER TEST] 矿工测试按钮被点击，进入Boss战（ID: 100）" << std::endl;
         std::cout << "[MINER TEST] 当前蜡烛数量: " << App::getRemainingCandles() << std::endl;
-        // 设置矿工Boss战（ID: 100）
-        auto* battleState = new BattleState(100);
-        app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
+        // Boss战前文本：battle_{layer}_4_before
+        App::setCurrentBattlePosition(currentMapLayer_, 4);
+        NarrativeManager::performBattlePreset(
+            app,
+            currentMapLayer_,
+            4,
+            /*before=*/true,
+            []() -> std::unique_ptr<State> { return std::make_unique<BattleState>(100); }
+        );
         return;
     }
     
@@ -868,9 +906,15 @@ void MapExploreState::update(App& app, float dt) {
         pendingGoFishermanBoss_ = false;
         std::cout << "[FISHERMAN TEST] 渔夫测试按钮被点击，进入Boss战（ID: 102）" << std::endl;
         std::cout << "[FISHERMAN TEST] 当前蜡烛数量: " << App::getRemainingCandles() << std::endl;
-        // 设置渔夫Boss战（ID: 102）
-        auto* battleState = new BattleState(102);
-        app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
+        // Boss战前文本：battle_{layer}_4_before
+        App::setCurrentBattlePosition(currentMapLayer_, 4);
+        NarrativeManager::performBattlePreset(
+            app,
+            currentMapLayer_,
+            4,
+            /*before=*/true,
+            []() -> std::unique_ptr<State> { return std::make_unique<BattleState>(102); }
+        );
         return;
     }
     
@@ -879,11 +923,15 @@ void MapExploreState::update(App& app, float dt) {
         std::cout << "[HUNTER TEST] 猎人测试按钮被点击，进入Boss战（ID: 104）" << std::endl;
         std::cout << "[HUNTER TEST] 当前蜡烛数量: " << App::getRemainingCandles() << std::endl;
         std::cout << "[HUNTER TEST] 正在创建BattleState(104)..." << std::endl;
-        // 设置猎人Boss战（ID: 104）
-        auto* battleState = new BattleState(104);
-        std::cout << "[HUNTER TEST] BattleState创建完成，正在切换状态..." << std::endl;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
-        std::cout << "[HUNTER TEST] 状态切换完成！" << std::endl;
+        // Boss战前文本：battle_{layer}_4_before
+        App::setCurrentBattlePosition(currentMapLayer_, 4);
+        NarrativeManager::performBattlePreset(
+            app,
+            currentMapLayer_,
+            4,
+            /*before=*/true,
+            []() -> std::unique_ptr<State> { return std::make_unique<BattleState>(104); }
+        );
         return;
     }
     
@@ -892,11 +940,15 @@ void MapExploreState::update(App& app, float dt) {
         std::cout << "[FINAL BOSS] 最终Boss按钮被点击，进入Boss战（ID: 105）" << std::endl;
         std::cout << "[FINAL BOSS] 当前蜡烛数量: " << App::getRemainingCandles() << std::endl;
         std::cout << "[FINAL BOSS] 正在创建BattleState(105)..." << std::endl;
-        // 设置最终Boss战（ID: 105）
-        auto* battleState = new BattleState(105);
-        std::cout << "[FINAL BOSS] BattleState创建完成，正在切换状态..." << std::endl;
-        app.setState(std::unique_ptr<State>(static_cast<State*>(battleState)));
-        std::cout << "[FINAL BOSS] 状态切换完成！" << std::endl;
+        // Boss战前文本：battle_{layer}_4_before
+        App::setCurrentBattlePosition(currentMapLayer_, 4);
+        NarrativeManager::performBattlePreset(
+            app,
+            currentMapLayer_,
+            4,
+            /*before=*/true,
+            []() -> std::unique_ptr<State> { return std::make_unique<BattleState>(105); }
+        );
         return;
     }
     
@@ -942,6 +994,20 @@ void MapExploreState::update(App& app, float dt) {
         return;
     }
     
+    if (pendingGoCombine_) {
+        pendingGoCombine_ = false;
+        // 进入合卷界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToCombine);
+        return;
+    }
+
+    if (pendingGoWenxinTrial_) {
+        pendingGoWenxinTrial_ = false;
+        // 进入文心试炼界面，先播放叙事文本
+        NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::MapExploreToWenxinTrial);
+        return;
+    }
+
     if (pendingGoMemoryRepair_) {
         pendingGoMemoryRepair_ = false;
         // 进入记忆修复界面，先播放叙事文本
@@ -974,9 +1040,22 @@ void MapExploreState::update(App& app, float dt) {
 void MapExploreState::render(App& app) {
     SDL_Renderer* r = app.getRenderer();
     
-    // 清屏 - 灰白色背景
-    SDL_SetRenderDrawColor(r, 180, 180, 180, 255);
+    // 清屏
+    SDL_SetRenderDrawColor(r, 10, 10, 12, 255);
     SDL_RenderClear(r);
+    
+    // 渲染地图背景（assets/pictures/mapbackground）
+    if (!mapBackgroundTex_) {
+        SDL_Surface* bg = IMG_Load("assets/pictures/mapbackground.jpg");
+        if (bg) {
+            mapBackgroundTex_ = SDL_CreateTextureFromSurface(r, bg);
+            SDL_FreeSurface(bg);
+        }
+    }
+    if (mapBackgroundTex_) {
+        SDL_Rect dst { 0, 0, screenW_, screenH_ };
+        SDL_RenderCopy(r, mapBackgroundTex_, nullptr, &dst);
+    }
     
     // 渲染标题（已删除"地图探索"标题）
     // renderTitle(r); // 完全去掉标题渲染
@@ -2776,6 +2855,10 @@ void MapExploreState::movePlayerToNode(int nodeIndex) {
                 pendingGoInkWorkshop_ = true;
             } else if (node->label == u8"墨鬼") {
                 pendingGoInkGhost_ = true;
+            } else if (node->label == u8"合卷") {
+                pendingGoCombine_ = true;
+            } else if (node->label == u8"文心试炼") {
+                pendingGoWenxinTrial_ = true;
             } else if (node->label == u8"记忆修复" || 
                        node->label == u8"记忆修复(随机)" || 
                        node->label == u8"记忆修复(已知部族)" || 
@@ -2982,6 +3065,7 @@ void MapExploreState::updatePlayerMoveAnimation(float dt) {
                 // 进入下一层
                 if (currentMapLayer_ < 4) {
                     currentMapLayer_++;
+                    App::resetBattleCounter();
                     std::cout << "[PLAYER MOVE] 进入第" << currentMapLayer_ << "层" << std::endl;
                     
                     // 生成新层的地图

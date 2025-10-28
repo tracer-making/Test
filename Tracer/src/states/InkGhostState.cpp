@@ -15,6 +15,7 @@
 InkGhostState::InkGhostState() {
     backButton_ = new Button();
     tutorialButton_ = new Button();
+    generateButton_ = new Button();
 }
 
 InkGhostState::~InkGhostState() {
@@ -23,6 +24,9 @@ InkGhostState::~InkGhostState() {
     }
     if (tutorialButton_) {
         delete tutorialButton_;
+    }
+    if (generateButton_) {
+        delete generateButton_;
     }
 }
 
@@ -57,6 +61,23 @@ void InkGhostState::onEnter(App& app) {
         if (smallFont_) tutorialButton_->setFont(smallFont_, app.getRenderer());
         tutorialButton_->setOnClick([this]() {
             startTutorial();
+        });
+    }
+    
+    // 生成按钮（仅在选中卡牌后显示）
+    if (generateButton_) {
+        int btnW = 140, btnH = 38;
+        // 先给一个占位，稍后在牌位确定后再精确定位
+        SDL_Rect gr{ (screenW_ - btnW)/2, screenH_ - 90, btnW, btnH };
+        generateButton_->setRect(gr);
+        generateButton_->setText(u8"生成新卡");
+        if (smallFont_) generateButton_->setFont(smallFont_, app.getRenderer());
+        generateButton_->setOnClick([this]() {
+            if (hasSelectedCard_ && !isAnimating_) {
+                isAnimating_ = true;
+                animTime_ = 0.0f;
+                animDuration_ = 2.0f;
+            }
         });
     }
     
@@ -97,6 +118,18 @@ void InkGhostState::onEnter(App& app) {
     
     leftSlotRect_ = {startX, slotY, slotSize, static_cast<int>(slotSize * 1.4f)};
     rightSlotRect_ = {startX + slotSize + slotGap, slotY, slotSize, static_cast<int>(slotSize * 1.4f)};
+
+    // 定位“生成新卡”按钮到两个牌位下方、手牌区上方
+    if (generateButton_) {
+        int btnW = 140, btnH = 38;
+        int slotsBottom = leftSlotRect_.y + leftSlotRect_.h;
+        int midX = (leftSlotRect_.x + rightSlotRect_.x + rightSlotRect_.w) / 2;
+        int y = slotsBottom + 20;
+        int handTop = screenH_ - 200; // 手牌区顶部
+        if (y + btnH > handTop - 10) y = handTop - 10 - btnH; // 避免与手牌区重叠
+        SDL_Rect gr{ midX - btnW / 2, y, btnW, btnH };
+        generateButton_->setRect(gr);
+    }
     
     // 重置状态
     rightSlotSelected_ = false;
@@ -197,8 +230,15 @@ void InkGhostState::render(App& app) {
         renderGeneratedCard(app);
     }
     
-    // 渲染手牌区
-    renderHandCards(app);
+    // 渲染手牌区（仅在右侧槽位被选中后显示可选卡牌）
+    if (rightSlotSelected_) {
+        renderHandCards(app);
+    }
+
+    // 渲染生成按钮（仅当已选择卡牌且未在动画中）
+    if (hasSelectedCard_ && !isAnimating_ && generateButton_) {
+        generateButton_->render(app.getRenderer());
+    }
     
     // 渲染说明文字
     if (smallFont_) {
@@ -233,58 +273,55 @@ void InkGhostState::handleEvent(App& app, const SDL_Event& event) {
     // 处理返回按钮事件
     if (backButton_) backButton_->handleEvent(event);
     if (tutorialButton_) tutorialButton_->handleEvent(event);
+    if (generateButton_ && hasSelectedCard_ && !isAnimating_) generateButton_->handleEvent(event);
     
     if (event.type == SDL_MOUSEMOTION) {
         int mx = event.motion.x;
         int my = event.motion.y;
-        
-        // 处理印记悬停
-        // 检查手牌中的印记悬停
-        for (int i = 0; i < (int)handCardRects_.size(); ++i) {
-            if (mx >= handCardRects_[i].x && mx <= handCardRects_[i].x + handCardRects_[i].w &&
-                my >= handCardRects_[i].y && my <= handCardRects_[i].y + handCardRects_[i].h) {
-                if (i < (int)handCards_.size()) {
-                    CardRenderer::handleMarkHover(handCards_[i], handCardRects_[i], mx, my, smallFont_);
-                    return;
+
+        // 先更新手牌悬停索引（仅在右侧槽位已被选中时）
+        hoveredHandCardIndex_ = -1;
+        if (rightSlotSelected_) {
+            for (int i = 0; i < (int)handCardRects_.size(); ++i) {
+                if (mx >= handCardRects_[i].x && mx <= handCardRects_[i].x + handCardRects_[i].w &&
+                    my >= handCardRects_[i].y && my <= handCardRects_[i].y + handCardRects_[i].h) {
+                    hoveredHandCardIndex_ = i;
+                    break;
                 }
             }
         }
-        
+
+        // 再处理印记悬停（仅在右侧槽位已被选中且命中某张手牌时）
+        if (rightSlotSelected_ && hoveredHandCardIndex_ >= 0 && hoveredHandCardIndex_ < (int)handCards_.size()) {
+            CardRenderer::handleMarkHover(handCards_[hoveredHandCardIndex_], handCardRects_[hoveredHandCardIndex_], mx, my, smallFont_);
+        }
+
         // 检查右侧牌位中的印记悬停
         if (mx >= rightSlotRect_.x && mx <= rightSlotRect_.x + rightSlotRect_.w &&
             my >= rightSlotRect_.y && my <= rightSlotRect_.y + rightSlotRect_.h) {
             if (selectedCard_.id != "") {
                 CardRenderer::handleMarkHover(selectedCard_, rightSlotRect_, mx, my, smallFont_);
-                return;
             }
         }
         
         // 如果没有悬停在任何印记上，隐藏提示
         App::hideMarkTooltip();
-        
-        // 检查手牌悬停
-        hoveredHandCardIndex_ = -1;
-        for (int i = 0; i < (int)handCardRects_.size(); ++i) {
-            if (mx >= handCardRects_[i].x && mx <= handCardRects_[i].x + handCardRects_[i].w &&
-                my >= handCardRects_[i].y && my <= handCardRects_[i].y + handCardRects_[i].h) {
-                hoveredHandCardIndex_ = i;
-                break;
-            }
-        }
     }
     // 处理印记右键点击
     else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
         int mx = event.button.x;
         int my = event.button.y;
         
-        // 检查手牌中的印记
-        for (int i = 0; i < (int)handCardRects_.size(); ++i) {
-            if (mx >= handCardRects_[i].x && mx <= handCardRects_[i].x + handCardRects_[i].w &&
-                my >= handCardRects_[i].y && my <= handCardRects_[i].y + handCardRects_[i].h) {
-                if (i < (int)handCards_.size()) {
-                    CardRenderer::handleMarkClick(handCards_[i], handCardRects_[i], mx, my, smallFont_);
-                    if (App::isMarkTooltipVisible()) {
-                        return;
+        // 检查手牌中的印记（仅在右侧槽位已被选中时）
+        if (rightSlotSelected_) {
+            for (int i = 0; i < (int)handCardRects_.size(); ++i) {
+                if (mx >= handCardRects_[i].x && mx <= handCardRects_[i].x + handCardRects_[i].w &&
+                    my >= handCardRects_[i].y && my <= handCardRects_[i].y + handCardRects_[i].h) {
+                    if (i < (int)handCards_.size()) {
+                        CardRenderer::handleMarkClick(handCards_[i], handCardRects_[i], mx, my, smallFont_);
+                        if (App::isMarkTooltipVisible()) {
+                            return;
+                        }
                     }
                 }
             }
@@ -305,22 +342,22 @@ void InkGhostState::handleEvent(App& app, const SDL_Event& event) {
         int mx = event.button.x;
         int my = event.button.y;
         
-        // 检查右侧牌位点击
+        // 检查右侧牌位点击：进入/退出选择模式
         if (mx >= rightSlotRect_.x && mx <= rightSlotRect_.x + rightSlotRect_.w &&
             my >= rightSlotRect_.y && my <= rightSlotRect_.y + rightSlotRect_.h) {
+            // 若已有选择，则清空以便重新选择
+            if (hasSelectedCard_ && !isAnimating_) {
+                hasSelectedCard_ = false;
+                selectedCard_ = Card{};
+            }
             rightSlotSelected_ = true;
         }
         // 检查手牌点击（当右侧牌位被选中时）
         else if (rightSlotSelected_ && hoveredHandCardIndex_ >= 0 && hoveredHandCardIndex_ < (int)handCards_.size()) {
-            // 选择卡牌
+            // 选择卡牌并显示于右侧牌位；等待“生成新卡”按钮点击再开始动画
             selectedCard_ = handCards_[hoveredHandCardIndex_];
             hasSelectedCard_ = true;
-            rightSlotSelected_ = false;
-            
-            // 开始生成动画（延时生成）
-            isAnimating_ = true;
-            animTime_ = 0.0f;
-            animDuration_ = 2.0f;  // 2秒动画
+            // 保持 rightSlotSelected_ 为 true，允许再次点击右槽重选
         }
     }
     else if (event.type == SDL_KEYDOWN) {

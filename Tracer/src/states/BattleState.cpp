@@ -1257,16 +1257,31 @@ void BattleState::update(App& app, float dt) {
 	
 	if (pendingGoMapExplore_) {
 		pendingGoMapExplore_ = false;
-		// 进入地图探索界面，先播放叙事文本
-		NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::BattleToMapExplore);
+		// 战斗结束返回地图：battle_{layer}_{index}_after
+		int layer = App::getCurrentBattleLayer();
+		int index = App::getCurrentBattleIndex();
+		NarrativeManager::performBattlePreset(
+			app,
+			layer,
+			index,
+			/*before=*/false,
+			[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+		);
 		return;
 	}
 	
 	if (pendingGoMemoryRepair_) {
-		std::cout << "[BATTLE STATE] 跳转到记忆修复界面，isBossVictory=true" << std::endl;
+		std::cout << "[BATTLE STATE] 跳转到记忆修复界面（Boss战后），先播放 battle_{layer}_4_after" << std::endl;
 		pendingGoMemoryRepair_ = false;
-		// 进入记忆修复界面，先播放叙事文本
-		NarrativeManager::performNarrativeTransition(app, NarrativeManager::NarrativeType::BattleToMemoryRepair);
+		int layer = App::getCurrentBattleLayer();
+		// 强制使用 index=4 的 after 文本，然后进入 MemoryRepairState(true)
+		NarrativeManager::performBattlePreset(
+			app,
+			layer,
+			4,
+			/*before=*/false,
+			[]() -> std::unique_ptr<State> { return std::make_unique<MemoryRepairState>(true); }
+		);
 		return;
 	}
 	

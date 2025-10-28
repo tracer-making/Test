@@ -55,6 +55,16 @@ public:
 	// 初始化叙事跳转
 	static void initializeNarrativeTransitions();
 
+	// 当前战斗位置信息（用于文本播放的 before/after 预设定位）
+	static void setCurrentBattlePosition(int layer, int index) { currentBattleLayer_ = layer; currentBattleIndex_ = index; }
+	static int getCurrentBattleLayer() { return currentBattleLayer_; }
+	static int getCurrentBattleIndex() { return currentBattleIndex_; }
+
+	// 全局战斗计数器（用于按顺序 1..4 周期索引）
+	static int incrementBattleCounter() { return ++battleCounter_; }
+	static int getBattleCounter() { return battleCounter_; }
+	static void resetBattleCounter() { battleCounter_ = 0; }
+
 private:
 	SDL_Window* window_ = nullptr;
 	SDL_Renderer* renderer_ = nullptr;
@@ -75,6 +85,11 @@ private:
 	static std::string tooltipDescription_;
 	static int tooltipMouseX_;
 	static int tooltipMouseY_;
+
+	// 当前战斗位置信息
+	static int currentBattleLayer_;
+	static int currentBattleIndex_;
+	static int battleCounter_;
 };
 
 

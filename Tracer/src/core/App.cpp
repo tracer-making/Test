@@ -1,6 +1,7 @@
 #include "App.h"
 #include "State.h"
 #include "NarrativeManager.h"
+#include "MusicManager.h"
 #include <SDL.h>
 #if __has_include(<SDL2/SDL_ttf.h>)
 #include <SDL2/SDL_ttf.h>
@@ -27,6 +28,7 @@
 #include "../states/BurnState.h"
 #include "../states/CombineState.h"
 #include "../states/InkShopState.h"
+#include "../states/WenxinTrialState.h"
 
 // 定义静态成员变量
 bool App::godMode_ = false;
@@ -39,12 +41,16 @@ std::string App::tooltipMarkName_ = "";
 std::string App::tooltipDescription_ = "";
 int App::tooltipMouseX_ = 0;
 int App::tooltipMouseY_ = 0;
+// 当前战斗位置信息
+int App::currentBattleLayer_ = 1;
+int App::currentBattleIndex_ = 1;
+int App::battleCounter_ = 0;
 
 App::App() = default;
 App::~App() { shutdown(); }
 
 bool App::init(const char* title, int width, int height) {
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) != 0) {
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS | SDL_INIT_AUDIO) != 0) {
 		SDL_Log("SDL_Init Error: %s", SDL_GetError());
 		return false;
 	}
@@ -72,6 +78,9 @@ bool App::init(const char* title, int width, int height) {
 	// 初始化叙事管理器
 	initializeNarrativeTransitions();
 	
+    // 初始化音乐管理器（若未编译进SDL_mixer，将自动禁用音乐并继续运行）
+    MusicManager::instance().init();
+	
 	// 注意：不在这里初始化玩家牌堆，等用户选择牌组后再初始化
 
 	running_ = true;
@@ -82,6 +91,10 @@ void App::shutdown() {
 	state_.reset();
 	if (renderer_) { SDL_DestroyRenderer(renderer_); renderer_ = nullptr; }
 	if (window_) { SDL_DestroyWindow(window_); window_ = nullptr; }
+	
+	// 关闭音乐管理器
+	MusicManager::instance().shutdown();
+	
 	TTF_Quit();
 	SDL_Quit();
 }
@@ -100,6 +113,9 @@ void App::run() {
 		prev = now;
 
 		if (state_) state_->update(*this, static_cast<float>(delta));
+
+		// 更新音乐管理器（检查是否需要播放下一首）
+		MusicManager::instance().update();
 
 		SDL_SetRenderDrawColor(renderer_, 10, 10, 12, 255);
 		SDL_RenderClear(renderer_);
@@ -264,6 +280,13 @@ void App::initializeNarrativeTransitions() {
 		"assets/narrative/all_narratives.txt",
 		[]() -> std::unique_ptr<State> { return std::make_unique<CombineState>(); }
 	);
+
+	// 地图探索 -> 文心试炼
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::MapExploreToWenxinTrial,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<WenxinTrialState>(); }
+	);
 	
 	NarrativeManager::setNarrativeTransition(
 		NarrativeManager::NarrativeType::MapExploreToInkShop,
@@ -334,6 +357,12 @@ void App::initializeNarrativeTransitions() {
 	
 	NarrativeManager::setNarrativeTransition(
 		NarrativeManager::NarrativeType::CombineToMapExplore,
+		"assets/narrative/all_narratives.txt",
+		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
+	);
+
+	NarrativeManager::setNarrativeTransition(
+		NarrativeManager::NarrativeType::WenxinTrialToMapExplore,
 		"assets/narrative/all_narratives.txt",
 		[]() -> std::unique_ptr<State> { return std::make_unique<MapExploreState>(); }
 	);

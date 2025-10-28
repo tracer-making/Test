@@ -34,6 +34,7 @@ public:
         MapExploreToBurn,          // 地图探索 -> 燃烧
         MapExploreToCombine,       // 地图探索 -> 融合
         MapExploreToInkShop,       // 地图探索 -> 墨店
+        MapExploreToWenxinTrial,   // 地图探索 -> 文心试炼
         // 各个节点到地图探索
         HeritageToMapExplore,      // 文脉传承 -> 地图探索
         EngraveToMapExplore,       // 意境刻画 -> 地图探索
@@ -47,6 +48,7 @@ public:
         BurnToMapExplore,          // 燃烧 -> 地图探索
         CombineToMapExplore,       // 融合 -> 地图探索
         InkShopToMapExplore,       // 墨店 -> 地图探索
+        WenxinTrialToMapExplore,   // 文心试炼 -> 地图探索
         FinalBossVictory,          // 最终Boss胜利 -> 主菜单
         Custom                     // 自定义跳转
     };
@@ -73,6 +75,15 @@ public:
     
     // 获取预设名称
     static std::string getPresetName(NarrativeType type);
+
+    // 按 layer/index 组织的战斗过渡助手：
+    // before=true 使用 battle_{layer}_{index}_before，否则使用 *_after
+    static void performBattlePreset(App& app,
+                                    int layer,
+                                    int index,
+                                    bool before,
+                                    std::function<std::unique_ptr<State>()> nextStateFactory,
+                                    const std::string& textFile = "assets/narrative/all_narratives.txt");
 
 private:
     struct NarrativeTransition {

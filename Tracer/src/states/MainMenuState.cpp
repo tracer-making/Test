@@ -5,6 +5,7 @@
 #include "DeckSelectState.h"
 #include "TextPlayerState.h"
 #include "../core/NarrativeManager.h"
+#include "../core/MusicManager.h"
 #include "../core/App.h"
 #include "../ui/Button.h"
 #include <SDL.h>
@@ -120,6 +121,9 @@ void MainMenuState::onEnter(App& app) {
 		star.twinkleSpeed = 2.0f + static_cast<float>(rand() % 300) / 100.0f; // 2.0-5.0
 		stars_.push_back(star);
 	}
+	
+	// 启动背景音乐
+	MusicManager::instance().startRandomPlaylist();
 }
 
 void MainMenuState::handleEvent(App& app, const SDL_Event& e) {
