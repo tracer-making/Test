@@ -15,93 +15,210 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\\core\\App.cpp">
+    <ClCompile Include="src\core\App.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\core\\Deck.cpp">
+    <ClCompile Include="src\core\NarrativeManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\ui\\Button.cpp">
+    <ClCompile Include="src\core\ItemStore.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\BattleState.cpp">
+    <ClCompile Include="src\core\Deck.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\HeritageState.cpp">
+    <ClCompile Include="src\core\Cards.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\EngraveState.cpp">
+    <ClCompile Include="src\core\EnemyEngraveStore.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\InkShopState.cpp">
+    <ClCompile Include="src\core\MarkEffectDatabase.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\MemoryRepairState.cpp">
+    <ClCompile Include="src\ui\Button.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\RelicPickupState.cpp">
+    <ClCompile Include="src\ui\CardRenderer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\TemperState.cpp">
+    <ClCompile Include="src\states\BattleState.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\SeekerState.cpp">
+    <ClCompile Include="src\states\HeritageState.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\DeckState.cpp">
+    <ClCompile Include="src\states\EngraveState.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\states\\MainMenuState.cpp">
+    <ClCompile Include="src\states\InkGhostState.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="src\\main.cpp">
+    <ClCompile Include="src\states\InkWorkshopState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\InkShopState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\MemoryRepairState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\RelicPickupState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\TemperState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\SeekerState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\BurnState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\CombineState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\BarterState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\CardBrowserState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\DeckState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\MainMenuState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\TestState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\MapExploreState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\WenxinTrialState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\DeckViewState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\DeckSelectState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\EnemyPresets.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\VictoryState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\states\TextPlayerState.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\\core\\App.h">
+    <ClInclude Include="src\core\App.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\core\\Card.h">
+    <ClInclude Include="src\core\NarrativeManager.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\core\\Deck.h">
+    <ClInclude Include="src\core\ItemStore.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\core\\State.h">
+    <ClInclude Include="src\core\Card.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\ui\\Button.h">
+    <ClInclude Include="src\core\Deck.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\BattleState.h">
+    <ClInclude Include="src\core\Cards.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\MainMenuState.h">
+    <ClInclude Include="src\core\EnemyEngraveStore.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\HeritageState.h">
+    <ClInclude Include="src\core\MarkEffectDatabase.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\EngraveState.h">
+    <ClInclude Include="src\core\State.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\InkShopState.h">
+    <ClInclude Include="src\ui\Button.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\MemoryRepairState.h">
+    <ClInclude Include="src\ui\CardRenderer.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\RelicPickupState.h">
+    <ClInclude Include="src\states\MainMenuState.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\TemperState.h">
+    <ClInclude Include="src\states\DeckState.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\SeekerState.h">
+    <ClInclude Include="src\states\HeritageState.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="src\\states\\DeckState.h">
+    <ClInclude Include="src\states\EngraveState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\InkGhostState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\InkWorkshopState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\InkShopState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\MemoryRepairState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\RelicPickupState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\TemperState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\SeekerState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\BurnState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\CombineState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\BarterState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\CardBrowserState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\TestState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\MapExploreState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\WenxinTrialState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\DeckViewState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\DeckSelectState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\EnemyPresets.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\VictoryState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\states\TextPlayerState.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
