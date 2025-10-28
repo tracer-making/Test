@@ -22,41 +22,41 @@ end
 
 [PRESET:map_explore_to_battle]
 你来到了一个充满危险的地方。
-[BG:assets/background1.png]空气中弥漫着紧张的气息。
-[BG:assets/background2.png]敌人就在前方，准备迎接挑战吧！
-[BG:assets/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
-[BG:assets/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
-[BG:assets/background2.png]准备好了吗？让我们开始战斗吧！
+[BG:assets/pictures/background1.png]空气中弥漫着紧张的气息。
+[BG:assets/pictures/background2.png]敌人就在前方，准备迎接挑战吧！
+[BG:assets/pictures/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
+[BG:assets/pictures/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
+[BG:assets/pictures/background2.png]准备好了吗？让我们开始战斗吧！
 你来到了一个充满危险的地方。
-[BG:assets/background1.png]空气中弥漫着紧张的气息。
-[BG:assets/background2.png]敌人就在前方，准备迎接挑战吧！
-[BG:assets/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
-[BG:assets/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
-[BG:assets/background2.png]准备好了吗？让我们开始战斗吧！
+[BG:assets/pictures/background1.png]空气中弥漫着紧张的气息。
+[BG:assets/pictures/background2.png]敌人就在前方，准备迎接挑战吧！
+[BG:assets/pictures/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
+[BG:assets/pictures/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
+[BG:assets/pictures/background2.png]准备好了吗？让我们开始战斗吧！
 你来到了一个充满危险的地方。
-[BG:assets/background1.png]空气中弥漫着紧张的气息。
-[BG:assets/background2.png]敌人就在前方，准备迎接挑战吧！
-[BG:assets/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
-[BG:assets/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
-[BG:assets/background2.png]准备好了吗？让我们开始战斗吧！
+[BG:assets/pictures/background1.png]空气中弥漫着紧张的气息。
+[BG:assets/pictures/background2.png]敌人就在前方，准备迎接挑战吧！
+[BG:assets/pictures/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
+[BG:assets/pictures/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
+[BG:assets/pictures/background2.png]准备好了吗？让我们开始战斗吧！
 你来到了一个充满危险的地方。
-[BG:assets/background1.png]空气中弥漫着紧张的气息。
-[BG:assets/background2.png]敌人就在前方，准备迎接挑战吧！
-[BG:assets/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
-[BG:assets/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
-[BG:assets/background2.png]准备好了吗？让我们开始战斗吧！
+[BG:assets/pictures/background1.png]空气中弥漫着紧张的气息。
+[BG:assets/pictures/background2.png]敌人就在前方，准备迎接挑战吧！
+[BG:assets/pictures/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
+[BG:assets/pictures/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
+[BG:assets/pictures/background2.png]准备好了吗？让我们开始战斗吧！
 你来到了一个充满危险的地方。
-[BG:assets/background1.png]空气中弥漫着紧张的气息。
-[BG:assets/background2.png]敌人就在前方，准备迎接挑战吧！
-[BG:assets/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
-[BG:assets/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
-[BG:assets/background2.png]准备好了吗？让我们开始战斗吧！
+[BG:assets/pictures/background1.png]空气中弥漫着紧张的气息。
+[BG:assets/pictures/background2.png]敌人就在前方，准备迎接挑战吧！
+[BG:assets/pictures/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
+[BG:assets/pictures/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
+[BG:assets/pictures/background2.png]准备好了吗？让我们开始战斗吧！
 你来到了一个充满危险的地方。
-[BG:assets/background1.png]空气中弥漫着紧张的气息。
-[BG:assets/background2.png]敌人就在前方，准备迎接挑战吧！
-[BG:assets/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
-[BG:assets/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
-[BG:assets/background2.png]准备好了吗？让我们开始战斗吧！
+[BG:assets/pictures/background1.png]空气中弥漫着紧张的气息。
+[BG:assets/pictures/background2.png]敌人就在前方，准备迎接挑战吧！
+[BG:assets/pictures/background3.png]战斗不仅仅是力量的较量，更是智慧的体现。
+[BG:assets/pictures/background1.png]合理搭配卡牌，制定策略，才能获得胜利。
+[BG:assets/pictures/background2.png]准备好了吗？让我们开始战斗吧！
 end
 
 [PRESET:battle_to_map_explore]
@@ -95,7 +95,7 @@ end
 end
 
 [PRESET:battle_to_memory_repair]
-[BG:assets/heritage1.jpg]战斗结束了，但你发现了一些异常。
+[BG:assets/pictures/heritage1.jpg]战斗结束了，但你发现了一些异常。
 你的记忆似乎出现了问题。
 一些重要的信息变得模糊不清。
 你需要修复这些记忆碎片。
@@ -103,19 +103,19 @@ end
 end
 
 [PRESET:map_explore_to_heritage]
-[BG:assets/heritage1.jpg]你来到了一个充满古老气息的地方。
+[BG:assets/pictures/heritage1.jpg]你来到了一个充满古老气息的地方。
 这里似乎隐藏着深厚的文化底蕴。
 文脉传承的力量在这里汇聚。
 你将在这里获得新的知识和力量。
 (文化继承可以将你手牌的其中之一的词条继承到另一张手牌上，但给出词条的那张手牌会被损毁)
-[BG:assets/heritage2.png](对话结束后会来到如下界面，点击左边方框)
-[BG:assets/heritage3.png](下方是你拥有的可以被继承的手牌，选择其一)
-[BG:assets/heritage4.png](然后点击右边的方框，再从你的手牌中选择可以继承的手牌)
-[BG:assets/heritage5.png](最后点击中间的按钮即可完成文化传承)
+[BG:assets/pictures/heritage2.png](对话结束后会来到如下界面，点击左边方框)
+[BG:assets/pictures/heritage3.png](下方是你拥有的可以被继承的手牌，选择其一)
+[BG:assets/pictures/heritage4.png](然后点击右边的方框，再从你的手牌中选择可以继承的手牌)
+[BG:assets/pictures/heritage4.png](最后点击中间的按钮即可完成文化传承)
 end
 
 [PRESET:heritage_to_map_explore]
-[BG:assets/heritage1.jpg]传承结束了！
+[BG:assets/pictures/heritage1.jpg]传承结束了！
 你获得了新的知识和力量。
 这些传承将帮助你在接下来的冒险中。
 现在，让我们继续探索这个世界。
@@ -123,18 +123,18 @@ end
 end
 
 [PRESET:map_explore_to_engrave]
-[BG:assets/heritage1.jpg]你来到了一个神秘的地方。
+[BG:assets/pictures/heritage1.jpg]你来到了一个神秘的地方。
 空气中弥漫着意境的气息。
 这里可以进行意境刻画。
 通过刻画，你可以获得新的能力。
-[BG:assets/engrave1.png](对话结束后会来到如下界面，从三个中选一个)
+[BG:assets/pictures/engrave1.png](对话结束后会来到如下界面，从三个中选一个)
 (其中，方形为部，代表那些卡牌可以得到增益)
 (圆形为增益，代表卡牌所受的具体增益)
 (只有同时拥有一个部和一个增益才能生效)
 end
 
 [PRESET:engrave_to_map_explore]
-[BG:assets/heritage1.jpg]刻画完成了！
+[BG:assets/pictures/heritage1.jpg]刻画完成了！
 你成功刻画了新的意境。
 这些意境将增强你的战斗能力。
 现在，让我们继续探索这个世界。
@@ -142,18 +142,18 @@ end
 end
 
 [PRESET:map_explore_to_ink_workshop]
-[BG:assets/heritage1.jpg]你来到了墨工坊。
+[BG:assets/pictures/heritage1.jpg]你来到了墨工坊。
 这里充满了墨香和工艺的气息。
 在这里，你可以制作各种墨宝。
 每一件墨宝都有其独特的功效。
-[BG:assets/ink_work_shop1.png](对话结束后进入该界面)
+[BG:assets/pictures/ink_work_shop1.png](对话结束后进入该界面)
 (左侧是你的文脉数量，可用文脉换取墨宝)
 (上方是售卖的墨宝，每个墨宝所需的文脉数都已经标清楚)
 (下方是你能拿走的墨宝，点击即结束事件。不论你有没有买，这个节点都会免费送你一个墨宝)
 end
 
 [PRESET:ink_workshop_to_map_explore]
-[BG:assets/heritage1.jpg]制作完成了！
+[BG:assets/pictures/heritage1.jpg]制作完成了！
 你成功制作了新的墨宝。
 这些墨宝将帮助你在冒险中。
 现在，让我们继续探索这个世界。
@@ -161,18 +161,18 @@ end
 end
 
 [PRESET:map_explore_to_ink_ghost]
-[BG:assets/heritage1.jpg]你遇到了墨鬼。
+[BG:assets/pictures/heritage1.jpg]你遇到了墨鬼。
 这是一个神秘的存在。
 墨鬼拥有强大的力量。
 你需要小心应对。
-[BG:assets/inkghost.png](结束对话后进入该界面)
-[BG:assets/inkghost.png](点击右侧方块)
+[BG:assets/pictures/inkghost1.png](结束对话后进入该界面)
+[BG:assets/pictures/inkghost2.png](点击右侧方块)
 (选择你想要复制的牌)
 (复制出来的牌不一定与原本的牌一摸一样)
 end
 
 [PRESET:ink_ghost_to_map_explore]
-[BG:assets/heritage1.jpg]墨鬼事件结束了！
+[BG:assets/pictures/heritage1.jpg]墨鬼事件结束了！
 你成功处理了墨鬼事件。
 获得了宝贵的经验和奖励。
 现在，让我们继续探索这个世界。
@@ -180,16 +180,16 @@ end
 end
 
 [PRESET:map_explore_to_barter]
-[BG:assets/heritage1.jpg]你来到了以物易物的场所。
+[BG:assets/pictures/heritage1.jpg]你来到了以物易物的场所。
 这里充满了交易的气息。
 你可以用手中的物品换取需要的东西。
 每一次交易都可能改变你的命运。
-[BG:assets/barter1.png](结束对话后会来到该界面，左侧是你可以交出去的卡牌)
-[BG:assets/barter2.png](右侧是你可以得到的卡牌，左键点击获得)
+[BG:assets/pictures/barter1.png](结束对话后会来到该界面，左侧是你可以交出去的卡牌)
+[BG:assets/pictures/barter2.png](右侧是你可以得到的卡牌，左键点击获得)
 end
 
 [PRESET:barter_to_map_explore]
-[BG:assets/heritage1.jpg]交易完成了！
+[BG:assets/pictures/heritage1.jpg]交易完成了！
 你成功完成了交易。
 获得了新的物品和资源。
 现在，让我们继续探索这个世界。
@@ -197,18 +197,17 @@ end
 end
 
 [PRESET:map_explore_to_memory_repair]
-[BG:assets/heritage1.jpg]你来到了记忆修复的地方。
+[BG:assets/pictures/heritage1.jpg]你来到了记忆修复的地方。
 这里充满了记忆的气息。
 你的记忆需要修复和整理。
 通过修复记忆，你可以获得新的能力。
-[BG:assets/memory_repair1](对话结束后来到该界面，上方三张卡点击后即可知道这张是什么卡)
-[BG:assets/memory_repair2]
-[BG:assets/memory_repair3](三张卡下方有"重新抽卡"，点击后可以洗牌，但只能点一次)
-end
+[BG:assets/pictures/memory_repair1.png](对话结束后来到该界面，上方三张卡点击后即可知道这张是什么卡)
+[BG:assets/pictures/memory_repair2.png]
+[BG:assets/pictures/memory_repair3.png](三张卡下方有"重新抽卡"，点击后可以洗牌，但只能点一次)
 end
 
 [PRESET:memory_repair_to_map_explore]
-[BG:assets/heritage1.jpg]记忆修复完成了！
+[BG:assets/pictures/heritage1.jpg]记忆修复完成了！
 你成功修复了记忆。
 获得了新的能力和知识。
 现在，让我们继续探索这个世界。
@@ -216,7 +215,7 @@ end
 end
 
 [PRESET:map_explore_to_relic_pickup]
-[BG:assets/heritage1.jpg]你发现了墨宝拾遗的地方。
+[BG:assets/pictures/heritage1.jpg]你发现了墨宝拾遗的地方。
 这里散落着各种珍贵的墨宝。
 每一件墨宝都有其独特的价值。
 你需要仔细选择。
@@ -226,7 +225,7 @@ end
 end
 
 [PRESET:relic_pickup_to_map_explore]
-[BG:assets/heritage1.jpg]拾遗完成了！
+[BG:assets/pictures/heritage1.jpg]拾遗完成了！
 你成功拾取了珍贵的墨宝。
 这些墨宝将增强你的实力。
 现在，让我们继续探索这个世界。
@@ -234,17 +233,17 @@ end
 end
 
 [PRESET:map_explore_to_seeker]
-[BG:assets/heritage1.jpg]你遇到了寻求者。
+[BG:assets/pictures/heritage1.jpg]你遇到了寻求者。
 这是一个神秘的存在。
 寻求者拥有特殊的能力。
 你需要小心应对。
-[BG:assets/seeker1.png](对话结束后进入该页面)
-[BG:assets/seeker2.png](从三个卡中点击一个，便可获得这张卡)
-[BG:assets/seeker3.png]
+[BG:assets/pictures/seeker1.png](对话结束后进入该页面)
+[BG:assets/pictures/seeker2.png](从三个卡中点击一个，便可获得这张卡)
+[BG:assets/pictures/seeker3.png]
 end
 
 [PRESET:seeker_to_map_explore]
-[BG:assets/heritage1.jpg]寻求者事件结束了！
+[BG:assets/pictures/heritage1.jpg]寻求者事件结束了！
 你成功处理了寻求者事件。
 获得了宝贵的经验和奖励。
 现在，让我们继续探索这个世界。
@@ -252,19 +251,19 @@ end
 end
 
 [PRESET:map_explore_to_temper]
-[BG:assets/heritage1.jpg]你来到了淬炼之地。
+[BG:assets/pictures/heritage1.jpg]你来到了淬炼之地。
 这里充满了淬炼的气息。
 你可以在这里淬炼你的能力。
 每一次淬炼都可能带来突破。
-[BG:assets/temper1.png](结束对话后进入该界面)
-[BG:assets/temper2.png](点击中间方框，即可展示可进行淬炼的卡牌)
-[BG:assets/temper3.png](点击蓝色按钮进行淬炼)
+[BG:assets/pictures/temper1.png](结束对话后进入该界面)
+[BG:assets/pictures/temper2.png](点击中间方框，即可展示可进行淬炼的卡牌)
+[BG:assets/pictures/temper3.png](点击蓝色按钮进行淬炼)
 (同一个节点淬炼至多进行两次，第一次必定淬炼成功，第二次有可能失败)
 (失败后卡牌即被摧毁)
 end
 
 [PRESET:temper_to_map_explore]
-[BG:assets/heritage1.jpg]淬炼完成了！
+[BG:assets/pictures/heritage1.jpg]淬炼完成了！
 你成功完成了淬炼。
 获得了新的能力和突破。
 现在，让我们继续探索这个世界。
@@ -272,18 +271,18 @@ end
 end
 
 [PRESET:map_explore_to_burn]
-[BG:assets/heritage1.jpg]你来到了燃烧之地。
+[BG:assets/pictures/heritage1.jpg]你来到了燃烧之地。
 这里充满了燃烧的气息。
 你可以在这里燃烧你的能力。
 每一次燃烧都可能带来新的力量。
-[BG:assets/burn1.png](对话结束后进入该界面)
-[BG:assets/burn2.png](点击中间方框，展示可以燃烧的卡牌)
-[BG:assets/burn3.png](点击想要燃烧的牌)
-[BG:assets/burn4.png](点击蓝色按钮燃烧该牌)
+[BG:assets/pictures/burn1.png](对话结束后进入该界面)
+[BG:assets/pictures/burn2.png](点击中间方框，展示可以燃烧的卡牌)
+[BG:assets/pictures/burn3.png](点击想要燃烧的牌)
+[BG:assets/pictures/burn4.png](点击蓝色按钮燃烧该牌)
 end
 
 [PRESET:burn_to_map_explore]
-[BG:assets/heritage1.jpg]燃烧完成了！
+[BG:assets/pictures/heritage1.jpg]燃烧完成了！
 你成功完成了燃烧。
 获得了新的力量和能力。
 现在，让我们继续探索这个世界。
@@ -291,17 +290,17 @@ end
 end
 
 [PRESET:map_explore_to_combine]
-[BG:assets/heritage1.jpg]你来到了合卷之地。
+[BG:assets/pictures/heritage1.jpg]你来到了合卷之地。
 这里充满了融合的气息。
 你可以在这里融合你的能力。
 每一次融合都可能带来新的突破。
-[BG:assets/combine1.png](对话结束后进入该界面)
-[BG:assets/combine2.png](点击任意方框会展示出可以进行融合的两张牌)
-[BG:assets/combine3.png](点击蓝色按钮进行融合，两张卡牌的数值、词条都会融合到一张牌上)
+[BG:assets/pictures/combine1.png](对话结束后进入该界面)
+[BG:assets/pictures/combine2.png](点击任意方框会展示出可以进行融合的两张牌)
+[BG:assets/pictures/combine3.png](点击蓝色按钮进行融合，两张卡牌的数值、词条都会融合到一张牌上)
 end
 
 [PRESET:combine_to_map_explore]
-[BG:assets/heritage1.jpg]融合完成了！
+[BG:assets/pictures/heritage1.jpg]融合完成了！
 你成功完成了融合。
 获得了新的融合能力。
 现在，让我们继续探索这个世界。
@@ -310,10 +309,10 @@ end
 
 [PRESET:map_explore_to_ink_shop]
 你来到了墨店。
-[BG:assets/background1.png]这里充满了墨香和商业的气息。
-[BG:assets/background2.png]你可以在这里购买各种墨宝。
-[BG:assets/background3.png]每一件墨宝都有其独特的功效。
-[BG:assets/background1.png]准备好开始购物了吗？
+[BG:assets/pictures/background1.png]这里充满了墨香和商业的气息。
+[BG:assets/pictures/background2.png]你可以在这里购买各种墨宝。
+[BG:assets/pictures/background3.png]每一件墨宝都有其独特的功效。
+[BG:assets/pictures/background1.png]准备好开始购物了吗？
 end
 
 [PRESET:ink_shop_to_map_explore]
@@ -727,5 +726,21 @@ end
 他们不居庙堂，不著华章，却以双手与生命，
 让文明从少数人的特权，变成全人类的共有。
 [BG:assets/pictures/4.1.6.png]​我终于懂得：真正的“匠心”，不是精巧的技艺，而是“让更多人活得更好一点”的朴素愿望——它微小如尘，却比任何王冠更接近永恒。
-而这三种“魂”，在时间的尽头交汇了。
+而这三种"魂"，在时间的尽头交汇了。
+end
+
+[PRESET:map_explore_to_wenxin_trial]
+[BG:assets/pictures/background1.png]你来到了文心试炼之地。
+[BG:assets/pictures/background2.png]这里充满了智慧与挑战的气息。
+[BG:assets/pictures/background3.png]文心试炼将考验你的文学修养和智慧。
+[BG:assets/pictures/background1.png]准备好接受文心的考验了吗？
+[BG:assets/pictures/background2.png]这将是一次深刻的心灵之旅。
+end
+
+[PRESET:wenxin_trial_to_map_explore]
+[BG:assets/pictures/background1.png]文心试炼结束了！
+[BG:assets/pictures/background2.png]你成功通过了文心的考验。
+[BG:assets/pictures/background3.png]获得了宝贵的智慧和经验。
+[BG:assets/pictures/background1.png]现在，让我们继续探索这个世界。
+[BG:assets/pictures/background2.png]前方还有更多的挑战等待着你。
 end

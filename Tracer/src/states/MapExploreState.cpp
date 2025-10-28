@@ -2288,7 +2288,7 @@ void MapExploreState::renderNode(SDL_Renderer* renderer, const MapNode& node, in
     
     // 为当前节点添加细圆形边框
     if (isCurrentNode) {
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); // 白色细边框
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // 黑色细边框
         // 图标是以中心点定位的，所以边框也要以中心点定位
         int centerX = x;
         int centerY = y;
@@ -2344,7 +2344,7 @@ void MapExploreState::assignRowEventLabels() {
     };
     
     static const std::vector<EventWithWeight> battleEvents = {
-        {u8"诗剑之争", 1, true},
+        {u8"诗剑之争", 2, true},
         {u8"意境之斗", 1, true}
     };
 
