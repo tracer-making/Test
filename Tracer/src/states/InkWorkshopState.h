@@ -59,9 +59,9 @@ private:
     Button* tutorialButton_ = nullptr;
     
     // 牌位相关
-    SDL_Rect rabbitSlotRect_;    // 兔皮牌位
-    SDL_Rect wolfSlotRect_;      // 狼皮牌位
-    SDL_Rect goldSheepSlotRect_; // 金羊皮牌位
+    SDL_Rect rabbitSlotRect_;    // 平凡之墨牌位
+    SDL_Rect wolfSlotRect_;      // 稀有之墨牌位
+    SDL_Rect goldSheepSlotRect_; // 传奇之墨牌位
     SDL_Rect toolRect_;          // 道具位置
     
     // 消耗的文脉点数

@@ -46,7 +46,7 @@ void InkWorkshopState::onEnter(App& app) {
     
     // 根据地图层级设置毛皮价格
     if (mapLayer_ == 3) {
-        // 第三层：兔皮2、狼皮6、金羊皮11
+        // 第三层：平凡之墨2、稀有之墨6、传奇之墨11
         rabbitCost_ = 2;
         wolfCost_ = 6;
         goldSheepCost_ = 11;
@@ -94,11 +94,11 @@ void InkWorkshopState::onEnter(App& app) {
     // 道具位置（右上角）
     toolRect_ = {screenW_ - 120, 20, 100, 80};
     
-    // 初始化可获得的毛皮（固定有一张兔皮）
+    // 初始化可获得的毛皮（固定有一张平凡之墨）
     availableSkins_.clear();
     Card rabbitSkin;
     rabbitSkin.id = "rabbit_skin";
-    rabbitSkin.name = u8"兔皮";
+    rabbitSkin.name = u8"平凡之墨";
     rabbitSkin.category = u8"毛皮";
     rabbitSkin.health = 1;
     rabbitSkin.attack = 0;
@@ -323,15 +323,15 @@ void InkWorkshopState::handleEvent(App& app, const SDL_Event& event) {
         // 检查牌位点击
         if (mx >= rabbitSlotRect_.x && mx <= rabbitSlotRect_.x + rabbitSlotRect_.w &&
             my >= rabbitSlotRect_.y && my <= rabbitSlotRect_.y + rabbitSlotRect_.h) {
-            tryGetSkin(0); // 兔皮
+            tryGetSkin(0); // 平凡之墨
         }
         else if (mx >= wolfSlotRect_.x && mx <= wolfSlotRect_.x + wolfSlotRect_.w &&
                  my >= wolfSlotRect_.y && my <= wolfSlotRect_.y + wolfSlotRect_.h) {
-            tryGetSkin(1); // 狼皮
+            tryGetSkin(1); // 稀有之墨
         }
         else if (mx >= goldSheepSlotRect_.x && mx <= goldSheepSlotRect_.x + goldSheepSlotRect_.w &&
                  my >= goldSheepSlotRect_.y && my <= goldSheepSlotRect_.y + goldSheepSlotRect_.h) {
-            tryGetSkin(2); // 金羊皮
+            tryGetSkin(2); // 传奇之墨
         }
         // 检查道具点击
         else if (mx >= toolRect_.x && mx <= toolRect_.x + toolRect_.w &&
@@ -392,15 +392,15 @@ void InkWorkshopState::renderWenMai(App& app) {
 void InkWorkshopState::renderSkinSlots(App& app) {
     SDL_Renderer* r = app.getRenderer();
     
-    // 渲染兔皮卡牌
+    // 渲染平凡之墨卡牌
     Card rabbitCard = CardDB::instance().make("tuopi_mao");
     CardRenderer::renderCard(app, rabbitCard, rabbitSlotRect_, cardNameFont_, cardStatFont_, false);
     
-    // 渲染狼皮卡牌
+    // 渲染稀有之墨卡牌
     Card wolfCard = CardDB::instance().make("langpi");
     CardRenderer::renderCard(app, wolfCard, wolfSlotRect_, cardNameFont_, cardStatFont_, false);
     
-    // 渲染金羊皮卡牌（金色背景）
+    // 渲染传奇之墨卡牌（金色背景）
     Card goldSheepCard = CardDB::instance().make("jinang_mao");
     renderGoldenCard(app, goldSheepCard, goldSheepSlotRect_);
     
@@ -408,8 +408,8 @@ void InkWorkshopState::renderSkinSlots(App& app) {
     if (smallFont_) {
         SDL_Color labelColor{255, 255, 255, 255};
         
-        // 兔皮标签
-        SDL_Surface* rabbitLabel = TTF_RenderUTF8_Blended(smallFont_, u8"兔皮 (2文脉)", labelColor);
+        // 平凡之墨标签
+        SDL_Surface* rabbitLabel = TTF_RenderUTF8_Blended(smallFont_, u8"平凡之墨 (2文脉)", labelColor);
         if (rabbitLabel) {
             SDL_Texture* rabbitTexture = SDL_CreateTextureFromSurface(r, rabbitLabel);
             SDL_Rect rabbitLabelRect{rabbitSlotRect_.x + (rabbitSlotRect_.w - rabbitLabel->w) / 2, 
@@ -419,8 +419,8 @@ void InkWorkshopState::renderSkinSlots(App& app) {
             SDL_FreeSurface(rabbitLabel);
         }
         
-        // 狼皮标签
-        SDL_Surface* wolfLabel = TTF_RenderUTF8_Blended(smallFont_, u8"狼皮 (4文脉)", labelColor);
+        // 稀有之墨标签
+        SDL_Surface* wolfLabel = TTF_RenderUTF8_Blended(smallFont_, u8"稀有之墨 (4文脉)", labelColor);
         if (wolfLabel) {
             SDL_Texture* wolfTexture = SDL_CreateTextureFromSurface(r, wolfLabel);
             SDL_Rect wolfLabelRect{wolfSlotRect_.x + (wolfSlotRect_.w - wolfLabel->w) / 2, 
@@ -430,8 +430,8 @@ void InkWorkshopState::renderSkinSlots(App& app) {
             SDL_FreeSurface(wolfLabel);
         }
         
-        // 金羊皮标签
-        SDL_Surface* goldSheepLabel = TTF_RenderUTF8_Blended(smallFont_, u8"金羊皮 (7文脉)", labelColor);
+        // 传奇之墨标签
+        SDL_Surface* goldSheepLabel = TTF_RenderUTF8_Blended(smallFont_, u8"传奇之墨 (7文脉)", labelColor);
         if (goldSheepLabel) {
             SDL_Texture* goldSheepTexture = SDL_CreateTextureFromSurface(r, goldSheepLabel);
             SDL_Rect goldSheepLabelRect{goldSheepSlotRect_.x + (goldSheepSlotRect_.w - goldSheepLabel->w) / 2, 
@@ -517,19 +517,19 @@ void InkWorkshopState::tryGetSkin(int skinType) {
     std::string skinId;
     
     switch (skinType) {
-        case 0: // 兔皮
+        case 0: // 平凡之墨
             cost = rabbitCost_;
-            skinName = u8"兔皮";
+            skinName = u8"平凡之墨";
             skinId = "tuopi_mao";
             break;
-        case 1: // 狼皮
+        case 1: // 稀有之墨
             cost = wolfCost_;
-            skinName = u8"狼皮";
+            skinName = u8"稀有之墨";
             skinId = "langpi";
             break;
-        case 2: // 金羊皮
+        case 2: // 传奇之墨
             cost = goldSheepCost_;
-            skinName = u8"金羊皮";
+            skinName = u8"传奇之墨";
             skinId = "jinang_mao";
             break;
     }
@@ -542,8 +542,8 @@ void InkWorkshopState::tryGetSkin(int skinType) {
             newSkin.id = skinId;
             newSkin.name = skinName;
             newSkin.category = u8"其他";
-            newSkin.health = skinType + 1; // 兔皮1血，狼皮2血，金羊皮3血
-            newSkin.attack = skinType;     // 兔皮0攻，狼皮1攻，金羊皮2攻
+            newSkin.health = skinType + 1; // 平凡之墨1血，稀有之墨2血，传奇之墨3血
+            newSkin.attack = skinType;     // 平凡之墨0攻，稀有之墨1攻，传奇之墨2攻
         }
         
         availableSkins_.push_back(newSkin);
@@ -644,7 +644,7 @@ void InkWorkshopState::addItem(const std::string& itemId, int count) {
     // 创建新道具
     Item newItem;
     if (itemId == "tunmohao") {
-        newItem = Item("tunmohao", u8"吞墨毫", u8"使用后摧毁敌人第二行任意一张牌，摧毁后手牌获得一张狼皮", count);
+        newItem = Item("tunmohao", u8"吞墨毫", u8"使用后摧毁敌人第二行任意一张牌，摧毁后手牌获得一张稀有之墨", count);
     } else {
         newItem = Item(itemId, itemId, "", count);
     }

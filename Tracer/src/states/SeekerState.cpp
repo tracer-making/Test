@@ -121,7 +121,7 @@ void SeekerState::render(App& app) {
 
 	for (const auto& en : entries_) {
 		if (en.revealed) {
-			// 金羊皮淡金色渲染，参考墨坊
+			// 传奇之墨淡金色渲染，参考墨坊
 			if (en.card.id == "jinang_mao") {
 				// 直接复用自定义金色渲染逻辑（内联一份简版以避免状态依赖）
 				SDL_Renderer* r2 = app.getRenderer();

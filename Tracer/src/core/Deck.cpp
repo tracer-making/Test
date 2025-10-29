@@ -105,7 +105,7 @@ void DeckStore::initializePlayerDeck() {
 		initialCardIds = {"xuewei_yousheng", "bichan", "shuomuo_canglang"};
 	}
 	
-	// 每个牌组都会获得两张兔皮
+	// 每个牌组都会获得两张平凡之墨
 	initialCardIds.push_back("tuopi_mao");
 	initialCardIds.push_back("tuopi_mao");
 	

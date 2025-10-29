@@ -36,9 +36,9 @@ private:
     // 交易界面相关
     enum class TradeType {
         None,
-        RabbitFur,    // 兔皮交易
-        WolfFur,      // 狼皮交易
-        GoldenFur     // 金羊皮交易
+        RabbitFur,    // 平凡之墨交易
+        WolfFur,      // 稀有之墨交易
+        GoldenFur     // 传奇之墨交易
     };
     TradeType currentTradeType_ = TradeType::None;
     

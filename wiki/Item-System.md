@@ -52,9 +52,9 @@ struct Item {
 
 [InkWorkshopState](../Tracer/src/states/InkWorkshopState.h)允许玩家消耗文脉获取毛皮道具：
 
-- 兔皮（消耗2文脉）
-- 狼皮（消耗4文脉）
-- 金羊皮（消耗7文脉）
+- 平凡之墨（消耗2文脉）
+- 稀有之墨（消耗4文脉）
+- 传奇之墨（消耗7文脉）
 - 道具（消耗7文脉）
 
 ### 道具效果

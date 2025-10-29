@@ -285,7 +285,7 @@ void RelicPickupState::setupPickupContent() {
         if (id == "fengya_shan") return u8"赋予空袭等效果";
         if (id == "rigui") return u8"记录回合影响结算";
         if (id == "duanyinjian") return u8"选择目标斩断因缘";
-        if (id == "tunmohao") return u8"摧毁敌牌并得狼皮";
+        if (id == "tunmohao") return u8"摧毁敌牌并得稀有之墨";
         if (id == "fuhunsuo") return u8"拖拽移动敌方单位";
         if (id == "wuzitianshu") return u8"赋予随机印记";
         if (id == "xuanmuping") return u8"获得护体之力";

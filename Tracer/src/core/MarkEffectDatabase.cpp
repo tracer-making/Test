@@ -43,7 +43,7 @@ MarkEffectDatabase::MarkEffectDatabase() {
     markDescriptions_[u8"丰产之巢"] = u8"使用带有该印记的卡牌时，你的手牌里会出现一张同样的牌";
     markDescriptions_[u8"食尸鬼"] = u8"如你拥有的造物在战斗中死亡，你手中的带有该印记的牌会自动补位";
     markDescriptions_[u8"冰封禁锢"] = u8"带有该印记的卡牌死亡时，被冰封在里面的造物会取代它的位置";
-    markDescriptions_[u8"铁兽夹"] = u8"带有该印记的卡牌死亡时，它对面的造物也会同时死亡。同时你的手牌中将会出现一张狼皮）";
+    markDescriptions_[u8"墨家机关术"] = u8"带有该印记的卡牌死亡时，它对面的造物也会同时死亡。同时你的手牌中将会出现一张稀有之墨）";
     markDescriptions_[u8"拾荒者"] = u8"当场上出现带有该印记的卡牌时，它对面的造物死亡时也会产生魂骨";
     
     // 消耗类印记

@@ -55,7 +55,7 @@ void BarterState::onEnter(App& app) {
     
     // 如果有毛皮，开始交易
     if (hasFur_) {
-        startTrade(TradeType::RabbitFur); // 默认从兔皮开始
+        startTrade(TradeType::RabbitFur); // 默认从平凡之墨开始
     }
 }
 
@@ -146,7 +146,7 @@ void BarterState::buildTradeCards() {
     
     switch (currentTradeType_) {
         case TradeType::RabbitFur:
-            // 兔皮：2行4列共8个牌位，从所有可获取的牌库中随机选择
+            // 平凡之墨：2行4列共8个牌位，从所有可获取的牌库中随机选择
             tradeCards_.resize(8);
             {
                 auto allCardIds = CardDB::instance().allIds();
@@ -169,7 +169,7 @@ void BarterState::buildTradeCards() {
             break;
             
         case TradeType::WolfFur:
-            // 狼皮：2行4列共8个牌位，从普通卡牌中随机选择，并添加1个随机印记
+            // 稀有之墨：2行4列共8个牌位，从普通卡牌中随机选择，并添加1个随机印记
             tradeCards_.resize(8);
             {
                 auto allCardIds = CardDB::instance().allIds();
@@ -227,7 +227,7 @@ void BarterState::buildTradeCards() {
             break;
             
         case TradeType::GoldenFur:
-            // 金羊皮：从所有稀有卡牌中随机选择4张
+            // 传奇之墨：从所有稀有卡牌中随机选择4张
             tradeCards_.resize(4);
             {
                 auto allCardIds = CardDB::instance().allIds();
@@ -279,13 +279,13 @@ void BarterState::layoutCards() {
     int cardsPerRow, totalCards;
     
     if (currentTradeType_ == TradeType::GoldenFur) {
-        // 金羊皮：1行4列
+        // 传奇之墨：1行4列
         totalCards = 4;
         cardsPerRow = 4;
         rightX = screenW_ - 100 - 4 * (cardWidth + cardSpacing);  // 向中心移动
         rightY = 300;  // 稍微向下移动
 		} else {
-        // 兔皮和狼皮：2行4列
+        // 平凡之墨和稀有之墨：2行4列
         totalCards = 8;
         cardsPerRow = 4;
         rightX = screenW_ - 100 - 4 * (cardWidth + cardSpacing);  // 向中心移动
@@ -339,9 +339,9 @@ void BarterState::nextTradeType() {
         // 当前毛皮交易完了，检查是否需要切换到下一种毛皮
         const auto& library = DeckStore::instance().library();
         
-        // 按顺序检查：兔皮 -> 狼皮 -> 金羊皮
+        // 按顺序检查：平凡之墨 -> 稀有之墨 -> 传奇之墨
         if (currentTradeType_ == TradeType::RabbitFur) {
-            // 兔皮交易完了，检查狼皮
+            // 平凡之墨交易完了，检查稀有之墨
             bool hasWolfFur = false;
             for (const auto& card : library) {
                 if (card.id == "langpi") {
@@ -356,7 +356,7 @@ void BarterState::nextTradeType() {
         }
         
         if (currentTradeType_ == TradeType::WolfFur || currentTradeType_ == TradeType::RabbitFur) {
-            // 狼皮交易完了，检查金羊皮
+            // 稀有之墨交易完了，检查传奇之墨
             bool hasGoldenFur = false;
             for (const auto& card : library) {
                 if (card.id == "jinang_mao") {
@@ -590,13 +590,13 @@ void BarterState::render(App& app) {
             
             switch (currentTradeType_) {
                 case TradeType::RabbitFur:
-                    hint = u8"兔皮交易：点击右侧卡牌进行交易";
+                    hint = u8"平凡之墨交易：点击右侧卡牌进行交易";
                     break;
                 case TradeType::WolfFur:
-                    hint = u8"狼皮交易：右侧卡牌带有额外印记";
+                    hint = u8"稀有之墨交易：右侧卡牌带有额外印记";
                     break;
                 case TradeType::GoldenFur:
-                    hint = u8"金羊皮交易：只能交易特定卡牌";
+                    hint = u8"传奇之墨交易：只能交易特定卡牌";
                     break;
                 default:
                     hint = u8"点击右侧卡牌进行交易";

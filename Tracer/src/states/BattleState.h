@@ -36,7 +36,7 @@ private:
 	
 	// 矿工Boss死亡转阶段
 	void triggerMinerBossDeathPhase();
-	void generateJinkuai();  // 生成金块
+	void generateJinkuai();  // 生成墨块
 	void updateMinerBossTransform(float dt);  // 更新矿工Boss转阶段动画
 	void updateFishermanBossTransform(float dt);  // 更新渔夫Boss转阶段动画
 	void updateFishermanBossFuhunsuoAnimation(float dt);  // 更新渔夫Boss缚魂索移动动画
@@ -75,7 +75,7 @@ private:
 	int currentBossPhase_ = 1;  // 当前Boss阶段（1或2）
 	bool isBossBattle_ = false;  // 是否为Boss战
 	bool isEngraveBattle_ = false;  // 是否为意境之斗
-	bool isGeneratingJinkuai_ = false;  // 是否正在生成金块
+	bool isGeneratingJinkuai_ = false;  // 是否正在生成墨块
 	
     // 矿工Boss转阶段动画
     bool isMinerBossTransforming_ = false;  // 是否正在转阶段
@@ -170,7 +170,7 @@ private:
 		bool isDiving = false; // 水袭印记：是否潜水状态
 		bool isJiaoyu = false; // 是否为鲛鱼（渔夫Boss转阶段生成）
 		bool isJiaolong = false; // 是否为鲛龙（鲛鱼死亡后生成）
-		bool isMoon = false; // 是否为月球（最终Boss三阶段生成）
+		bool isMoon = false; // 是否为兵马俑（最终Boss三阶段生成）
 	};
 	std::array<BattlefieldCard, TOTAL_BATTLEFIELD_SLOTS> battlefield_;
 

@@ -132,7 +132,7 @@ void DeckSelectState::handleEvent(App& app, const SDL_Event& e) {
                     }
                 }
                 
-                // 检查兔皮卡牌
+                // 检查平凡之墨卡牌
                 int rabbitFurY = startY + totalCardsHeight + 30;
                 int rabbitFurX = centerX - cardWidth - cardSpacing/2;
                 
@@ -201,7 +201,7 @@ void DeckSelectState::handleEvent(App& app, const SDL_Event& e) {
                     }
                 }
                 
-                // 检查兔皮卡牌
+                // 检查平凡之墨卡牌
                 int rabbitFurY = startY + totalCardsHeight + 30;
                 int rabbitFurX = centerX - cardWidth - cardSpacing/2;
                 
@@ -508,9 +508,9 @@ void DeckSelectState::renderDeckView(App& app) {
         }
     }
     
-    // 渲染两张兔皮（在卡牌下方）
+    // 渲染两张平凡之墨（在卡牌下方）
     int rabbitFurY = startY + totalCardsHeight + 30; // 卡牌下方30像素
-    int rabbitFurX = centerX - cardWidth - cardSpacing/2; // 居中显示两张兔皮
+    int rabbitFurX = centerX - cardWidth - cardSpacing/2; // 居中显示两张平凡之墨
     
     for (int i = 0; i < 2; ++i) {
         int x = rabbitFurX + i * (cardWidth + cardSpacing);
@@ -518,13 +518,13 @@ void DeckSelectState::renderDeckView(App& app) {
         
         SDL_Rect rabbitRect{ x, y, cardWidth, cardHeight };
         
-        // 绘制兔皮背景
+        // 绘制平凡之墨背景
         SDL_SetRenderDrawColor(r, 40, 50, 60, 200);
         SDL_RenderFillRect(r, &rabbitRect);
         SDL_SetRenderDrawColor(r, 100, 120, 140, 255);
         SDL_RenderDrawRect(r, &rabbitRect);
         
-        // 创建兔皮卡牌并渲染
+        // 创建平凡之墨卡牌并渲染
         Card rabbitCard = CardDB::instance().make("tuopi_mao");
         if (!rabbitCard.id.empty()) {
             CardRenderer::renderCard(app, rabbitCard, rabbitRect, smallFont_, smallFont_, false);
