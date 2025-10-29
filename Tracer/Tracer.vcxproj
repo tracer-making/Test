@@ -71,12 +71,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>D:\C++Project\SDL2-2.32.10\include;D:\C++Project\SDL2_image-2.8.8\include;D:\C++Project\SDL2_ttf-2.22.0\include;D:\C++Project\SDL2_mixer-2.8.1\include;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\C++Project\SDL2-2.32.10\lib\x64;D:\C++Project\SDL2_image-2.8.8\lib\x64;D:\C++Project\SDL2_ttf-2.22.0\lib\x64;D:\C++Project\SDL2_mixer-2.8.1\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>D:\yingjian\SDL2-2.32.10\include;D:\yingjian\SDL2_ttf-2.22.0\include;D:\yingjian\SDL2_image-2.8.8\include;D:\yingjian\SDL2_mixer-2.8.1\include;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\yingjian\SDL2-2.32.10\lib\x64;D:\yingjian\SDL2_image-2.8.8\lib\x64;D:\yingjian\SDL2_ttf-2.22.0\lib\x64;D:\yingjian\SDL2_mixer-2.8.1\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>D:\C++Project\SDL2-2.32.10\include;D:\C++Project\SDL2_image-2.8.8\include;D:\C++Project\SDL2_ttf-2.22.0\include;D:\C++Project\SDL2_mixer-2.8.1\include;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\C++Project\SDL2-2.32.10\lib\x64;D:\C++Project\SDL2_image-2.8.8\lib\x64;D:\C++Project\SDL2_ttf-2.22.0\lib\x64;D:\C++Project\SDL2_mixer-2.8.1\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>D:\yingjian\SDL2-2.32.10\include;D:\yingjian\SDL2_ttf-2.22.0\include;D:\yingjian\SDL2_image-2.8.8\include;D:\yingjian\SDL2_mixer-2.8.1\include;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\yingjian\SDL2-2.32.10\lib\x64;D:\yingjian\SDL2_image-2.8.8\lib\x64;D:\yingjian\SDL2_ttf-2.22.0\lib\x64;D:\yingjian\SDL2_mixer-2.8.1\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -124,7 +124,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>SDL2.lib;SDL2main.lib;SDL2_ttf.lib;SDL2_image.lib;SDL2_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>SDL2.lib;SDL2main.lib;SDL2_ttf.lib;SDL2_mixer.lib;SDL2_image.lib;SDL2_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>D:\C++Project\SDL2_image-2.8.8\lib\x64;D:\C++Project\SDL2-2.32.10\lib\x64;D:\C++Project\SDL2_ttf-2.22.0\lib\x64;D:\C++Project\SDL2_mixer-2.8.1\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -141,7 +141,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>SDL2.lib;SDL2main.lib;SDL2_ttf.lib;SDL2_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>SDL2.lib;SDL2main.lib;SDL2_ttf.lib;SDL2_mixer.lib;SDL2_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>D:\C++Project\SDL2_mixer-2.8.1\lib\x64;D:\C++Project\SDL2-2.32.10\lib\x64;D:\C++Project\SDL2_ttf-2.22.0\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
